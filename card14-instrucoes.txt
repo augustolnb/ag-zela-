@@ -1,0 +1,87 @@
+Desafio: Construção de um Agente Inteligente e Inovador para a Área da Saúde
+
+Objetivo do Desafio:
+Integrar o conhecimento adquirido em todas as tarefas do curso para conceber, desenvolver um MVP e planejar a evolução de um agente inteligente inovador que resolva um problema ou explore uma oportunidade na área da saúde. Os alunos deverão aplicar conceitos como arquiteturas de agentes (ReAct), validação de dados (Pydantic), orquestração de múltiplos agentes (ADK), interfaces de usuário (Streamlit), comunicação (WhatsApp via Langflow), embeddings e fluxos de trabalho (Langflow), culminando na entrega de um MVP funcional hospedado no GitHub com instruções claras.
+
+Estrutura do Desafio:
+1. Prazo para Entrega:
+7 dias: O prazo é estipulado para 7 dias a partir da data de cópia do cartão.
+
+Data de Entrega: A data de entrega deve ser calculada com base na data de cópia do cartão e o prazo estabelecido (7 dias).
+
+2. Entrega a Ser Feita:
+Relatório, Código e Vídeo Pitch: O participante deve entregar um relatório com a descrição do projeto, o código desenvolvido e um pitch de apresentação. O relatório e o link para o repositório no GitHub deverão estar anexos ao card. No repositório, deverão constar o código-fonte e o vídeo do pitch. O código deverá conter instruções claras para reprodução e análise. O pitch deverá ter duração máxima de três minutos e contemplar, de forma estruturada, a abertura e contextualização, a descrição do problema, a apresentação da solução, os principais diferenciais e os resultados obtidos.
+
+3. Etapas do Projeto:
+3.1. Definição do Problema/Oportunidade e Escopo do MVP:
+Ação Esperada: Escolher um problema específico ou uma oportunidade de melhoria na área da saúde e definir um escopo mínimo e viável para o MVP do agente inteligente que abordará esse problema/oportunidade.
+
+Entrega: Uma seção no relatório descrevendo o problema/oportunidade e o escopo das funcionalidades que serão incluídas no MVP.
+
+3.2. Projeto da Arquitetura do Agente ou Sistema Multiagente para o MVP:
+Ação Esperada: Projetar a arquitetura do agente (único ou multiagente) que será implementada no MVP. Focar em uma arquitetura simples e funcional que demonstre o conceito principal.
+
+Para Agente Único: Definir o fluxo principal de raciocínio e ação para a funcionalidade chave do MVP.
+
+Para Multiagentes: Identificar os agentes essenciais e suas interações mínimas para entregar a funcionalidade principal do MVP.
+
+Entrega: Uma seção no relatório detalhando a arquitetura do MVP, incluindo um diagrama simplificado, se aplicável.
+
+3.3. Implementação da Validação de Dados Essencial com Pydantic:
+Ação Esperada: Identificar os dados de entrada críticos para a funcionalidade do MVP e implementar modelos Pydantic para garantir sua validação básica.
+
+Entrega: Código Python demonstrando os modelos Pydantic implementados e como eles são usados para validar os dados no contexto do MVP. Referência a este código no relatório.
+
+3.4. Design e Implementação de um Fluxo de Trabalho Básico com Langflow:
+Ação Esperada: Criar um fluxo de trabalho básico no Langflow que represente a lógica principal do agente.
+
+Entrega: Arquivo de Langflow (.json ou similar) no repositório e uma captura de tela no relatório.
+
+3.5. Aplicação de Embeddings para uma Funcionalidade Específica:
+Ação Esperada: Implementar a geração e o uso de embeddings (e.g., classificação, busca) para essa finalidade.
+
+Entrega: Código Python demonstrando a geração e o uso de embeddings no contexto do MVP. Referência a este código no relatório.
+
+3.6. Orquestração de Multiagentes para a Funcionalidade Principal:
+Ação Esperada: Se o MVP exigir múltiplos agentes, implementar a orquestração básica desses agentes para realizar a funcionalidade principal.
+
+Entrega: Código Python demonstrando a orquestração dos agentes (usando ADK). Referência a este código no relatório.
+
+3.7. Criação de uma Interface de Usuário Simples com Streamlit:
+Ação Esperada: Desenvolver uma interface de usuário minimalista com Streamlit que permita a interação básica com a funcionalidade principal do MVP.
+
+Entrega: Código Python da aplicação Streamlit (.py) no repositório e capturas de tela da interface no relatório. Instruções sobre como executar a aplicação no README.
+
+3.8. Consideração da Integração com Comunicação:
+Ação Esperada: Se a comunicação direta com o usuário for um aspecto fundamental do MVP, implementar uma integração básica com um sistema de comunicação (e.g., uma interação simples via WhatsApp usando os princípios do Langflow).
+
+Entrega: Código Python demonstrando a integração com o sistema de comunicação e instruções sobre como configurá-la no README.
+
+3.9. Desenvolvimento e Teste do MVP:
+Ação Esperada: Codificar a funcionalidade principal do MVP, integrando os conceitos definidos nas etapas anteriores. Realizar testes básicos para garantir que a funcionalidade essencial esteja funcionando corretamente.
+
+Entrega: Código Python completo do MVP no repositório GitHub.
+
+3.10. Preparação do Repositório GitHub e Documentação:
+Ação Esperada: Organizar o código no repositório GitHub, incluindo um arquivo AI Tools Directory - dealsbe.com  detalhado com:
+
+Uma descrição clara do problema que o MVP resolve.
+
+As tecnologias utilizadas.
+
+Instruções de instalação das dependências.
+
+Instruções claras sobre como executar o MVP.
+
+(Opcional) Capturas de tela da interface Streamlit ou exemplos de interação.
+
+Entrega: Um link para o repositório GitHub contendo todos os arquivos necessários e um README bem documentado.
+
+4. Orientações para o Relatório:
+Descrição do Projeto: Incluir uma descrição clara e concisa do projeto, seus objetivos e a abordagem utilizada.
+
+Detalhamento Técnico: Explicar a implementação técnica, incluindo modelos e técnicas utilizados para embeddings, similaridade, sumarização, RAG, multi-agents, orquestração e integrações.
+
+Resultados Obtidos: Apresentar os resultados obtidos com o projeto, incluindo exemplos práticos de funcionamento.
+
+Instruções de Uso: Fornecer instruções claras sobre como clonar, instalar dependências e executar o projeto.
