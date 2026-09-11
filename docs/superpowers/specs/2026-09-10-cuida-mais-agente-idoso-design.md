@@ -1,4 +1,4 @@
-# Cuida+ — Agente Inteligente de Apoio ao Idoso que Mora Sozinho
+# Zela+ — Agente Inteligente de Apoio ao Idoso que Mora Sozinho
 
 Spec de design (fase de brainstorming), previamente ao plano de implementação.
 
@@ -84,7 +84,7 @@ que escreve a agenda do dia em um quadro branco (seção 9).
            via Health Auto Export)
 ```
 
-Arquitetura escolhida (dentre 3 avaliadas): **5 agentes especializados**
+Arquitetura escolhida (dentre 3 avaliadas) para o Zela+: **5 agentes especializados**
 (Orquestrador + Rotina/Medicação + Monitoramento de Saúde/Risco +
 Comunicação + Emergência/Alertas), cada um com responsabilidade única e
 contrato de dados Pydantic próprio. A decisão de emergência fica isolada em
