@@ -67,3 +67,13 @@ def test_sem_resposta_da_familia_apos_janela_simula_emergencia():
     assert novo_estado.estagio == EstagioEscalonamento.SIMULAR_EMERGENCIA
     assert len(alertas) == 1
     assert "SIMULAÇÃO" in alertas[0].mensagem
+    assert alertas[0].destinatario == "servico_emergencia_simulado"
+
+
+def test_evento_de_risco_apos_resolvido_reinicia_contato_idoso():
+    estado = EstadoEscalonamento(estagio=EstagioEscalonamento.RESOLVIDO)
+    agora = datetime(2026, 9, 13, 14, 0)
+    novo_estado, alertas = decidir_proxima_acao(_evento(StatusMonitoramento.RISCO), _perfil(), estado, agora)
+    assert novo_estado.estagio == EstagioEscalonamento.CONTATO_IDOSO
+    assert len(alertas) == 1
+    assert alertas[0].destinatario == "Maria da Silva"

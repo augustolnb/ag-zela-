@@ -34,7 +34,7 @@ def decidir_proxima_acao(
     if evento.status == StatusMonitoramento.NORMAL:
         return EstadoEscalonamento(estagio=EstagioEscalonamento.RESOLVIDO), []
 
-    if estado.estagio == EstagioEscalonamento.OCIOSO:
+    if estado.estagio in (EstagioEscalonamento.OCIOSO, EstagioEscalonamento.RESOLVIDO) or estado.iniciado_em is None:
         novo_estado = EstadoEscalonamento(estagio=EstagioEscalonamento.CONTATO_IDOSO, iniciado_em=agora)
         alerta = Alerta(
             nivel=NivelAlerta.ATENCAO,
