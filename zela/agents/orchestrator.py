@@ -70,3 +70,6 @@ def montar_orquestrador(model: str = MODELO_PADRAO) -> Agent:
             montar_agente_emergencia(model=model),
         ],
     )
+
+
+root_agent = montar_orquestrador()

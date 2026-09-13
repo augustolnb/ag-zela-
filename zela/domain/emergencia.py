@@ -76,6 +76,7 @@ def decidir_proxima_acao(
                 f"Motivo: {evento.motivo}. Nenhuma ligação real foi realizada."
             ),
             timestamp=agora,
+            simulado=True,
         )
         return novo_estado, [alerta]
 

@@ -38,6 +38,7 @@ def test_primeiro_evento_de_risco_contata_idoso():
     assert novo_estado.estagio == EstagioEscalonamento.CONTATO_IDOSO
     assert len(alertas) == 1
     assert alertas[0].destinatario == "Maria da Silva"
+    assert alertas[0].simulado is False
 
 
 def test_sem_resposta_apos_janela_notifica_familia():
@@ -48,6 +49,7 @@ def test_sem_resposta_apos_janela_notifica_familia():
     assert novo_estado.estagio == EstagioEscalonamento.NOTIFICAR_FAMILIA
     assert len(alertas) == 1
     assert alertas[0].destinatario == "João"
+    assert alertas[0].simulado is False
 
 
 def test_ainda_dentro_da_janela_de_contato_idoso_nao_escalona():
@@ -68,6 +70,7 @@ def test_sem_resposta_da_familia_apos_janela_simula_emergencia():
     assert len(alertas) == 1
     assert "SIMULAÇÃO" in alertas[0].mensagem
     assert alertas[0].destinatario == "servico_emergencia_simulado"
+    assert alertas[0].simulado is True
 
 
 def test_evento_de_risco_apos_resolvido_reinicia_contato_idoso():

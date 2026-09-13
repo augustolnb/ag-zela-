@@ -27,3 +27,4 @@ class Alerta(BaseModel):
     mensagem: str
     status: StatusAlerta = StatusAlerta.ENVIADO
     timestamp: datetime
+    simulado: bool = False

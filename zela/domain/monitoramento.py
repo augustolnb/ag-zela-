@@ -16,11 +16,11 @@ def classificar_por_regra(
     agora: datetime,
     limite_horas_sem_presenca: float = LIMITE_HORAS_SEM_PRESENCA,
 ) -> EventoMonitoramento:
-    leituras_presenca = [l for l in leituras if l.tipo == TipoLeitura.PRESENCA]
-    leituras_fc = [l for l in leituras if l.tipo == TipoLeitura.FREQUENCIA_CARDIACA]
+    leituras_presenca = [leitura for leitura in leituras if leitura.tipo == TipoLeitura.PRESENCA]
+    leituras_fc = [leitura for leitura in leituras if leitura.tipo == TipoLeitura.FREQUENCIA_CARDIACA]
 
     if leituras_presenca:
-        ultima_presenca = max(l.timestamp for l in leituras_presenca)
+        ultima_presenca = max(leitura.timestamp for leitura in leituras_presenca)
         horas_sem_presenca = (agora - ultima_presenca).total_seconds() / 3600
         if horas_sem_presenca >= limite_horas_sem_presenca:
             return EventoMonitoramento(
@@ -31,7 +31,7 @@ def classificar_por_regra(
                 metodo_classificacao=MetodoClassificacao.REGRA,
             )
 
-    leituras_fc_implausiveis = [l for l in leituras_fc if not l.plausivel]
+    leituras_fc_implausiveis = [leitura for leitura in leituras_fc if not leitura.plausivel]
     if leituras_fc_implausiveis:
         return EventoMonitoramento(
             status=StatusMonitoramento.ATENCAO,

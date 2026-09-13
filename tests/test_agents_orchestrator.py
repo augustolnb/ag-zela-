@@ -16,6 +16,7 @@ def test_cada_agente_especializado_tem_nome_esperado():
 
 def test_orquestrador_tem_os_quatro_subagentes_e_nome_proprio():
     orquestrador = montar_orquestrador()
+    assert len(orquestrador.sub_agents) == 4
     nomes_subagentes = {sub_agente.name for sub_agente in orquestrador.sub_agents}
     assert nomes_subagentes == {
         "agente_rotina",
