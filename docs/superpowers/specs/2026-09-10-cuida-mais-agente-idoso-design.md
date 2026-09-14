@@ -21,6 +21,15 @@ workflows com paridade de funcionalidades (webhooks, HTTP requests, export
 de workflow em `.json`) — a justificativa deve constar no relatório final
 para o avaliador.
 
+**Nota de substituição de ferramenta (canal WhatsApp):** o canal de
+comunicação com o idoso usa **WAHA** (WhatsApp HTTP API, open-source,
+self-hosted) em vez de Twilio. Decisão tomada por combinar melhor com a
+escolha do n8n (nó nativo na comunidade, sem exigir conta/sandbox Twilio) —
+trade-off registrado: WAHA opera sobre o protocolo WhatsApp Web via QR code
+com um número real, então carrega um risco baixo, mas real, de limitação
+do número por automação, ao contrário do Twilio Sandbox (oficial, sem esse
+risco, porém mais burocrático de configurar).
+
 **Sem pressão de prazo no momento da escrita desta spec:** o autor ainda não
 "copiou o card" (o que dispararia o prazo formal de 7 dias), e já possui
 hardware disponível (Mi Band 9, ESP32, Arduino, motores de passo,
@@ -138,7 +147,8 @@ aceita/emite objetos validados (cobre o item 3.3 do card).
 - **n8n (substitui Langflow, itens 3.4 e 3.8)** — desenha visualmente o
   fluxo de **entrada de mensagem → classificação de urgência (via
   embeddings) → roteamento de resposta**, e hospeda a integração com
-  WhatsApp/Twilio. Entregue como `.json` do workflow + screenshot.
+  WhatsApp via WAHA (WhatsApp HTTP API). Entregue como `.json` do workflow
+  + screenshot.
 - **ADK (item 3.6)** — implementa em código Python a orquestração real dos
   5 agentes definidos na arquitetura (o "motor" do sistema).
 
@@ -168,8 +178,11 @@ forma coerente.
   histórico de medicação (confirmado/atrasado), últimos alertas, gráfico
   simples de presença/atividade do dia. Permite à família cadastrar/editar
   medicamentos e compromissos (evita depender do idoso digitar isso).
-- **WhatsApp (Twilio Sandbox) = canal do idoso:** lembretes de
-  remédio/compromisso; aceita respostas em texto ou áudio. Áudio é
+- **WhatsApp (WAHA) = canal do idoso:** lembretes de remédio/compromisso;
+  aceita respostas em texto ou áudio. WAHA é um serviço open-source
+  self-hosted (container Docker) que expõe uma API HTTP + webhooks sobre o
+  protocolo WhatsApp Web (conexão via QR code com um número real), com nó
+  nativo no n8n — evita depender de conta/sandbox Twilio. Áudio é
   transcrito (STT) antes de entrar no Orquestrador; resposta pode voltar em
   texto e, opcionalmente, em áudio (TTS).
 
@@ -249,6 +262,6 @@ código do MVP agora:
 | 3.5 Embeddings | Seção 6 |
 | 3.6 Orquestração ADK | Seção 3, 5 |
 | 3.7 Streamlit | Seção 7 |
-| 3.8 Comunicação (→ n8n/Twilio) | Seção 7, 5 |
+| 3.8 Comunicação (→ n8n/WAHA) | Seção 7, 5 |
 | 3.9 Desenvolvimento e testes | Seção 10 |
 | 3.10 Repositório e documentação | A definir no plano de implementação |
