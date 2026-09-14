@@ -1,6 +1,43 @@
+from datetime import datetime
+
 from google.adk.agents import Agent
 
+from zela.storage.db import conectar
+from zela.storage.rotina import aplicar_confirmacao, aplicar_lembretes_pendentes, listar_medicamentos
+
 MODELO_PADRAO = "gemini-2.0-flash"
+
+_CAMINHO_DB = "zela.db"
+
+
+def _obter_conexao():
+    return conectar(_CAMINHO_DB)
+
+
+def verificar_lembretes_pendentes(idoso_id: str, agora_iso: str) -> list[dict]:
+    """Retorna os medicamentos com lembrete pendente para o idoso no horário informado (ISO 8601)."""
+    conn = _obter_conexao()
+    agora = datetime.fromisoformat(agora_iso)
+    pendentes = aplicar_lembretes_pendentes(conn, idoso_id, agora)
+    return [m.model_dump(mode="json") for m in pendentes]
+
+
+def confirmar_medicamento(
+    idoso_id: str, medicamento_id: str, horario_previsto_iso: str, agora_iso: str
+) -> dict:
+    """Registra que o idoso confirmou ter tomado um medicamento."""
+    conn = _obter_conexao()
+    medicamentos = {m.id: m for m in listar_medicamentos(conn, idoso_id)}
+    medicamento = medicamentos.get(medicamento_id)
+    if medicamento is None:
+        return {"erro": f"medicamento {medicamento_id} não encontrado"}
+    confirmacao = aplicar_confirmacao(
+        conn,
+        medicamento,
+        horario_previsto=datetime.fromisoformat(horario_previsto_iso),
+        agora=datetime.fromisoformat(agora_iso),
+    )
+    return confirmacao.model_dump(mode="json")
 
 
 def montar_agente_rotina(model: str = MODELO_PADRAO) -> Agent:
@@ -9,10 +46,12 @@ def montar_agente_rotina(model: str = MODELO_PADRAO) -> Agent:
         model=model,
         description="Gerencia lembretes de medicamentos e compromissos do idoso.",
         instruction=(
-            "Verifique a agenda de medicamentos do idoso e avise quando houver "
-            "lembretes pendentes. Registre confirmações quando o idoso informar "
-            "que tomou o medicamento."
+            "Verifique a agenda de medicamentos do idoso usando "
+            "verificar_lembretes_pendentes, e registre confirmações com "
+            "confirmar_medicamento quando o idoso informar que tomou o "
+            "medicamento."
         ),
+        tools=[verificar_lembretes_pendentes, confirmar_medicamento],
     )
 
 
