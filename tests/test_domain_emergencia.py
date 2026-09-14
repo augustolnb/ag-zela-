@@ -8,6 +8,7 @@ from zela.models.perfil import ContatoFamiliar, PerfilIdoso
 def _perfil():
     return PerfilIdoso(
         nome="Maria da Silva",
+        telefone="+5511911111111",
         data_nascimento=datetime(1945, 3, 12).date(),
         contatos_familiares=[ContatoFamiliar(nome="João", telefone="+5511987654321")],
     )

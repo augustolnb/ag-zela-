@@ -12,6 +12,7 @@ class ContatoFamiliar(BaseModel):
 
 class PerfilIdoso(BaseModel):
     nome: str
+    telefone: str = Field(pattern=E164_PATTERN)
     data_nascimento: date
     contatos_familiares: list[ContatoFamiliar] = Field(min_length=1)
     condicoes_medicas: list[str] = Field(default_factory=list)
