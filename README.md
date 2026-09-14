@@ -13,7 +13,7 @@ Este repositório está sendo construído em fases (planos sequenciais):
 1. **Fundação** (este plano) — modelos Pydantic + lógica de domínio dos 5
    agentes + esqueleto de orquestração ADK. Tudo testável com `pytest`,
    sem hardware nem APIs externas.
-2. Comunicação real (WhatsApp/Twilio + áudio) — próxima etapa.
+2. **Comunicação real** (WhatsApp/Twilio + áudio) ✓
 3. Ingestão de sensores reais (ESP32 + Health Connect/Mi Band 9).
 4. Embeddings (classificação de urgência + RAG).
 5. Painel Streamlit para a família.
@@ -89,3 +89,34 @@ aritmética de datas da camada de domínio (`agora - ultima_presenca`,
   por enquanto é feito para ser importado e chamado a partir dos testes
   ou de um futuro runner, não executado diretamente pela linha de
   comando.
+
+## Configurando o WAHA (WhatsApp)
+
+1. Suba o container do WAHA:
+   ```bash
+   docker compose up -d
+   ```
+2. Abra `http://localhost:3000/` no navegador — o WAHA expõe um painel/Swagger
+   com um QR code. Escaneie com o WhatsApp do número que vai representar o
+   Zela+ (pode ser um número dedicado ao projeto, não precisa ser o número
+   pessoal do idoso).
+3. Configure o webhook do WAHA para apontar para
+   `http://<seu-host>:8000/webhook/whatsapp` (durante desenvolvimento local,
+   use uma ferramenta de túnel como `ngrok` se o WAHA rodar em um ambiente
+   que não alcança `localhost` diretamente).
+4. Defina a variável de ambiente com a chave de API do Gemini antes de
+   rodar o backend (necessária para o ADK processar as mensagens):
+   ```bash
+   export GOOGLE_API_KEY=sua-chave-aqui
+   ```
+5. Rode o backend:
+   ```bash
+   uvicorn zela.api.main:app --reload
+   ```
+
+**Nota:** o formato exato dos endpoints/payloads do WAHA usado no código
+(`zela/integrations/waha_client.py`, `zela/api/webhook.py`) foi escrito a
+partir de documentação/conhecimento geral sobre o projeto WAHA e pode
+precisar de pequenos ajustes contra a versão específica da imagem Docker
+usada — confira o Swagger da sua instância (`http://localhost:3000/`) se
+as mensagens não chegarem como esperado.

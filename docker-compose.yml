@@ -1,0 +1,10 @@
+services:
+  waha:
+    image: devlikeapro/waha
+    ports:
+      - "3000:3000"
+    volumes:
+      - waha_data:/app/.sessions
+
+volumes:
+  waha_data:
