@@ -16,9 +16,13 @@ def processar_mensagem(runner, id_idoso: str, texto: str, agora: datetime) -> st
     """Processa uma mensagem do idoso através do agente orquestrador e
     retorna o texto da resposta. `runner` é injetado para permitir testes
     sem um Runner ADK real (ver nota de risco de API no cabeçalho da task)."""
-    sessao = runner.session_service.create_session_sync(
+    sessao = runner.session_service.get_session_sync(
         app_name=_APP_NAME, user_id=id_idoso, session_id=id_idoso
     )
+    if sessao is None:
+        sessao = runner.session_service.create_session_sync(
+            app_name=_APP_NAME, user_id=id_idoso, session_id=id_idoso
+        )
     mensagem = types.Content(role="user", parts=[types.Part(text=texto)])
 
     texto_resposta = ""

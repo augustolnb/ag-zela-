@@ -23,12 +23,28 @@ class _EventoFalso:
 
 
 class _SessaoFalsa:
-    id = "sessao-1"
+    def __init__(self, session_id="sessao-1"):
+        self.id = session_id
 
 
 class _ServicoSessaoFalso:
-    def create_session_sync(self, app_name, user_id, session_id):
-        return _SessaoFalsa()
+    """Modela o comportamento real do InMemorySessionService: get_session_sync
+    retorna None se a sessão não existir, create_session_sync cria a sessão."""
+
+    def __init__(self):
+        self._sessoes = {}
+        self.chamadas_get = []
+        self.chamadas_create = []
+
+    def get_session_sync(self, *, app_name, user_id, session_id):
+        self.chamadas_get.append((app_name, user_id, session_id))
+        return self._sessoes.get(session_id)
+
+    def create_session_sync(self, *, app_name, user_id, session_id):
+        self.chamadas_create.append((app_name, user_id, session_id))
+        sessao = _SessaoFalsa("sessao-1")
+        self._sessoes[session_id] = sessao
+        return sessao
 
 
 class _RunnerFalso:
@@ -37,7 +53,7 @@ class _RunnerFalso:
         self._eventos = eventos
         self.chamadas = []
 
-    def run(self, user_id, session_id, new_message):
+    def run(self, *, user_id, session_id, new_message):
         self.chamadas.append((user_id, session_id, new_message))
         return self._eventos
 
@@ -49,6 +65,22 @@ def test_processar_mensagem_extrai_texto_do_evento_final():
 
     assert resposta == "Que bom que tomou!"
     assert len(runner_falso.chamadas) == 1
+    user_id, session_id, new_message = runner_falso.chamadas[0]
+    assert user_id == "idosa-1"
+    assert session_id == "sessao-1"
+    assert new_message.parts[0].text == "já tomei"
+
+
+def test_processar_mensagem_reusa_sessao_em_chamadas_consecutivas():
+    runner_falso = _RunnerFalso([_EventoFalso("ok")])
+
+    processar_mensagem(runner_falso, "idosa-1", "primeira mensagem", datetime(2026, 9, 14, 8, 5))
+    processar_mensagem(runner_falso, "idosa-1", "segunda mensagem", datetime(2026, 9, 14, 8, 6))
+
+    servico = runner_falso.session_service
+    assert len(servico.chamadas_get) == 2
+    assert len(servico.chamadas_create) == 1
+    assert len(runner_falso.chamadas) == 2
 
 
 def test_processar_mensagem_retorna_mensagem_padrao_sem_evento_final():
