@@ -260,8 +260,78 @@ código do MVP agora:
 | 3.3 Pydantic | Seção 4 |
 | 3.4 Langflow (→ n8n) | Seção 5 |
 | 3.5 Embeddings | Seção 6 |
-| 3.6 Orquestração ADK | Seção 3, 5 |
+| 3.6 Orquestração ADK | Seção 3, 5, 13 |
 | 3.7 Streamlit | Seção 7 |
-| 3.8 Comunicação (→ n8n/WAHA) | Seção 7, 5 |
+| 3.8 Comunicação (→ n8n/WAHA) | Seção 7, 5, 13 |
 | 3.9 Desenvolvimento e testes | Seção 10 |
 | 3.10 Repositório e documentação | A definir no plano de implementação |
+
+## 13. Detalhamento do Plano 2 — Comunicação Real (WAHA + persistência + runtime ADK)
+
+O Plano 1 deixou deliberadamente em aberto a camada de persistência e o
+runtime real dos agentes ADK (que ficaram só com o esqueleto estrutural,
+`tools=[]`). O Plano 2 resolve essas duas lacunas ao mesmo tempo em que
+implementa o canal de comunicação real com o idoso.
+
+### Arquitetura
+
+```
+WAHA (container Docker, pareado via QR code com um número real)
+   │  webhook (mensagem recebida: texto ou áudio)
+   ▼
+FastAPI (endpoint /webhook/whatsapp)
+   │
+   ▼
+Runner (ADK Runner + sessão de conversa em memória, por idoso)
+   │  chama ferramentas dos agentes
+   ▼
+Camada de serviço (lê/grava zela/storage, chama as funções puras de
+zela/domain — que NÃO mudam em relação ao Plano 1)
+   │
+   ▼
+SQLite (perfil, medicamentos, compromissos, confirmações, leituras de
+sensor, alertas, estado de escalonamento)
+
++ um scheduler (APScheduler) rodando em paralelo ao FastAPI, checando
+  lembretes de medicação/compromisso pendentes periodicamente e disparando
+  mensagens de saída via WAHA.
+```
+
+### Decisões
+
+- **Persistência:** SQLite local (arquivo único, sem servidor separado —
+  adequado ao escopo de MVP e fácil de inspecionar/reproduzir). Uma nova
+  camada `zela/storage/` (repositórios) fica entre o runtime e os modelos
+  Pydantic; a camada `zela/domain/` do Plano 1 continua 100% pura e
+  inalterada — os repositórios leem o estado necessário, chamam a função de
+  domínio correspondente, e gravam o resultado de volta.
+- **Ferramentas dos agentes ADK:** agora que existe onde ler/gravar estado,
+  os 4 agentes especializados (Plano 1, `zela/agents/orchestrator.py`)
+  ganham `tools=[...]` de verdade, apontando para funções na camada de
+  serviço (que por sua vez chamam `zela/domain/`).
+- **STT (voz do idoso → texto):** entrada multimodal nativa do Gemini (o
+  áudio é enviado diretamente ao modelo via ADK), sem serviço de STT
+  externo — decisão tomada para simplificar dependências, já que o Gemini
+  já é o LLM principal do projeto.
+- **TTS (resposta em áudio):** tentativa dentro do próprio Plano 2 (API de
+  fala do Gemini), mas não bloqueia o plano — se a integração complicar
+  demais, o MVP cai para resposta só em texto sem prejuízo ao restante do
+  escopo.
+- **Sessão de conversa vs. dados de domínio:** o histórico de conversa do
+  ADK Runner fica em memória (aceitável perder ao reiniciar o processo); os
+  dados de domínio (remédios, confirmações, alertas, leituras) persistem no
+  SQLite.
+- **Papel do n8n permanece adiado para o Plano 6:** o Plano 2 conecta o
+  FastAPI diretamente ao WAHA (webhook de entrada, chamadas HTTP de saída),
+  sem n8n no meio. O n8n entra depois como uma camada/visão adicional do
+  fluxo (itens 3.4/3.8), sem reescrever a integração que já está
+  funcionando.
+- **Scheduler de lembretes:** um job periódico (APScheduler, embutido no
+  processo do FastAPI) consulta `calcular_lembretes_pendentes` para os
+  medicamentos/compromissos cadastrados e dispara mensagens via WAHA — essa
+  peça não existia no Plano 1 (os testes chamavam a função de domínio
+  diretamente com um `agora` fixo).
+- **Setup do WAHA:** roda como container Docker separado, pareado via QR
+  code com um número de WhatsApp real. Isso precisa de instruções claras no
+  README (item 3.10 do card) — como subir o container, como parear o
+  número, como configurar a URL do webhook apontando para o FastAPI local.
