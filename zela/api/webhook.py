@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Request
+from starlette.concurrency import run_in_threadpool
 
 _ID_IDOSO_PADRAO = "idosa-1"
 
@@ -26,8 +27,8 @@ def montar_roteador(processar_mensagem, waha_client, id_idoso: str = _ID_IDOSO_P
             return {"status": "ignorado"}
         telefone, texto = extraido
 
-        resposta_texto = processar_mensagem(id_idoso, texto, datetime.now())
-        waha_client.enviar_texto(telefone, resposta_texto)
+        resposta_texto = await run_in_threadpool(processar_mensagem, id_idoso, texto, datetime.now())
+        await run_in_threadpool(waha_client.enviar_texto, telefone, resposta_texto)
 
         return {"status": "processado"}
 
