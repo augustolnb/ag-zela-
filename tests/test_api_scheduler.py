@@ -59,3 +59,38 @@ def test_verificar_e_enviar_lembretes_sem_perfil_retorna_lista_vazia(tmp_path):
     enviadas = verificar_e_enviar_lembretes(caminho_db, "nao-existe", waha_falso)
 
     assert enviadas == []
+
+
+def test_verificar_e_enviar_lembretes_nao_reenvia_dentro_da_mesma_janela(tmp_path, monkeypatch):
+    monkeypatch.setattr("zela.api.scheduler._lembretes_ja_enviados", set())
+
+    caminho_db = str(tmp_path / "teste.db")
+    conn = conectar(caminho_db)
+    salvar_perfil(conn, _perfil(), idoso_id="idosa-1")
+    medicamento = Medicamento(
+        id="med-1", nome="Losartana",
+        dosagem=Dosagem(quantidade=50, unidade="mg"), horarios=[time(8, 0)],
+    )
+    salvar_medicamento(conn, medicamento, idoso_id="idosa-1")
+
+    class _DatetimeFixo:
+        _agora = None
+
+        @classmethod
+        def now(cls):
+            return cls._agora
+
+    monkeypatch.setattr("zela.api.scheduler.datetime", _DatetimeFixo)
+
+    waha_falso = _WahaFalso()
+
+    from datetime import datetime as _dt
+
+    _DatetimeFixo._agora = _dt(2026, 9, 14, 8, 5)
+    primeira = verificar_e_enviar_lembretes(caminho_db, "idosa-1", waha_falso)
+    assert len(primeira) == 1
+
+    _DatetimeFixo._agora = _dt(2026, 9, 14, 8, 12)
+    segunda = verificar_e_enviar_lembretes(caminho_db, "idosa-1", waha_falso)
+    assert len(segunda) == 0
+    assert len(waha_falso.enviados) == 1

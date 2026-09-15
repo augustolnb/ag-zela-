@@ -16,8 +16,11 @@ def _obter_conexao():
 
 def verificar_lembretes_pendentes(idoso_id: str, agora_iso: str) -> list[dict]:
     """Retorna os medicamentos com lembrete pendente para o idoso no horário informado (ISO 8601)."""
+    try:
+        agora = datetime.fromisoformat(agora_iso)
+    except ValueError:
+        return [{"erro": f"agora_iso inválido: {agora_iso!r}"}]
     conn = _obter_conexao()
-    agora = datetime.fromisoformat(agora_iso)
     pendentes = aplicar_lembretes_pendentes(conn, idoso_id, agora)
     return [m.model_dump(mode="json") for m in pendentes]
 
@@ -26,6 +29,11 @@ def confirmar_medicamento(
     idoso_id: str, medicamento_id: str, horario_previsto_iso: str, agora_iso: str
 ) -> dict:
     """Registra que o idoso confirmou ter tomado um medicamento."""
+    try:
+        horario_previsto = datetime.fromisoformat(horario_previsto_iso)
+        agora = datetime.fromisoformat(agora_iso)
+    except ValueError as exc:
+        return {"erro": f"data/hora inválida: {exc}"}
     conn = _obter_conexao()
     medicamentos = {m.id: m for m in listar_medicamentos(conn, idoso_id)}
     medicamento = medicamentos.get(medicamento_id)
@@ -34,8 +42,8 @@ def confirmar_medicamento(
     confirmacao = aplicar_confirmacao(
         conn,
         medicamento,
-        horario_previsto=datetime.fromisoformat(horario_previsto_iso),
-        agora=datetime.fromisoformat(agora_iso),
+        horario_previsto=horario_previsto,
+        agora=agora,
     )
     return confirmacao.model_dump(mode="json")
 
@@ -49,7 +57,16 @@ def montar_agente_rotina(model: str = MODELO_PADRAO) -> Agent:
             "Verifique a agenda de medicamentos do idoso usando "
             "verificar_lembretes_pendentes, e registre confirmações com "
             "confirmar_medicamento quando o idoso informar que tomou o "
-            "medicamento."
+            "medicamento.\n\n"
+            "Toda mensagem recebida começa com uma linha de contexto do "
+            "sistema no formato "
+            "'[contexto do sistema: idoso_id=<id>; agora=<timestamp ISO 8601>]', "
+            "seguida do texto real do idoso. Extraia o valor exato de "
+            "idoso_id e de agora dessa linha e use-os como os argumentos "
+            "idoso_id e agora_iso ao chamar suas ferramentas. Ao confirmar "
+            "que um medicamento foi tomado agora (sem outro horário "
+            "explícito informado pelo idoso), use esse mesmo valor de "
+            "agora também como horario_previsto_iso."
         ),
         tools=[verificar_lembretes_pendentes, confirmar_medicamento],
     )

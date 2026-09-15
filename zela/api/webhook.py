@@ -8,6 +8,8 @@ _ID_IDOSO_PADRAO = "idosa-1"
 
 def _extrair_telefone_e_texto(payload: dict) -> tuple[str, str] | None:
     dados = payload.get("payload", {})
+    if dados.get("fromMe"):
+        return None
     remetente = dados.get("from")
     texto = dados.get("body")
     if not remetente or not texto:
@@ -16,7 +18,12 @@ def _extrair_telefone_e_texto(payload: dict) -> tuple[str, str] | None:
     return telefone, texto
 
 
-def montar_roteador(processar_mensagem, waha_client, id_idoso: str = _ID_IDOSO_PADRAO) -> APIRouter:
+def montar_roteador(
+    processar_mensagem,
+    waha_client,
+    id_idoso: str = _ID_IDOSO_PADRAO,
+    telefone_idoso: str | None = None,
+) -> APIRouter:
     roteador = APIRouter()
 
     @roteador.post("/webhook/whatsapp")
@@ -26,6 +33,8 @@ def montar_roteador(processar_mensagem, waha_client, id_idoso: str = _ID_IDOSO_P
         if extraido is None:
             return {"status": "ignorado"}
         telefone, texto = extraido
+        if telefone_idoso is not None and telefone != telefone_idoso:
+            return {"status": "ignorado"}
 
         resposta_texto = await run_in_threadpool(processar_mensagem, id_idoso, texto, datetime.now())
         await run_in_threadpool(waha_client.enviar_texto, telefone, resposta_texto)

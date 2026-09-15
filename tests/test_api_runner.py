@@ -68,7 +68,21 @@ def test_processar_mensagem_extrai_texto_do_evento_final():
     user_id, session_id, new_message = runner_falso.chamadas[0]
     assert user_id == "idosa-1"
     assert session_id == "sessao-1"
-    assert new_message.parts[0].text == "já tomei"
+    assert "já tomei" in new_message.parts[0].text
+    assert "idosa-1" in new_message.parts[0].text
+    assert datetime(2026, 9, 14, 8, 5).isoformat() in new_message.parts[0].text
+
+
+def test_processar_mensagem_inclui_idoso_id_e_agora_no_texto_enviado_ao_modelo():
+    runner_falso = _RunnerFalso([_EventoFalso("ok")])
+    agora = datetime(2026, 9, 14, 12, 30, 0)
+
+    processar_mensagem(runner_falso, "idosa-42", "oi", agora)
+
+    _, _, new_message = runner_falso.chamadas[0]
+    texto_enviado = new_message.parts[0].text
+    assert "idosa-42" in texto_enviado
+    assert agora.isoformat() in texto_enviado
 
 
 def test_processar_mensagem_reusa_sessao_em_chamadas_consecutivas():

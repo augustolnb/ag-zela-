@@ -23,7 +23,8 @@ def processar_mensagem(runner, id_idoso: str, texto: str, agora: datetime) -> st
         sessao = runner.session_service.create_session_sync(
             app_name=_APP_NAME, user_id=id_idoso, session_id=id_idoso
         )
-    mensagem = types.Content(role="user", parts=[types.Part(text=texto)])
+    contexto = f"[contexto do sistema: idoso_id={id_idoso}; agora={agora.isoformat()}]\n"
+    mensagem = types.Content(role="user", parts=[types.Part(text=contexto + texto)])
 
     texto_resposta = ""
     for evento in runner.run(user_id=id_idoso, session_id=sessao.id, new_message=mensagem):

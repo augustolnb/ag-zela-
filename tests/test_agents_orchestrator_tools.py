@@ -62,3 +62,26 @@ def test_confirmar_medicamento_inexistente_retorna_erro(monkeypatch, tmp_path):
     resultado = confirmar_medicamento("idosa-1", "nao-existe", "2026-09-14T08:05:00", "2026-09-14T08:05:00")
 
     assert "erro" in resultado
+
+
+def test_verificar_lembretes_pendentes_com_agora_iso_invalido_retorna_erro_estruturado(
+    monkeypatch, tmp_path
+):
+    banco = str(tmp_path / "teste.db")
+    monkeypatch.setattr("zela.agents.orchestrator._CAMINHO_DB", banco)
+    conectar(banco)
+
+    resultado = verificar_lembretes_pendentes("idosa-1", "não-é-uma-data")
+
+    assert isinstance(resultado, list)
+    assert "erro" in resultado[0]
+
+
+def test_confirmar_medicamento_com_data_invalida_retorna_erro_estruturado(monkeypatch, tmp_path):
+    banco = str(tmp_path / "teste.db")
+    monkeypatch.setattr("zela.agents.orchestrator._CAMINHO_DB", banco)
+    conectar(banco)
+
+    resultado = confirmar_medicamento("idosa-1", "med-1", "não-é-uma-data", "2026-09-14T08:05:00")
+
+    assert "erro" in resultado

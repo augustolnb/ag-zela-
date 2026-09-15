@@ -10,10 +10,11 @@ podendo escalar alertas até simular contato com serviço de emergência.
 
 Este repositório está sendo construído em fases (planos sequenciais):
 
-1. **Fundação** (este plano) — modelos Pydantic + lógica de domínio dos 5
+1. **Fundação** (Plano 1) — modelos Pydantic + lógica de domínio dos 5
    agentes + esqueleto de orquestração ADK. Tudo testável com `pytest`,
    sem hardware nem APIs externas.
-2. **Comunicação real** (WhatsApp/Twilio + áudio) ✓
+2. **Comunicação real** (WhatsApp via WAHA) ✓ — áudio (STT/TTS) ainda não
+   implementado.
 3. Ingestão de sensores reais (ESP32 + Health Connect/Mi Band 9).
 4. Embeddings (classificação de urgência + RAG).
 5. Painel Streamlit para a família.
@@ -31,6 +32,46 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 ```
+
+## Cadastrando a idosa e os medicamentos
+
+Nenhum caminho do código em produção cadastra dados sozinho — é preciso
+popular o banco SQLite usando os repositórios de `zela/storage/`
+diretamente. O `idoso_id` usado em todo o código (webhook, scheduler,
+ferramentas do agente de rotina) é `"idosa-1"` (veja a constante
+`ID_IDOSO` em `zela/api/main.py`); use o mesmo valor ao cadastrar:
+
+```python
+from datetime import date, time
+from zela.models.perfil import ContatoFamiliar, PerfilIdoso
+from zela.models.rotina import Dosagem, Medicamento
+from zela.storage.db import conectar
+from zela.storage.perfil import salvar_perfil
+from zela.storage.rotina import salvar_medicamento
+
+conn = conectar("zela.db")
+
+perfil = PerfilIdoso(
+    nome="Maria da Silva",
+    telefone="+5511900000000",  # número real da idosa, formato E.164
+    data_nascimento=date(1945, 3, 12),
+    contatos_familiares=[ContatoFamiliar(nome="João", telefone="+5511987654321")],
+)
+salvar_perfil(conn, perfil, idoso_id="idosa-1")
+
+medicamento = Medicamento(
+    id="med-1",
+    nome="Losartana",
+    dosagem=Dosagem(quantidade=50, unidade="mg"),
+    horarios=[time(8, 0), time(20, 0)],
+)
+salvar_medicamento(conn, medicamento, idoso_id="idosa-1")
+```
+
+Esse trecho pode ser salvo como um script (`python seed.py`) e executado
+uma vez, ou rodado interativamente (`python` / REPL). Um painel Streamlit
+de administração para fazer isso pela interface está planejado para uma
+fase posterior (ver "Status do projeto" acima).
 
 ## Rodando os testes
 
@@ -89,6 +130,12 @@ aritmética de datas da camada de domínio (`agora - ultima_presenca`,
   por enquanto é feito para ser importado e chamado a partir dos testes
   ou de um futuro runner, não executado diretamente pela linha de
   comando.
+- `zela/storage/` — repositórios SQLite (perfil, medicamentos,
+  confirmações) que persistem os dados usados pelos agentes.
+- `zela/integrations/` — cliente WAHA para envio/recebimento de mensagens
+  via WhatsApp.
+- `zela/api/` — webhook do WhatsApp, ponte com o ADK Runner, scheduler de
+  lembretes e montagem do app FastAPI.
 
 ## Configurando o WAHA (WhatsApp)
 
