@@ -55,9 +55,9 @@ visibilidade do dia a dia nem um mecanismo de alerta em caso de risco
 que escreve a agenda do dia em um quadro branco (seção 9).
 
 **Integrações reais de hardware no MVP:**
-- Mi Band 9, via Health Connect (Android), usando o app "Health Auto
-  Export" como ponte para enviar leituras por webhook — evita desenvolver
-  um app Android próprio.
+- Mi Band 9, via Health Connect (Android), usando o app "Health Connect
+  Webhook" (Play Store, `com.hcwebhook.app`) como ponte para enviar
+  leituras por webhook — evita desenvolver um app Android próprio.
 - ESP32 com sensor ultrassônico (HC-SR04) para detecção de
   presença/movimento nos cômodos da casa.
 - Pressão arterial e glicemia **não** entram como sensores reais no MVP
@@ -90,7 +90,7 @@ que escreve a agenda do dia em um quadro branco (seção 9).
                      ┌─────────────┴─────────────┐
                      ▼                            ▼
            Mi Band 9 (Health Connect,       ESP32 (HC-SR04 presença)
-           via Health Auto Export)
+           via Health Connect Webhook)
 ```
 
 Arquitetura escolhida (dentre 3 avaliadas) para o Zela+: **5 agentes especializados**
@@ -193,10 +193,13 @@ forma coerente.
   detectada em um cômodo. Vira um `LeituraSensor(fonte=esp32,
   tipo=presenca)`.
 - **Mi Band 9 → Health Connect:** Health Connect é uma API on-device do
-  Android sem endpoint de nuvem próprio. Ponte escolhida: app "Health Auto
-  Export" (Play Store), que lê o Health Connect e envia dados
-  periodicamente via webhook HTTP ao mesmo endpoint de ingestão — evita
-  desenvolver um app Android próprio para o MVP.
+  Android sem endpoint de nuvem próprio. Ponte escolhida: app "Health
+  Connect Webhook" (Play Store, `com.hcwebhook.app`), que lê o Health
+  Connect e envia dados periodicamente via webhook HTTP a um endpoint de
+  ingestão — evita desenvolver um app Android próprio para o MVP.
+  ("Health Auto Export", cogitado inicialmente, é exclusivo do
+  ecossistema Apple Health/iOS — não se aplica ao Android/Health
+  Connect; descoberto e corrigido durante o brainstorming do Plano 3.)
 
 ## 9. Política de escalonamento de emergência
 
@@ -260,7 +263,7 @@ código do MVP agora:
 | 3.3 Pydantic | Seção 4 |
 | 3.4 Langflow (→ n8n) | Seção 5 |
 | 3.5 Embeddings | Seção 6 |
-| 3.6 Orquestração ADK | Seção 3, 5, 13 |
+| 3.6 Orquestração ADK | Seção 3, 5, 13, 14 |
 | 3.7 Streamlit | Seção 7 |
 | 3.8 Comunicação (→ n8n/WAHA) | Seção 7, 5, 13 |
 | 3.9 Desenvolvimento e testes | Seção 10 |
@@ -335,3 +338,83 @@ sensor, alertas, estado de escalonamento)
   code com um número de WhatsApp real. Isso precisa de instruções claras no
   README (item 3.10 do card) — como subir o container, como parear o
   número, como configurar a URL do webhook apontando para o FastAPI local.
+
+## 14. Detalhamento do Plano 3 — Ingestão de Sensores e Detecção de Risco
+
+O Plano 1 deixou os agentes de Monitoramento e Emergência sem ferramentas
+(`tools=[]`) por não haver, ainda, nenhum dado de sensor real fluindo pelo
+sistema. O Plano 3 resolve isso: ingestão real do ESP32 e do smartwatch,
+mais o ciclo automático de detecção de risco e escalonamento.
+
+### Arquitetura
+
+```
+ESP32 (HC-SR04)              Mi Band 9 → Health Connect → app "Health
+     │ POST                          │ Connect Webhook" (com.hcwebhook.app)
+     ▼                               ▼ POST (webhook configurado no app)
+POST /ingest/esp32          POST /ingest/health-connect
+   (zela/api/ingestao.py, novo módulo FastAPI)
+                     └──────────────┬───────────────┘
+                                    ▼
+                  zela/storage/monitoramento.py
+                  (valida com LeituraSensor, persiste em leitura_sensor)
+
+Scheduler (novo job, junto ao de lembretes do Plano 2, a cada 15 min):
+  lê leituras recentes → classificar_por_regra (domínio, Plano 1)
+  → EventoMonitoramento
+  → zela/storage/escalonamento.py: lê/grava EstadoEscalonamento
+    → decidir_proxima_acao (domínio, Plano 1) → list[Alerta]
+  → zela/storage/alertas.py: persiste os Alertas
+  → WahaClient envia cada Alerta por WhatsApp
+
+ADK (consulta pela família via WhatsApp — o LLM nunca decide risco,
+apenas responde a perguntas sobre o status já calculado pelo scheduler):
+  agente_monitoramento ganha tool: consultar_status_atual(idoso_id)
+    -> status mais recente + últimas leituras
+  agente_emergencia ganha tool: consultar_historico_alertas(idoso_id)
+    -> alertas recentes
+```
+
+### Decisões
+
+- **Ponte do smartwatch corrigida:** o app "Health Auto Export" (decisão
+  original do Plano 1) é exclusivo do ecossistema Apple Health/iOS e não
+  se aplica ao Health Connect/Android. Substituído por **"Health Connect
+  Webhook"** (Play Store, `com.hcwebhook.app`), feito especificamente para
+  ler o Health Connect e enviar dados via webhook HTTP configurável —
+  descoberto durante o brainstorming deste plano (ver seção 1 e seção 8,
+  já corrigidas).
+- **Detecção de risco é 100% determinística:** o ciclo automático
+  (classificação + escalonamento) roda via scheduler chamando as funções
+  puras de domínio diretamente — o LLM nunca participa da decisão de
+  "há risco?" ou "devo escalar?". Isso é deliberado: uma decisão de
+  segurança não deve depender do comportamento não determinístico de um
+  LLM. O LLM só entra para a família **consultar** o status já calculado.
+- **Storage finalmente completo:** `zela/storage/monitoramento.py`,
+  `escalonamento.py` e `alertas.py` — todos deliberadamente adiados desde
+  o Plano 2 por falta de dados de sensor — são construídos agora. O
+  schema SQLite (todas as tabelas já existem desde o Plano 2, Task 3) não
+  muda.
+- **Ajuste retroativo no webhook do Plano 2:** a trava de segurança
+  adicionada na correção final do Plano 2 (`telefone_idoso`) restringe o
+  webhook a aceitar mensagens só do número da idosa. Para a família poder
+  consultar o status pelo WhatsApp, essa lista precisa aceitar também os
+  números de `contatos_familiares` — ajuste incluído neste plano
+  (`montar_roteador` passa a aceitar uma lista de números permitidos, não
+  só um).
+- **Firmware do ESP32:** código Arduino/C++ real (não Python, não testável
+  via `pytest`) lendo o HC-SR04 e enviando `POST /ingest/esp32` a cada
+  mudança de presença detectada. Entregue como um arquivo `.ino` com
+  instruções de fiação e flash no README — sem teste automatizado,
+  mesmo tratamento dado ao `docker-compose.yml` do WAHA (infraestrutura
+  documentada, verificação manual).
+- **Risco real de API (payload do "Health Connect Webhook"):** o formato
+  exato do payload que esse app envia não foi verificado neste momento —
+  mesmo tratamento de risco dado ao WAHA e ao ADK Runner nos planos
+  anteriores (nota explícita no plano de implementação, endpoint
+  projetado para ser fácil de ajustar após inspeção real).
+- **"Sem dados" como alerta distinto (spec §10):** se nenhuma leitura
+  chegar por um período (ESP32 ou ponte do Health Connect param de
+  enviar), o scheduler gera um alerta de nível informativo diferenciado
+  de "risco de saúde" — evita alarme falso por falha técnica, conforme já
+  previsto na seção 10.
