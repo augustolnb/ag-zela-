@@ -22,6 +22,8 @@ const float DISTANCIA_LIMIAR_CM = 150.0;
 const unsigned long INTERVALO_LEITURA_MS = 2000;
 
 bool presencaAnterior = false;
+unsigned long ultimaTentativaReconexaoMs = 0;
+const unsigned long INTERVALO_RECONEXAO_MS = 15000UL;  // no minimo 15s entre tentativas
 
 float lerDistanciaCm() {
   digitalWrite(PINO_TRIGGER, LOW);
@@ -71,11 +73,16 @@ void setup() {
 
   WiFi.begin(WIFI_SSID, WIFI_SENHA);
   Serial.print("Conectando ao WiFi");
-  while (WiFi.status() != WL_CONNECTED) {
+  unsigned long limiteEsperaWifiMs = millis() + 30000UL;
+  while (WiFi.status() != WL_CONNECTED && millis() < limiteEsperaWifiMs) {
     delay(500);
     Serial.print(".");
   }
-  Serial.println("\nConectado.");
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\nConectado.");
+  } else {
+    Serial.println("\nWiFi nao conectou no boot; tentando em segundo plano.");
+  }
 
   // O ESP32 nao tem RTC com bateria propria — sincroniza a hora via NTP
   // antes de comecar a enviar leituras, para os timestamps serem reais.
@@ -96,9 +103,10 @@ void setup() {
 }
 
 void loop() {
-  if (WiFi.status() != WL_CONNECTED) {
-    WiFi.disconnect();
-    WiFi.begin(WIFI_SSID, WIFI_SENHA);
+  if (WiFi.status() != WL_CONNECTED && millis() - ultimaTentativaReconexaoMs >= INTERVALO_RECONEXAO_MS) {
+    Serial.println("WiFi desconectado, tentando reconectar...");
+    WiFi.reconnect();
+    ultimaTentativaReconexaoMs = millis();
   }
 
   float distanciaCm = lerDistanciaCm();
