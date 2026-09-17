@@ -81,3 +81,32 @@ def test_aplicar_classificacao_sem_leituras_de_presenca_na_janela_e_atencao():
 
     assert evento.status == StatusMonitoramento.ATENCAO
     assert "sem" in evento.motivo.lower() or "nenhuma" in evento.motivo.lower()
+
+
+def test_listar_leituras_recentes_isola_por_idoso():
+    conn = conectar(":memory:")
+    agora = datetime(2026, 9, 16, 10, 0)
+    leitura_outra_idosa = LeituraSensor(
+        fonte=FonteSensor.ESP32, tipo=TipoLeitura.PRESENCA, valor=1,
+        unidade="deteccao", timestamp=agora,
+    )
+    salvar_leitura(conn, leitura_outra_idosa, idoso_id="idosa-2")
+
+    leituras = listar_leituras_recentes(conn, "idosa-1", desde=agora - timedelta(hours=1))
+
+    assert leituras == []
+
+
+def test_aplicar_classificacao_ignora_leituras_de_outro_idoso():
+    conn = conectar(":memory:")
+    agora = datetime(2026, 9, 16, 14, 0)
+    leitura_outra_idosa = LeituraSensor(
+        fonte=FonteSensor.ESP32, tipo=TipoLeitura.PRESENCA, valor=1,
+        unidade="deteccao", timestamp=agora,  # presença recente, mas de outra idosa
+    )
+    salvar_leitura(conn, leitura_outra_idosa, idoso_id="idosa-2")
+
+    evento = aplicar_classificacao(conn, "idosa-1", agora)
+
+    # idosa-1 não tem nenhuma leitura própria -> deve cair no caso "sem dados", não "normal"
+    assert evento.status == StatusMonitoramento.ATENCAO
