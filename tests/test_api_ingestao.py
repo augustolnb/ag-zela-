@@ -72,3 +72,59 @@ def test_ingest_health_connect_payload_invalido_retorna_400():
 
     assert resposta.status_code == 400
     assert armazenamento.salvas == []
+
+
+def test_ingest_esp32_valor_com_tipo_errado_retorna_400():
+    armazenamento = _ArmazenamentoFalso()
+    app = FastAPI()
+    app.include_router(montar_roteador_ingestao(armazenamento.salvar))
+    cliente = TestClient(app)
+
+    resposta = cliente.post(
+        "/ingest/esp32", json={"valor": "abc", "timestamp": "2026-09-16T10:00:00"}
+    )
+
+    assert resposta.status_code == 400
+    assert armazenamento.salvas == []
+
+
+def test_ingest_esp32_timestamp_invalido_retorna_400():
+    armazenamento = _ArmazenamentoFalso()
+    app = FastAPI()
+    app.include_router(montar_roteador_ingestao(armazenamento.salvar))
+    cliente = TestClient(app)
+
+    resposta = cliente.post("/ingest/esp32", json={"valor": 1, "timestamp": "nao-e-uma-data"})
+
+    assert resposta.status_code == 400
+    assert armazenamento.salvas == []
+
+
+def test_ingest_health_connect_value_com_tipo_errado_retorna_400():
+    armazenamento = _ArmazenamentoFalso()
+    app = FastAPI()
+    app.include_router(montar_roteador_ingestao(armazenamento.salvar))
+    cliente = TestClient(app)
+
+    resposta = cliente.post(
+        "/ingest/health-connect",
+        json={"value": {"bpm": 72}, "unit": "bpm", "timestamp": "2026-09-16T10:00:00"},
+    )
+
+    assert resposta.status_code == 400
+    assert armazenamento.salvas == []
+
+
+def test_ingest_health_connect_timestamp_invalido_retorna_400():
+    armazenamento = _ArmazenamentoFalso()
+    app = FastAPI()
+    app.include_router(montar_roteador_ingestao(armazenamento.salvar))
+    cliente = TestClient(app)
+
+    resposta = cliente.post(
+        "/ingest/health-connect",
+        json={"value": 72, "unit": "bpm", "timestamp": "nao-e-uma-data"},
+    )
+
+    assert resposta.status_code == 400
+    assert armazenamento.salvas == []
