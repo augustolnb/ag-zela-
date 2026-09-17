@@ -55,3 +55,31 @@ def test_aplicar_confirmacao_persiste_e_exclui_de_lembretes_futuros():
 
     pendentes_depois = aplicar_lembretes_pendentes(conn, "idosa-1", agora)
     assert pendentes_depois == []
+
+
+def test_salvar_e_listar_medicamento_com_bula():
+    conn = conectar(":memory:")
+    medicamento = Medicamento(
+        id="med-1", nome="Losartana",
+        dosagem=Dosagem(quantidade=50, unidade="mg"), horarios=[time(8, 0)],
+        bula="Usado para pressão alta. Tomar em jejum.",
+    )
+
+    salvar_medicamento(conn, medicamento, idoso_id="idosa-1")
+    medicamentos = listar_medicamentos(conn, "idosa-1")
+
+    assert len(medicamentos) == 1
+    assert medicamentos[0].bula == "Usado para pressão alta. Tomar em jejum."
+
+
+def test_salvar_e_listar_medicamento_sem_bula():
+    conn = conectar(":memory:")
+    medicamento = Medicamento(
+        id="med-2", nome="Vitamina D",
+        dosagem=Dosagem(quantidade=1, unidade="comprimido"), horarios=[time(9, 0)],
+    )
+
+    salvar_medicamento(conn, medicamento, idoso_id="idosa-1")
+    medicamentos = listar_medicamentos(conn, "idosa-1")
+
+    assert medicamentos[0].bula is None

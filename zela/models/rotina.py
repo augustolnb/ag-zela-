@@ -33,6 +33,7 @@ class Medicamento(BaseModel):
     horarios: list[time]
     dias_semana: list[int] = Field(default_factory=lambda: list(range(7)))
     ativo: bool = True
+    bula: str | None = None
 
     @field_validator("horarios")
     @classmethod

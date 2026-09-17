@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS medicamento (
     dosagem_unidade TEXT NOT NULL,
     horarios TEXT NOT NULL,
     dias_semana TEXT NOT NULL,
-    ativo INTEGER NOT NULL DEFAULT 1
+    ativo INTEGER NOT NULL DEFAULT 1,
+    bula TEXT
 );
 
 CREATE TABLE IF NOT EXISTS confirmacao_medicacao (

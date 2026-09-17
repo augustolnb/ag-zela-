@@ -17,15 +17,16 @@ def salvar_medicamento(conn: sqlite3.Connection, medicamento: Medicamento, idoso
     conn.execute(
         """
         INSERT INTO medicamento
-            (id, idoso_id, nome, dosagem_quantidade, dosagem_unidade, horarios, dias_semana, ativo)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (id, idoso_id, nome, dosagem_quantidade, dosagem_unidade, horarios, dias_semana, ativo, bula)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             nome = excluded.nome,
             dosagem_quantidade = excluded.dosagem_quantidade,
             dosagem_unidade = excluded.dosagem_unidade,
             horarios = excluded.horarios,
             dias_semana = excluded.dias_semana,
-            ativo = excluded.ativo
+            ativo = excluded.ativo,
+            bula = excluded.bula
         """,
         (
             medicamento.id,
@@ -36,6 +37,7 @@ def salvar_medicamento(conn: sqlite3.Connection, medicamento: Medicamento, idoso
             json.dumps([h.isoformat() for h in medicamento.horarios]),
             json.dumps(medicamento.dias_semana),
             int(medicamento.ativo),
+            medicamento.bula,
         ),
     )
     conn.commit()
@@ -49,6 +51,7 @@ def _linha_para_medicamento(linha: sqlite3.Row) -> Medicamento:
         horarios=[time.fromisoformat(h) for h in json.loads(linha["horarios"])],
         dias_semana=json.loads(linha["dias_semana"]),
         ativo=bool(linha["ativo"]),
+        bula=linha["bula"],
     )
 
 
