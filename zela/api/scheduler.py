@@ -4,11 +4,18 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 from zela.domain.comunicacao import formatar_lembrete
 from zela.domain.rotina import JANELA_LEMBRETE
+from zela.models.alertas import Alerta
+from zela.models.monitoramento import EventoMonitoramento
+from zela.models.perfil import PerfilIdoso
+from zela.storage.alertas import salvar_alerta
 from zela.storage.db import conectar
+from zela.storage.escalonamento import aplicar_escalonamento
+from zela.storage.monitoramento import aplicar_classificacao
 from zela.storage.perfil import obter_perfil
 from zela.storage.rotina import aplicar_lembretes_pendentes
 
 INTERVALO_MINUTOS = 5
+INTERVALO_MONITORAMENTO_MINUTOS = 15
 
 # Dedupe em memória de processo: evita reenviar o mesmo lembrete a cada
 # execução do scheduler enquanto a dose continuar dentro da janela de
@@ -55,6 +62,36 @@ def verificar_e_enviar_lembretes(caminho_db: str, id_idoso: str, waha_client) ->
     return enviadas
 
 
+def _telefone_por_nome(perfil: PerfilIdoso, nome: str) -> str | None:
+    if nome == perfil.nome:
+        return perfil.telefone
+    for contato in perfil.contatos_familiares:
+        if contato.nome == nome:
+            return contato.telefone
+    return None
+
+
+def verificar_e_escalonar_riscos(caminho_db: str, id_idoso: str, waha_client) -> list[Alerta]:
+    conn = conectar(caminho_db)
+    perfil = obter_perfil(conn, id_idoso)
+    if perfil is None:
+        return []
+
+    agora = datetime.now()
+    evento: EventoMonitoramento = aplicar_classificacao(conn, id_idoso, agora)
+    alertas = aplicar_escalonamento(conn, id_idoso, evento, perfil, agora)
+
+    for alerta in alertas:
+        salvar_alerta(conn, alerta, id_idoso)
+        if alerta.simulado:
+            continue
+        telefone = _telefone_por_nome(perfil, alerta.destinatario)
+        if telefone is not None:
+            waha_client.enviar_texto(telefone, alerta.mensagem)
+
+    return alertas
+
+
 def iniciar_scheduler(caminho_db: str, id_idoso: str, waha_client) -> BackgroundScheduler:
     agendador = BackgroundScheduler()
     agendador.add_job(
@@ -63,6 +100,13 @@ def iniciar_scheduler(caminho_db: str, id_idoso: str, waha_client) -> Background
         minutes=INTERVALO_MINUTOS,
         args=[caminho_db, id_idoso, waha_client],
         id="verificar_lembretes",
+    )
+    agendador.add_job(
+        verificar_e_escalonar_riscos,
+        "interval",
+        minutes=INTERVALO_MONITORAMENTO_MINUTOS,
+        args=[caminho_db, id_idoso, waha_client],
+        id="verificar_riscos",
     )
     agendador.start()
     return agendador

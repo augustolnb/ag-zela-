@@ -1,9 +1,13 @@
-from datetime import date, time
+from datetime import date, datetime, time
 
-from zela.api.scheduler import verificar_e_enviar_lembretes
+from zela.api.scheduler import verificar_e_enviar_lembretes, verificar_e_escalonar_riscos
+from zela.domain.emergencia import EstagioEscalonamento
+from zela.models.monitoramento import FonteSensor, LeituraSensor, TipoLeitura
 from zela.models.perfil import ContatoFamiliar, PerfilIdoso
 from zela.models.rotina import Dosagem, Medicamento
 from zela.storage.db import conectar
+from zela.storage.escalonamento import obter_estado
+from zela.storage.monitoramento import salvar_leitura
 from zela.storage.perfil import salvar_perfil
 from zela.storage.rotina import salvar_medicamento
 
@@ -94,3 +98,63 @@ def test_verificar_e_enviar_lembretes_nao_reenvia_dentro_da_mesma_janela(tmp_pat
     segunda = verificar_e_enviar_lembretes(caminho_db, "idosa-1", waha_falso)
     assert len(segunda) == 0
     assert len(waha_falso.enviados) == 1
+
+
+def test_verificar_e_escalonar_riscos_risco_envia_para_a_idosa(tmp_path, monkeypatch):
+    caminho_db = str(tmp_path / "teste.db")
+    conn = conectar(caminho_db)
+    salvar_perfil(conn, _perfil(), idoso_id="idosa-1")
+    leitura = LeituraSensor(
+        fonte=FonteSensor.ESP32, tipo=TipoLeitura.PRESENCA, valor=1,
+        unidade="deteccao", timestamp=datetime(2026, 9, 16, 6, 0),
+    )
+    salvar_leitura(conn, leitura, idoso_id="idosa-1")
+
+    class _DatetimeFixo:
+        @staticmethod
+        def now():
+            return datetime(2026, 9, 16, 14, 0)
+
+    monkeypatch.setattr("zela.api.scheduler.datetime", _DatetimeFixo)
+
+    waha_falso = _WahaFalso()
+    alertas = verificar_e_escalonar_riscos(caminho_db, "idosa-1", waha_falso)
+
+    assert len(alertas) == 1
+    assert waha_falso.enviados == [("+5511911111111", alertas[0].mensagem)]
+    assert obter_estado(conn, "idosa-1").estagio == EstagioEscalonamento.CONTATO_IDOSO
+
+
+def test_verificar_e_escalonar_riscos_normal_nao_envia_nada(tmp_path, monkeypatch):
+    caminho_db = str(tmp_path / "teste.db")
+    conn = conectar(caminho_db)
+    salvar_perfil(conn, _perfil(), idoso_id="idosa-1")
+
+    class _DatetimeFixo:
+        @staticmethod
+        def now():
+            return datetime(2026, 9, 16, 14, 0)
+
+    monkeypatch.setattr("zela.api.scheduler.datetime", _DatetimeFixo)
+
+    leitura = LeituraSensor(
+        fonte=FonteSensor.ESP32, tipo=TipoLeitura.PRESENCA, valor=1,
+        unidade="deteccao", timestamp=datetime(2026, 9, 16, 13, 45),
+    )
+    salvar_leitura(conn, leitura, idoso_id="idosa-1")
+
+    waha_falso = _WahaFalso()
+    alertas = verificar_e_escalonar_riscos(caminho_db, "idosa-1", waha_falso)
+
+    assert alertas == []
+    assert waha_falso.enviados == []
+
+
+def test_verificar_e_escalonar_riscos_sem_perfil_retorna_lista_vazia(tmp_path):
+    caminho_db = str(tmp_path / "teste.db")
+    conectar(caminho_db)
+
+    waha_falso = _WahaFalso()
+    alertas = verificar_e_escalonar_riscos(caminho_db, "nao-existe", waha_falso)
+
+    assert alertas == []
