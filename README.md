@@ -15,7 +15,7 @@ Este repositório está sendo construído em fases (planos sequenciais):
    sem hardware nem APIs externas.
 2. **Comunicação real** (WhatsApp via WAHA) ✓ — áudio (STT/TTS) ainda não
    implementado.
-3. Ingestão de sensores reais (ESP32 + Health Connect/Mi Band 9).
+3. **Ingestão de sensores reais** (ESP32 + Health Connect/Mi Band 9) ✓
 4. Embeddings (classificação de urgência + RAG).
 5. Painel Streamlit para a família.
 6. Fluxo visual em n8n (substitui Langflow, citado no enunciado original
@@ -167,3 +167,31 @@ partir de documentação/conhecimento geral sobre o projeto WAHA e pode
 precisar de pequenos ajustes contra a versão específica da imagem Docker
 usada — confira o Swagger da sua instância (`http://localhost:3000/`) se
 as mensagens não chegarem como esperado.
+
+## Configurando a ingestão de sensores
+
+### ESP32 (sensor de presença)
+
+1. Monte o circuito: HC-SR04 com `TRIG` no GPIO 5 e `ECHO` no GPIO 18 do
+   ESP32 (use um divisor de tensão no `ECHO` se o seu módulo for de 5V).
+2. Abra `firmware/zela_presenca/zela_presenca.ino` no Arduino IDE, com a
+   placa "ESP32 Dev Module" selecionada.
+3. Edite `WIFI_SSID`, `WIFI_SENHA` e `URL_INGESTAO` (aponte para o
+   endereço da máquina rodando o backend do Zela+, ex.:
+   `http://192.168.0.10:8000/ingest/esp32`).
+4. Grave no ESP32 e abra o Serial Monitor (115200 bps) para confirmar a
+   conexão WiFi, a sincronização de hora via NTP, e os envios
+   (`POST /ingest/esp32 -> 200`) ao mover a mão na frente do sensor.
+
+### Smartwatch (Mi Band 9 → Health Connect → Health Connect Webhook)
+
+1. Instale o app **"Health Connect Webhook"** (Play Store,
+   `com.hcwebhook.app`) no celular Android onde o Mi Fitness já
+   sincroniza com o Health Connect.
+2. Configure a URL do webhook para
+   `http://<seu-servidor>:8000/ingest/health-connect` e selecione os
+   tipos de dados desejados (ex.: frequência cardíaca).
+3. **Nota:** o formato exato do payload enviado por esse app não foi
+   verificado neste projeto — confira o JSON recebido de fato após
+   configurar o app (ex.: logando o corpo da requisição temporariamente)
+   e ajuste `zela/api/ingestao.py` se necessário.
