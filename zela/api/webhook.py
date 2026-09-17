@@ -22,7 +22,7 @@ def montar_roteador(
     processar_mensagem,
     waha_client,
     id_idoso: str = _ID_IDOSO_PADRAO,
-    telefone_idoso: str | None = None,
+    telefones_permitidos: list[str] | None = None,
 ) -> APIRouter:
     roteador = APIRouter()
 
@@ -33,7 +33,7 @@ def montar_roteador(
         if extraido is None:
             return {"status": "ignorado"}
         telefone, texto = extraido
-        if telefone_idoso is not None and telefone != telefone_idoso:
+        if telefones_permitidos is not None and telefone not in telefones_permitidos:
             return {"status": "ignorado"}
 
         resposta_texto = await run_in_threadpool(processar_mensagem, id_idoso, texto, datetime.now())

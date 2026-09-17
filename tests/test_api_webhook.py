@@ -84,7 +84,7 @@ def test_webhook_ignora_numero_fora_da_lista_permitida():
 
     app = FastAPI()
     app.include_router(
-        montar_roteador(processar_falso, waha_falso, telefone_idoso="+5511911111111")
+        montar_roteador(processar_falso, waha_falso, telefones_permitidos=["+5511911111111"])
     )
     cliente = TestClient(app)
 
@@ -109,7 +109,7 @@ def test_webhook_processa_numero_da_lista_permitida():
 
     app = FastAPI()
     app.include_router(
-        montar_roteador(processar_falso, waha_falso, telefone_idoso="+5511911111111")
+        montar_roteador(processar_falso, waha_falso, telefones_permitidos=["+5511911111111"])
     )
     cliente = TestClient(app)
 
@@ -124,3 +124,31 @@ def test_webhook_processa_numero_da_lista_permitida():
     assert resposta.status_code == 200
     assert resposta.json() == {"status": "processado"}
     assert waha_falso.enviados == [("+5511911111111", "ok")]
+
+
+def test_webhook_aceita_numero_de_familiar_quando_ha_mais_de_um_permitido():
+    waha_falso = _WahaFalso()
+
+    def processar_falso(id_idoso, texto, agora):
+        return "A vovó está bem hoje."
+
+    app = FastAPI()
+    app.include_router(
+        montar_roteador(
+            processar_falso, waha_falso,
+            telefones_permitidos=["+5511911111111", "+5511987654321"],
+        )
+    )
+    cliente = TestClient(app)
+
+    resposta = cliente.post(
+        "/webhook/whatsapp",
+        json={
+            "event": "message",
+            "payload": {"from": "5511987654321@c.us", "body": "como ela está?", "fromMe": False},
+        },
+    )
+
+    assert resposta.status_code == 200
+    assert resposta.json() == {"status": "processado"}
+    assert waha_falso.enviados == [("+5511987654321", "A vovó está bem hoje.")]

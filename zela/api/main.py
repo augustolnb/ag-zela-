@@ -19,13 +19,15 @@ waha_client = WahaClient(base_url=WAHA_BASE_URL)
 _runner = obter_runner_zela()
 
 
-def _obter_telefone_idoso() -> str | None:
+def _obter_telefones_permitidos() -> list[str] | None:
     conexao = conectar(CAMINHO_DB)
     perfil = obter_perfil(conexao, ID_IDOSO)
-    return perfil.telefone if perfil is not None else None
+    if perfil is None:
+        return None
+    return [perfil.telefone] + [c.telefone for c in perfil.contatos_familiares]
 
 
-_TELEFONE_IDOSO = _obter_telefone_idoso()
+_TELEFONES_PERMITIDOS = _obter_telefones_permitidos()
 
 
 def _processar(id_idoso: str, texto: str, agora) -> str:
@@ -48,6 +50,6 @@ def _salvar_leitura(leitura, idoso_id: str) -> None:
 
 app = FastAPI(lifespan=ciclo_de_vida)
 app.include_router(
-    montar_roteador(_processar, waha_client, id_idoso=ID_IDOSO, telefone_idoso=_TELEFONE_IDOSO)
+    montar_roteador(_processar, waha_client, id_idoso=ID_IDOSO, telefones_permitidos=_TELEFONES_PERMITIDOS)
 )
 app.include_router(montar_roteador_ingestao(_salvar_leitura, id_idoso=ID_IDOSO))
