@@ -96,7 +96,7 @@ def montar_agente_monitoramento(model: str = MODELO_PADRAO) -> Agent:
     return Agent(
         name="agente_monitoramento",
         model=model,
-        description="Analisa leituras de sensores e classifica o status de risco do idoso.",
+        description="Relata o status de saúde/risco do idoso já calculado automaticamente pelo sistema.",
         instruction=(
             "Quando a família perguntar sobre o estado de saúde/segurança do "
             "idoso, use a ferramenta consultar_status_atual para obter a "
@@ -129,7 +129,7 @@ def montar_agente_emergencia(model: str = MODELO_PADRAO) -> Agent:
     return Agent(
         name="agente_emergencia",
         model=model,
-        description="Decide o escalonamento de alertas em situações de risco.",
+        description="Relata alertas e ocorrências de emergência já registrados pelo sistema.",
         instruction=(
             "Quando a família perguntar sobre alertas ou ocorrências "
             "recentes, use a ferramenta consultar_historico_alertas para "
