@@ -56,3 +56,22 @@ def test_listar_alertas_ordena_por_timestamp():
     alertas = listar_alertas(conn, "idosa-1")
 
     assert [a.mensagem for a in alertas] == ["primeiro", "segundo"]
+
+
+def test_listar_alertas_isola_por_idoso():
+    conn = conectar(":memory:")
+    alerta_idosa_1 = Alerta(
+        nivel=NivelAlerta.INFO, destinatario="A", canal=CanalAlerta.WHATSAPP,
+        mensagem="alerta da idosa 1", timestamp=datetime(2026, 9, 16, 8, 0),
+    )
+    alerta_idosa_2 = Alerta(
+        nivel=NivelAlerta.INFO, destinatario="B", canal=CanalAlerta.WHATSAPP,
+        mensagem="alerta da idosa 2", timestamp=datetime(2026, 9, 16, 8, 0),
+    )
+    salvar_alerta(conn, alerta_idosa_1, idoso_id="idosa-1")
+    salvar_alerta(conn, alerta_idosa_2, idoso_id="idosa-2")
+
+    alertas = listar_alertas(conn, "idosa-1")
+
+    assert len(alertas) == 1
+    assert alertas[0].mensagem == "alerta da idosa 1"
