@@ -40,16 +40,16 @@ float lerDistanciaCm() {
 String obterTimestampIso() {
   time_t agora = time(nullptr);
   struct tm infoTempo;
-  gmtime_r(&agora, &infoTempo);
+  localtime_r(&agora, &infoTempo);
   char buffer[25];
   strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%S", &infoTempo);
   return String(buffer);
 }
 
-void enviarLeitura(bool presenca) {
+bool enviarLeitura(bool presenca) {
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("WiFi desconectado, pulando envio.");
-    return;
+    return false;
   }
   HTTPClient http;
   http.begin(URL_INGESTAO);
@@ -61,6 +61,7 @@ void enviarLeitura(bool presenca) {
   int codigoResposta = http.POST(corpo);
   Serial.printf("POST /ingest/esp32 -> %d\n", codigoResposta);
   http.end();
+  return codigoResposta > 0 && codigoResposta < 300;
 }
 
 void setup() {
@@ -78,24 +79,35 @@ void setup() {
 
   // O ESP32 nao tem RTC com bateria propria — sincroniza a hora via NTP
   // antes de comecar a enviar leituras, para os timestamps serem reais.
-  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+  configTime(-3 * 3600, 0, "pool.ntp.org", "time.nist.gov");  // UTC-3, sem horario de verao desde 2019
   Serial.print("Sincronizando hora via NTP");
+  unsigned long limiteEsperaMs = millis() + 30000UL;  // no maximo 30s de espera
   time_t agora = time(nullptr);
-  while (agora < 100000) {
+  while (agora < 100000 && millis() < limiteEsperaMs) {
     delay(500);
     Serial.print(".");
     agora = time(nullptr);
   }
-  Serial.println("\nHora sincronizada.");
+  if (agora < 100000) {
+    Serial.println("\nNTP falhou ao sincronizar; prosseguindo mesmo assim.");
+  } else {
+    Serial.println("\nHora sincronizada.");
+  }
 }
 
 void loop() {
+  if (WiFi.status() != WL_CONNECTED) {
+    WiFi.disconnect();
+    WiFi.begin(WIFI_SSID, WIFI_SENHA);
+  }
+
   float distanciaCm = lerDistanciaCm();
   bool presencaAtual = (distanciaCm > 0 && distanciaCm <= DISTANCIA_LIMIAR_CM);
 
   if (presencaAtual != presencaAnterior) {
-    enviarLeitura(presencaAtual);
-    presencaAnterior = presencaAtual;
+    if (enviarLeitura(presencaAtual)) {
+      presencaAnterior = presencaAtual;
+    }
   }
 
   delay(INTERVALO_LEITURA_MS);
