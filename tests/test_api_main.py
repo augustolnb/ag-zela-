@@ -11,6 +11,8 @@ def test_app_inclui_rota_de_webhook():
     # de versões anteriores assumidas pelo brief original da task.
     caminhos = set(app.openapi()["paths"])
     assert "/webhook/whatsapp" in caminhos
+    assert "/ingest/esp32" in caminhos
+    assert "/ingest/health-connect" in caminhos
 
 
 def test_app_sobe_e_desce_com_lifespan(monkeypatch):

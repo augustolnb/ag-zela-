@@ -2,11 +2,13 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from zela.api.ingestao import montar_roteador_ingestao
 from zela.api.runner import obter_runner_zela, processar_mensagem
 from zela.api.scheduler import iniciar_scheduler
 from zela.api.webhook import montar_roteador
 from zela.integrations.waha_client import WahaClient
 from zela.storage.db import conectar
+from zela.storage.monitoramento import salvar_leitura as salvar_leitura_sensor
 from zela.storage.perfil import obter_perfil
 
 CAMINHO_DB = "zela.db"
@@ -39,7 +41,13 @@ async def ciclo_de_vida(app: FastAPI):
         agendador.shutdown()
 
 
+def _salvar_leitura(leitura, idoso_id: str) -> None:
+    conexao = conectar(CAMINHO_DB)
+    salvar_leitura_sensor(conexao, leitura, idoso_id)
+
+
 app = FastAPI(lifespan=ciclo_de_vida)
 app.include_router(
     montar_roteador(_processar, waha_client, id_idoso=ID_IDOSO, telefone_idoso=_TELEFONE_IDOSO)
 )
+app.include_router(montar_roteador_ingestao(_salvar_leitura, id_idoso=ID_IDOSO))
