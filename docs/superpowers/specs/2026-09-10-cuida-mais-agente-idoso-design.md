@@ -418,3 +418,92 @@ apenas responde a perguntas sobre o status já calculado pelo scheduler):
   enviar), o scheduler gera um alerta de nível informativo diferenciado
   de "risco de saúde" — evita alarme falso por falha técnica, conforme já
   previsto na seção 10.
+
+## 15. Detalhamento do Plano 4 — Embeddings (classificação por similaridade + RAG)
+
+A seção 6 previa dois usos de embeddings, ainda não implementados: classificar
+a urgência de mensagens de texto do idoso por vizinho mais próximo, e
+responder perguntas ("para que serve esse remédio?", "o que a Vó disse
+ontem?") por busca semântica. O modelo `MetodoClassificacao.EMBEDDING`, já
+previsto desde o Plano 1 em `zela/models/monitoramento.py`, é usado pela
+primeira vez neste plano.
+
+### Arquitetura
+
+```
+Mensagem do idoso chega em POST /webhook/whatsapp (zela/api/webhook.py)
+  │
+  ├──▶ processar_mensagem (ADK Runner, já existente) → resposta ao idoso
+  │
+  └──▶ processar_risco_mensagem (novo, zela/api/monitoramento_mensagem.py)
+          │  (só roda se o remetente é o idoso, não familiares)
+          ▼
+        client.obter_embedding(texto)      [zela/embeddings/client.py — I/O, Gemini]
+          ▼
+        classificar_por_similaridade(...)  [zela/embeddings/classificador.py — puro]
+          → EventoMonitoramento(metodo_classificacao=EMBEDDING)
+          ▼
+        storage/escalonamento.py::aplicar_escalonamento   (Plano 3, reaproveitado)
+          → decidir_proxima_acao (domínio, Plano 1, intocado)  → list[Alerta]
+          ▼
+        despachar_alertas(...)  [extraído de scheduler.py] → WahaClient
+          │
+          └──▶ vetorial.indexar_documento(...)  [zela/embeddings/vetorial.py — Chroma]
+                 (a mesma mensagem também vira um documento indexado)
+
+RAG (consulta pela família/idoso via WhatsApp):
+  agente_comunicacao ganha tool: consultar_conhecimento(pergunta)
+    → vetorial.buscar_similares(...) → trechos de bulas + mensagens passadas
+    → LLM usa os trechos para responder (tool só leitura, não decide nada)
+
+Reindexação em lote (bulas/medicamentos já cadastrados):
+  main.py (lifespan, na subida da API)
+    → reindexar_documentos(conn, idoso_id) [zela/embeddings/vetorial.py]
+```
+
+### Decisões
+
+- **Provedor único (Gemini) e vector store local (Chroma):** mesmo provedor
+  do LLM principal (`text-embedding-004`), evitando uma segunda credencial
+  de API só para embeddings. Chroma persiste em `./chroma_db/` (adicionado
+  ao `.gitignore`), simples o suficiente para o volume de dados do MVP
+  (um idoso, poucos medicamentos, histórico de mensagens moderado).
+- **Classificação por embedding entra pela mesma porta que os sensores:**
+  `classificar_por_similaridade` produz um `EventoMonitoramento` como
+  qualquer outro método de classificação — quem decide se isso vira
+  contato/notificação/simulação de emergência continua sendo
+  `decidir_proxima_acao` (domínio, Plano 1, determinístico, intocado). Isso
+  preserva a propriedade central de segurança já estabelecida nos Planos
+  1-3: nem o LLM nem o embedding decidem escalonamento, apenas relatam um
+  status. Mesmo um `RISCO` vindo de embedding entra pela etapa
+  `CONTATO_IDOSO` (10 min de espera) antes de qualquer notificação à
+  família — não pula etapas.
+- **Refatoração pequena em `scheduler.py`:** extração de
+  `despachar_alertas(conn, alertas, perfil, waha_client)` (salvar +
+  enviar por WhatsApp, pulando alertas `simulado=True`), hoje inline em
+  `verificar_e_escalonar_riscos` (Plano 3). Passa a ser reaproveitada pelo
+  novo caminho de mensagem, evitando duas implementações divergentes do
+  mesmo comportamento de despacho.
+- **Novo campo `Medicamento.bula`** (`str | None`, com coluna
+  correspondente no schema SQLite): texto curto de instrução/uso,
+  cadastrado manualmente por ora — não há API real de bulas no MVP. O
+  script de seed pode incluir um texto de exemplo genérico por
+  medicamento cadastrado.
+- **Indexação em lote no boot, não por hook de escrita:** como o Streamlit
+  (Plano 5) ainda não existe para editar medicamentos ao vivo, uma
+  reindexação completa no `lifespan` da API (em vez de instrumentar cada
+  ponto de escrita em `storage/rotina.py`) é suficiente para o MVP e mais
+  simples. Mensagens do idoso, por serem eventos contínuos em tempo real,
+  são indexadas inline no momento em que chegam.
+- **Falha graciosa (spec §10):** falha na API de embeddings ou no Chroma
+  (rede fora do ar, quota excedida) é isolada em try/except, loga e não
+  bloqueia nem o webhook nem a resposta do LLM — mesma filosofia já usada
+  para falha de envio de WhatsApp. Sem embedding disponível naquele ciclo,
+  a detecção de risco por sensores (Plano 3) continua cobrindo o
+  monitoramento normalmente.
+- **Testes sem rede real:** `classificador.py` é puro (testado com vetores
+  fake e similaridade de cosseno calculável à mão); `client.py` e
+  `vetorial.py` são testados via fakes injetados, mesmo padrão já usado
+  para `WahaClient`. Um teste de integração real (manual, documentado no
+  README) valida a chave de API do Gemini e a persistência do Chroma em
+  disco — mesmo tratamento dado a WAHA e ao firmware do ESP32.
