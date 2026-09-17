@@ -4,13 +4,13 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 from zela.domain.comunicacao import formatar_lembrete
 from zela.domain.rotina import JANELA_LEMBRETE
-from zela.models.alertas import Alerta
-from zela.models.monitoramento import EventoMonitoramento
+from zela.models.alertas import Alerta, CanalAlerta, NivelAlerta
+from zela.models.monitoramento import EventoMonitoramento, StatusMonitoramento
 from zela.models.perfil import PerfilIdoso
 from zela.storage.alertas import salvar_alerta
 from zela.storage.db import conectar
 from zela.storage.escalonamento import aplicar_escalonamento
-from zela.storage.monitoramento import aplicar_classificacao
+from zela.storage.monitoramento import MOTIVO_SEM_DADOS_PREFIXO, aplicar_classificacao
 from zela.storage.perfil import obter_perfil
 from zela.storage.rotina import aplicar_lembretes_pendentes
 
@@ -79,6 +79,28 @@ def verificar_e_escalonar_riscos(caminho_db: str, id_idoso: str, waha_client) ->
 
     agora = datetime.now()
     evento: EventoMonitoramento = aplicar_classificacao(conn, id_idoso, agora)
+
+    # Caso técnico "sem dados" (nenhuma leitura de presença na janela de
+    # lookback — instalação nova, sensor/WiFi fora do ar etc.): isso NÃO é
+    # uma classificação de risco real, então não pode entrar na escada de
+    # escalonamento (`aplicar_escalonamento`/`decidir_proxima_acao` tratam
+    # qualquer status != NORMAL como início/continuação da escalada). Em vez
+    # disso, avisamos a família uma vez, com nível INFO, e paramos aqui.
+    if evento.status == StatusMonitoramento.ATENCAO and evento.motivo.startswith(
+        MOTIVO_SEM_DADOS_PREFIXO
+    ):
+        contato = perfil.contatos_familiares[0]
+        alerta = Alerta(
+            nivel=NivelAlerta.INFO,
+            destinatario=contato.nome,
+            canal=CanalAlerta.WHATSAPP,
+            mensagem=f"Aviso: {evento.motivo}.",
+            timestamp=agora,
+        )
+        salvar_alerta(conn, alerta, id_idoso)
+        waha_client.enviar_texto(contato.telefone, alerta.mensagem)
+        return [alerta]
+
     alertas = aplicar_escalonamento(conn, id_idoso, evento, perfil, agora)
 
     for alerta in alertas:

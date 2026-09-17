@@ -13,6 +13,12 @@ from zela.models.monitoramento import LeituraSensor
 
 JANELA_LOOKBACK_HORAS = 48.0
 
+# Prefixo estável do motivo retornado quando não há nenhuma leitura de
+# presença na janela de lookback (ver `aplicar_classificacao` abaixo). Usado
+# por `zela.api.scheduler` para distinguir esse caso técnico ("sem dados") de
+# uma classificação de risco real, sem precisar duplicar o texto completo.
+MOTIVO_SEM_DADOS_PREFIXO = "Nenhuma leitura de presença recebida nas últimas"
+
 
 def salvar_leitura(conn: sqlite3.Connection, leitura: LeituraSensor, idoso_id: str) -> None:
     conn.execute(
@@ -65,7 +71,7 @@ def aplicar_classificacao(
         return EventoMonitoramento(
             status=StatusMonitoramento.ATENCAO,
             motivo=(
-                f"Nenhuma leitura de presença recebida nas últimas "
+                f"{MOTIVO_SEM_DADOS_PREFIXO} "
                 f"{janela_horas:.0f}h — possível falha do sensor ou da conexão"
             ),
             timestamp=agora,

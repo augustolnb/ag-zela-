@@ -51,13 +51,20 @@ def confirmar_medicamento(
 
 
 def consultar_status_atual(idoso_id: str, agora_iso: str) -> dict:
-    """Retorna o status de monitoramento mais recente do idoso (normal, atenção ou risco) e o motivo."""
+    """Retorna o status de monitoramento mais recente do idoso (normal, atenção ou risco) e o motivo.
+
+    O argumento `agora_iso` é validado (para preservar o comportamento de erro
+    esperado pelo agente), mas o valor efetivamente usado na classificação é
+    sempre `datetime.now()` — esta é uma consulta somente-leitura relevante
+    para segurança, e não pode depender de um timestamp potencialmente
+    alucinado pelo LLM.
+    """
     try:
-        agora = datetime.fromisoformat(agora_iso)
+        datetime.fromisoformat(agora_iso)
     except ValueError:
         return {"erro": f"agora_iso inválido: {agora_iso!r}"}
     conn = _obter_conexao()
-    evento = aplicar_classificacao(conn, idoso_id, agora)
+    evento = aplicar_classificacao(conn, idoso_id, datetime.now())
     return evento.model_dump(mode="json")
 
 

@@ -195,3 +195,30 @@ as mensagens não chegarem como esperado.
    verificado neste projeto — confira o JSON recebido de fato após
    configurar o app (ex.: logando o corpo da requisição temporariamente)
    e ajuste `zela/api/ingestao.py` se necessário.
+
+## Limitações conhecidas do Plano 3
+
+1. **Sessão de conversa compartilhada entre idosa e família:** desde que o
+   webhook passou a aceitar mensagens de múltiplos números (idosa +
+   contatos familiares), a ponte com o ADK Runner (`zela/api/runner.py`)
+   ainda usa uma única sessão de conversa fixa por idoso (não por
+   remetente) — ou seja, mensagens da idosa e da família compartilham o
+   mesmo histórico de contexto do LLM. Isso significa que, em teoria, uma
+   mensagem de um familiar poderia acionar `confirmar_medicamento` como se
+   fosse a própria idosa confirmando. Corrigir isso exige repensar o
+   design de sessão do Plano 2 (ex.: uma sessão por número de telefone) —
+   fica como item para um plano futuro.
+2. **Sem autenticação nos endpoints de ingestão:** `/ingest/esp32` e
+   `/ingest/health-connect` não exigem nenhuma autenticação — qualquer
+   requisição que alcance a porta pode injetar leituras de sensor
+   fabricadas. Para um MVP local isso é aceitável, mas antes de qualquer
+   exposição além da rede local, esses endpoints precisam de um mecanismo
+   de autenticação (ex.: um token compartilhado).
+3. **Resposta da idosa não interrompe o escalonamento:** quando o Agente
+   de Emergência envia a mensagem inicial de verificação ("Tudo bem? Pode
+   confirmar que está tudo certo?"), uma resposta da idosa por WhatsApp
+   ainda não interrompe automaticamente a escada de escalonamento (que
+   segue avançando para notificar a família e, depois, simular contato de
+   emergência). Implementar isso exige um caminho determinístico (não
+   dependente de LLM) para interpretar a resposta da idosa e resetar o
+   estado de escalonamento — fica como item para um plano futuro.

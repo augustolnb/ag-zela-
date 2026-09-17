@@ -151,6 +151,35 @@ def test_verificar_e_escalonar_riscos_normal_nao_envia_nada(tmp_path, monkeypatc
     assert waha_falso.enviados == []
 
 
+def test_verificar_e_escalonar_riscos_sem_dados_envia_info_e_nao_escalona(tmp_path, monkeypatch):
+    # Instalação nova / sensor ou WiFi fora do ar: nenhuma leitura de
+    # presença foi salva. Isso NÃO pode disparar a escada de escalonamento
+    # (contato idoso -> notificar família -> simular emergência) — é um
+    # evento técnico "sem dados", e deve gerar só um aviso INFO à família.
+    caminho_db = str(tmp_path / "teste.db")
+    conn = conectar(caminho_db)
+    salvar_perfil(conn, _perfil(), idoso_id="idosa-1")
+
+    class _DatetimeFixo:
+        @staticmethod
+        def now():
+            return datetime(2026, 9, 16, 14, 0)
+
+    monkeypatch.setattr("zela.api.scheduler.datetime", _DatetimeFixo)
+
+    waha_falso = _WahaFalso()
+    alertas = verificar_e_escalonar_riscos(caminho_db, "idosa-1", waha_falso)
+
+    assert len(alertas) == 1
+    assert alertas[0].nivel.value == "info"
+    assert len(waha_falso.enviados) == 1
+    assert waha_falso.enviados[0][0] == "+5511987654321"
+
+    estado = obter_estado(conn, "idosa-1")
+    assert estado.estagio == EstagioEscalonamento.OCIOSO
+    assert estado.iniciado_em is None
+
+
 def test_verificar_e_escalonar_riscos_sem_perfil_retorna_lista_vazia(tmp_path):
     caminho_db = str(tmp_path / "teste.db")
     conectar(caminho_db)
