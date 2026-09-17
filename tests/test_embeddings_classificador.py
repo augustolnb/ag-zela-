@@ -68,3 +68,8 @@ def test_lista_de_exemplos_vazia_levanta_erro():
             texto_original="oi",
             agora=datetime(2026, 9, 17, 10, 0),
         )
+
+
+def test_similaridade_cosseno_levanta_erro_em_vetores_de_tamanhos_diferentes():
+    with pytest.raises(ValueError):
+        similaridade_cosseno([1.0, 0.0, 0.0], [1.0, 0.0])

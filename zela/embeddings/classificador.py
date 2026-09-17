@@ -6,7 +6,7 @@ from zela.models.monitoramento import EventoMonitoramento, MetodoClassificacao
 
 
 def similaridade_cosseno(a: list[float], b: list[float]) -> float:
-    produto_escalar = sum(x * y for x, y in zip(a, b))
+    produto_escalar = sum(x * y for x, y in zip(a, b, strict=True))
     norma_a = math.sqrt(sum(x * x for x in a))
     norma_b = math.sqrt(sum(y * y for y in b))
     if norma_a == 0 or norma_b == 0:
