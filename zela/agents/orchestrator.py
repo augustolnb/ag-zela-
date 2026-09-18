@@ -2,6 +2,8 @@ from datetime import datetime
 
 from google.adk.agents import Agent
 
+from zela.embeddings.client import ClienteEmbeddingGemini
+from zela.embeddings.vetorial import RepositorioVetorial
 from zela.storage.alertas import listar_alertas
 from zela.storage.db import conectar
 from zela.storage.monitoramento import aplicar_classificacao
@@ -14,6 +16,23 @@ _CAMINHO_DB = "zela.db"
 
 def _obter_conexao():
     return conectar(_CAMINHO_DB)
+
+
+def _obter_cliente_embedding() -> ClienteEmbeddingGemini:
+    return ClienteEmbeddingGemini()
+
+
+def _obter_repositorio_vetorial() -> RepositorioVetorial:
+    return RepositorioVetorial()
+
+
+def consultar_conhecimento(idoso_id: str, pergunta: str) -> list[str]:
+    """Busca trechos relevantes (bulas de medicamentos, mensagens passadas do idoso) para responder à pergunta."""
+    try:
+        embedding_pergunta = _obter_cliente_embedding().obter_embedding(pergunta)
+    except Exception:
+        return []
+    return _obter_repositorio_vetorial().buscar_similares(idoso_id, embedding_pergunta, k=3)
 
 
 def verificar_lembretes_pendentes(idoso_id: str, agora_iso: str) -> list[dict]:
@@ -127,8 +146,22 @@ def montar_agente_comunicacao(model: str = MODELO_PADRAO) -> Agent:
         description="Conversa com o idoso e a família via WhatsApp e Streamlit.",
         instruction=(
             "Formate lembretes de forma simples e acolhedora para o idoso, e "
-            "interprete as respostas recebidas."
+            "interprete as respostas recebidas. Quando o idoso ou a família "
+            "perguntarem algo que possa estar em uma bula de medicamento ou em "
+            "uma mensagem anterior do idoso (ex.: 'para que serve esse "
+            "remédio?', 'o que a Vó disse ontem?'), use a ferramenta "
+            "consultar_conhecimento para buscar trechos relevantes antes de "
+            "responder. Se a ferramenta não retornar nada relevante, diga que "
+            "não encontrou essa informação em vez de inventar uma resposta.\n\n"
+            "Toda mensagem recebida começa com uma linha de contexto do "
+            "sistema no formato "
+            "'[contexto do sistema: idoso_id=<id>; agora=<timestamp ISO 8601>]', "
+            "seguida do texto real da pergunta. Extraia idoso_id dessa linha e "
+            "use-o como o argumento idoso_id ao chamar consultar_conhecimento; "
+            "use o texto da pergunta em si (sem a linha de contexto) como o "
+            "argumento pergunta."
         ),
+        tools=[consultar_conhecimento],
     )
 
 
