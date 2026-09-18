@@ -507,3 +507,88 @@ Reindexação em lote (bulas/medicamentos já cadastrados):
   para `WahaClient`. Um teste de integração real (manual, documentado no
   README) valida a chave de API do Gemini e a persistência do Chroma em
   disco — mesmo tratamento dado a WAHA e ao firmware do ESP32.
+
+## 16. Detalhamento do Plano 5 — Painel Streamlit (família)
+
+A seção 7 previa o Streamlit como painel da família (status, histórico de
+medicação, alertas, gráfico de presença, cadastro de medicamentos e
+compromissos), ainda não construído. Este plano fecha essa lacuna.
+
+### Arquitetura
+
+```
+Família abre o navegador em localhost:8501 (streamlit run)
+  │
+  ▼
+zela/streamlit_app/app.py (entrypoint)
+  │  gate de senha: STREAMLIT_SENHA (env var) -> st.session_state["autenticado"]
+  ▼
+zela/streamlit_app/secoes.py (somente leitura, reaproveita storage já existente)
+  ├── renderizar_status       -> storage/monitoramento.py::aplicar_classificacao (Plano 3)
+  ├── renderizar_medicacao    -> storage/rotina.py::listar_confirmacoes_do_dia (Plano 1/2)
+  ├── renderizar_alertas      -> storage/alertas.py::listar_alertas (Plano 3)
+  └── renderizar_grafico      -> storage/monitoramento.py::listar_leituras_recentes (Plano 3)
+                                  -> pandas.DataFrame -> st.line_chart
+
+zela/streamlit_app/formularios.py (escrita)
+  ├── formulario_medicamento  -> storage/rotina.py::salvar_medicamento (Plano 2, upsert existente)
+  └── formulario_compromisso  -> storage/rotina.py::salvar_compromisso (NOVO, upsert)
+                                  storage/rotina.py::listar_compromissos (NOVO)
+
+Todo acesso a dados é direto no SQLite (zela.db) via zela/storage/*,
+mesmo padrão já usado por zela/api/scheduler.py e
+zela/agents/orchestrator.py — sem API HTTP nova.
+```
+
+### Decisões
+
+- **Acesso direto ao SQLite, sem API HTTP nova:** consistente com o resto
+  do projeto (scheduler, orquestrador ADK, processamento de mensagem por
+  embedding — todos conectam direto em `zela.db` via `zela/storage/*`).
+  Evita construir e manter uma camada REST só para o painel.
+- **Uma página única, com seções** (em vez de multipage nativo do
+  Streamlit): mais simples de navegar para uma família não-técnica, sem
+  menu lateral. `secoes.py` e `formularios.py` mantêm cada seção como uma
+  função de renderização isolada, facilitando tanto a leitura do código
+  quanto o teste individual.
+- **Gráfico nativo do Streamlit (`st.line_chart` via pandas), sem
+  dependência de gráfico adicional (ex.: Altair):** suficiente para
+  "picos de atividade ao longo do dia" e evita uma dependência nova só
+  para isso.
+- **Autenticação por senha simples via variável de ambiente
+  (`STREAMLIT_SENHA`):** mais forte que "sem autenticação" (que seria o
+  padrão dos outros planos, ex. endpoints de ingestão do Plano 3), porque
+  este painel expõe dados de saúde. Se a variável não estiver definida, o
+  app recusa subir — evita rodar sem senha por esquecimento. Ainda assim,
+  é uma senha única compartilhada, não um sistema de contas por usuário;
+  documentado como limitação conhecida.
+- **`salvar_compromisso`/`listar_compromissos` novos em
+  `zela/storage/rotina.py`:** a tabela `compromisso` e o modelo
+  `Compromisso` já existem desde o Plano 2 (schema e Pydantic prontos),
+  mas nenhuma camada de storage foi construída até agora — não havia
+  nenhum consumidor. O padrão de upsert por `id` é idêntico ao já usado
+  em `salvar_medicamento`.
+- **IDs gerados no cliente:** medicamentos/compromissos novos criados
+  pelo formulário recebem `id=str(uuid.uuid4())` antes de chamar
+  `salvar_*` — o schema já trata `id` como chave primária fornecida pelo
+  chamador (não é autoincremento), então isso é consistente com o padrão
+  já usado pelos scripts de seed dos planos anteriores.
+- **Testes com `streamlit.testing.v1.AppTest`** (framework oficial de
+  testes do Streamlit, execução real do script, sem mocks do próprio
+  Streamlit) — verificado nesta máquina (`streamlit==1.64.0`) que
+  simular digitação/cliques (`at.text_input[...].input(...).run()`,
+  `at.button[...].click().run()`) e ler o que foi renderizado
+  (`at.metric`, `at.warning`, `at.success`, etc.) funciona de ponta a
+  ponta. O caminho do banco é lido de uma variável de ambiente
+  (`ZELA_DB_PATH`, fallback `"zela.db"`), permitindo que os testes
+  apontem para um banco isolado em `tmp_path` via
+  `monkeypatch.setenv(...)` antes de rodar o `AppTest` — mesmo padrão de
+  configuração por variável de ambiente já usado no projeto
+  (`GOOGLE_API_KEY`, `WAHA_BASE_URL`, etc.), sem precisar de rede real.
+- **Erros de validação (Pydantic) e de storage são capturados e exibidos
+  via `st.error`**, nunca deixando o Streamlit quebrar com uma stack
+  trace visível para a família — mesma filosofia de falha graciosa já
+  aplicada nos Planos 3 e 4.
+- **Fora do escopo de teste automatizado:** aparência visual e experiência
+  de uso real no navegador — verificação manual, documentada no README
+  (mesmo tratamento já dado ao WAHA e ao firmware do ESP32).
