@@ -1,7 +1,12 @@
 from datetime import date, datetime, time, timedelta
 
-from zela.api.scheduler import verificar_e_enviar_lembretes, verificar_e_escalonar_riscos
+from zela.api.scheduler import (
+    despachar_alertas,
+    verificar_e_enviar_lembretes,
+    verificar_e_escalonar_riscos,
+)
 from zela.domain.emergencia import EstadoEscalonamento, EstagioEscalonamento
+from zela.models.alertas import Alerta, CanalAlerta, NivelAlerta
 from zela.models.monitoramento import FonteSensor, LeituraSensor, TipoLeitura
 from zela.models.perfil import ContatoFamiliar, PerfilIdoso
 from zela.models.rotina import Dosagem, Medicamento
@@ -249,3 +254,34 @@ def test_verificar_e_escalonar_riscos_simulado_nao_envia_e_persiste(tmp_path, mo
     # Mas continua sendo persistido, para auditoria/histórico.
     alertas_persistidos = listar_alertas(conn, "idosa-1")
     assert any(a.simulado for a in alertas_persistidos)
+
+
+def test_despachar_alertas_salva_e_envia_alertas_nao_simulados():
+    conn = conectar(":memory:")
+    perfil = _perfil()
+    waha_falso = _WahaFalso()
+    alerta_familia = Alerta(
+        nivel=NivelAlerta.CRITICO, destinatario="João", canal=CanalAlerta.WHATSAPP,
+        mensagem="Atenção, sem resposta.", timestamp=datetime(2026, 9, 17, 10, 0),
+    )
+
+    despachar_alertas(conn, [alerta_familia], perfil, "idosa-1", waha_falso)
+
+    assert waha_falso.enviados == [("+5511987654321", "Atenção, sem resposta.")]
+    assert len(listar_alertas(conn, "idosa-1")) == 1
+
+
+def test_despachar_alertas_nao_envia_alerta_simulado():
+    conn = conectar(":memory:")
+    perfil = _perfil()
+    waha_falso = _WahaFalso()
+    alerta_simulado = Alerta(
+        nivel=NivelAlerta.CRITICO, destinatario="servico_emergencia_simulado",
+        canal=CanalAlerta.WHATSAPP, mensagem="[SIMULAÇÃO] ...",
+        timestamp=datetime(2026, 9, 17, 10, 0), simulado=True,
+    )
+
+    despachar_alertas(conn, [alerta_simulado], perfil, "idosa-1", waha_falso)
+
+    assert waha_falso.enviados == []
+    assert len(listar_alertas(conn, "idosa-1")) == 1

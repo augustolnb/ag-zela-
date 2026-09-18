@@ -71,6 +71,18 @@ def _telefone_por_nome(perfil: PerfilIdoso, nome: str) -> str | None:
     return None
 
 
+def despachar_alertas(
+    conn, alertas: list[Alerta], perfil: PerfilIdoso, idoso_id: str, waha_client
+) -> None:
+    for alerta in alertas:
+        salvar_alerta(conn, alerta, idoso_id)
+        if alerta.simulado:
+            continue
+        telefone = _telefone_por_nome(perfil, alerta.destinatario)
+        if telefone is not None:
+            waha_client.enviar_texto(telefone, alerta.mensagem)
+
+
 def verificar_e_escalonar_riscos(caminho_db: str, id_idoso: str, waha_client) -> list[Alerta]:
     conn = conectar(caminho_db)
     perfil = obter_perfil(conn, id_idoso)
@@ -102,15 +114,7 @@ def verificar_e_escalonar_riscos(caminho_db: str, id_idoso: str, waha_client) ->
         return [alerta]
 
     alertas = aplicar_escalonamento(conn, id_idoso, evento, perfil, agora)
-
-    for alerta in alertas:
-        salvar_alerta(conn, alerta, id_idoso)
-        if alerta.simulado:
-            continue
-        telefone = _telefone_por_nome(perfil, alerta.destinatario)
-        if telefone is not None:
-            waha_client.enviar_texto(telefone, alerta.mensagem)
-
+    despachar_alertas(conn, alertas, perfil, id_idoso, waha_client)
     return alertas
 
 
