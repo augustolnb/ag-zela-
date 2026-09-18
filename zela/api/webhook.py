@@ -23,6 +23,7 @@ def montar_roteador(
     waha_client,
     id_idoso: str = _ID_IDOSO_PADRAO,
     telefones_permitidos: list[str] | None = None,
+    processar_risco=None,
 ) -> APIRouter:
     roteador = APIRouter()
 
@@ -36,8 +37,12 @@ def montar_roteador(
         if telefones_permitidos is not None and telefone not in telefones_permitidos:
             return {"status": "ignorado"}
 
-        resposta_texto = await run_in_threadpool(processar_mensagem, id_idoso, texto, datetime.now())
+        agora = datetime.now()
+        resposta_texto = await run_in_threadpool(processar_mensagem, id_idoso, texto, agora)
         await run_in_threadpool(waha_client.enviar_texto, telefone, resposta_texto)
+
+        if processar_risco is not None:
+            await run_in_threadpool(processar_risco, telefone, texto, agora)
 
         return {"status": "processado"}
 

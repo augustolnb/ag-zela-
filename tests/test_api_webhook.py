@@ -152,3 +152,49 @@ def test_webhook_aceita_numero_de_familiar_quando_ha_mais_de_um_permitido():
     assert resposta.status_code == 200
     assert resposta.json() == {"status": "processado"}
     assert waha_falso.enviados == [("+5511987654321", "A vovó está bem hoje.")]
+
+
+def test_webhook_chama_processar_risco_quando_fornecido():
+    waha_falso = _WahaFalso()
+    chamadas_risco = []
+
+    def processar_falso(id_idoso, texto, agora):
+        return "ok"
+
+    def processar_risco_falso(telefone, texto, agora):
+        chamadas_risco.append((telefone, texto))
+
+    app = FastAPI()
+    app.include_router(
+        montar_roteador(processar_falso, waha_falso, processar_risco=processar_risco_falso)
+    )
+    cliente = TestClient(app)
+
+    resposta = cliente.post(
+        "/webhook/whatsapp",
+        json={
+            "event": "message",
+            "payload": {"from": "5511987654321@c.us", "body": "caí no banheiro", "fromMe": False},
+        },
+    )
+
+    assert resposta.status_code == 200
+    assert chamadas_risco == [("+5511987654321", "caí no banheiro")]
+
+
+def test_webhook_nao_falha_quando_processar_risco_nao_e_fornecido():
+    waha_falso = _WahaFalso()
+
+    def processar_falso(id_idoso, texto, agora):
+        return "ok"
+
+    app = FastAPI()
+    app.include_router(montar_roteador(processar_falso, waha_falso))
+    cliente = TestClient(app)
+
+    resposta = cliente.post(
+        "/webhook/whatsapp",
+        json={"event": "message", "payload": {"from": "5511987654321@c.us", "body": "oi", "fromMe": False}},
+    )
+
+    assert resposta.status_code == 200
