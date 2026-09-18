@@ -198,3 +198,27 @@ def test_webhook_nao_falha_quando_processar_risco_nao_e_fornecido():
     )
 
     assert resposta.status_code == 200
+
+
+def test_webhook_nao_falha_quando_processar_risco_levanta_excecao():
+    waha_falso = _WahaFalso()
+
+    def processar_falso(id_idoso, texto, agora):
+        return "ok"
+
+    def processar_risco_com_falha(telefone, texto, agora):
+        raise RuntimeError("Gemini fora do ar")
+
+    app = FastAPI()
+    app.include_router(
+        montar_roteador(processar_falso, waha_falso, processar_risco=processar_risco_com_falha)
+    )
+    cliente = TestClient(app)
+
+    resposta = cliente.post(
+        "/webhook/whatsapp",
+        json={"event": "message", "payload": {"from": "5511987654321@c.us", "body": "oi", "fromMe": False}},
+    )
+
+    assert resposta.status_code == 200
+    assert resposta.json() == {"status": "processado"}

@@ -54,3 +54,4 @@ def test_construtor_nao_instancia_sdk_real_sem_chave_de_api(monkeypatch):
     cliente = ClienteEmbeddingGemini()
 
     assert cliente is not None
+    assert cliente._cliente_sdk_lazy is None

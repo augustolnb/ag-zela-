@@ -19,3 +19,31 @@ def test_conectar_cria_todas_as_tabelas():
 def test_conectar_e_idempotente():
     conn = conectar(":memory:")
     conn.executescript(ESQUEMA)  # não deve levantar erro ao rodar de novo
+
+
+def test_conectar_migra_coluna_bula_em_banco_com_schema_antigo(tmp_path):
+    import sqlite3
+
+    caminho = str(tmp_path / "banco_antigo.db")
+    conn_antiga = sqlite3.connect(caminho)
+    conn_antiga.execute(
+        """
+        CREATE TABLE medicamento (
+            id TEXT PRIMARY KEY,
+            idoso_id TEXT NOT NULL,
+            nome TEXT NOT NULL,
+            dosagem_quantidade REAL NOT NULL,
+            dosagem_unidade TEXT NOT NULL,
+            horarios TEXT NOT NULL,
+            dias_semana TEXT NOT NULL,
+            ativo INTEGER NOT NULL DEFAULT 1
+        )
+        """
+    )
+    conn_antiga.commit()
+    conn_antiga.close()
+
+    conn = conectar(caminho)
+
+    colunas = {linha["name"] for linha in conn.execute("PRAGMA table_info(medicamento)")}
+    assert "bula" in colunas

@@ -21,6 +21,11 @@ class _RepositorioVetorialFalso:
         return self._resultado
 
 
+class _RepositorioVetorialComFalha:
+    def buscar_similares(self, idoso_id, embedding_consulta, k=3):
+        raise RuntimeError("Chroma indisponível")
+
+
 def test_agente_comunicacao_tem_uma_ferramenta():
     agente = montar_agente_comunicacao()
 
@@ -45,6 +50,19 @@ def test_consultar_conhecimento_retorna_trechos_relevantes(monkeypatch):
 def test_consultar_conhecimento_retorna_lista_vazia_em_falha(monkeypatch):
     monkeypatch.setattr(
         "zela.agents.orchestrator._obter_cliente_embedding", lambda: _ClienteEmbeddingComFalha()
+    )
+
+    resultado = consultar_conhecimento("idosa-1", "para que serve a losartana?")
+
+    assert resultado == []
+
+
+def test_consultar_conhecimento_retorna_lista_vazia_quando_busca_vetorial_falha(monkeypatch):
+    monkeypatch.setattr(
+        "zela.agents.orchestrator._obter_cliente_embedding", lambda: _ClienteEmbeddingFalso()
+    )
+    monkeypatch.setattr(
+        "zela.agents.orchestrator._obter_repositorio_vetorial", lambda: _RepositorioVetorialComFalha()
     )
 
     resultado = consultar_conhecimento("idosa-1", "para que serve a losartana?")

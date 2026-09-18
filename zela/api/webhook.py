@@ -1,7 +1,10 @@
+import logging
 from datetime import datetime
 
 from fastapi import APIRouter, Request
 from starlette.concurrency import run_in_threadpool
+
+logger = logging.getLogger(__name__)
 
 _ID_IDOSO_PADRAO = "idosa-1"
 
@@ -42,7 +45,10 @@ def montar_roteador(
         await run_in_threadpool(waha_client.enviar_texto, telefone, resposta_texto)
 
         if processar_risco is not None:
-            await run_in_threadpool(processar_risco, telefone, texto, agora)
+            try:
+                await run_in_threadpool(processar_risco, telefone, texto, agora)
+            except Exception:
+                logger.exception("Falha ao processar risco da mensagem")
 
         return {"status": "processado"}
 

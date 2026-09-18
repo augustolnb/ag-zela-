@@ -31,7 +31,7 @@ def classificar_por_similaridade(
     return EventoMonitoramento(
         status=exemplo_mais_similar.status,
         motivo=(
-            f"Mensagem do idoso classificada por similaridade a exemplo de "
+            "Mensagem do idoso classificada por similaridade a exemplo de "
             f"referência ('{exemplo_mais_similar.texto}'): \"{texto_original}\""
         ),
         timestamp=agora,

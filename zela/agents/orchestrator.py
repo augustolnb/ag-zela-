@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 
 from google.adk.agents import Agent
@@ -12,6 +13,8 @@ from zela.storage.rotina import aplicar_confirmacao, aplicar_lembretes_pendentes
 MODELO_PADRAO = "gemini-2.0-flash"
 
 _CAMINHO_DB = "zela.db"
+
+logger = logging.getLogger(__name__)
 
 
 def _obter_conexao():
@@ -30,9 +33,10 @@ def consultar_conhecimento(idoso_id: str, pergunta: str) -> list[str]:
     """Busca trechos relevantes (bulas de medicamentos, mensagens passadas do idoso) para responder à pergunta."""
     try:
         embedding_pergunta = _obter_cliente_embedding().obter_embedding(pergunta)
+        return _obter_repositorio_vetorial().buscar_similares(idoso_id, embedding_pergunta, k=3)
     except Exception:
+        logger.exception("Falha ao consultar conhecimento (embedding ou busca vetorial)")
         return []
-    return _obter_repositorio_vetorial().buscar_similares(idoso_id, embedding_pergunta, k=3)
 
 
 def verificar_lembretes_pendentes(idoso_id: str, agora_iso: str) -> list[dict]:

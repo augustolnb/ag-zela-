@@ -60,7 +60,11 @@ def _processar_risco(telefone: str, texto: str, agora: datetime) -> None:
     perfil = obter_perfil(conexao, ID_IDOSO)
     if perfil is None or telefone != perfil.telefone:
         return
-    exemplos = _obter_exemplos_com_embedding()
+    try:
+        exemplos = _obter_exemplos_com_embedding()
+    except Exception:
+        logger.exception("Falha ao carregar exemplos de referência para classificação por embedding")
+        return
     processar_risco_mensagem(
         conexao, ID_IDOSO, perfil, texto, agora,
         cliente_embedding, exemplos, repositorio_vetorial, waha_client,

@@ -74,4 +74,12 @@ def conectar(caminho_db: str = "zela.db") -> sqlite3.Connection:
     conn = sqlite3.connect(caminho_db)
     conn.row_factory = sqlite3.Row
     conn.executescript(ESQUEMA)
+    _migrar_coluna_bula(conn)
     return conn
+
+
+def _migrar_coluna_bula(conn: sqlite3.Connection) -> None:
+    colunas = {linha["name"] for linha in conn.execute("PRAGMA table_info(medicamento)")}
+    if "bula" not in colunas:
+        conn.execute("ALTER TABLE medicamento ADD COLUMN bula TEXT")
+        conn.commit()

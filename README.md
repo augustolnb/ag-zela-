@@ -132,6 +132,8 @@ aritmética de datas da camada de domínio (`agora - ultima_presenca`,
   comando.
 - `zela/storage/` — repositórios SQLite (perfil, medicamentos,
   confirmações) que persistem os dados usados pelos agentes.
+- `zela/embeddings/` — cliente de embeddings do Gemini, classificador de
+  urgência por similaridade (puro), e vector store Chroma para RAG.
 - `zela/integrations/` — cliente WAHA para envio/recebimento de mensagens
   via WhatsApp.
 - `zela/api/` — webhook do WhatsApp, ponte com o ADK Runner, scheduler de
@@ -207,10 +209,11 @@ O vector store (Chroma) persiste localmente em `./chroma_db/` (ignorado
 pelo git, recriado automaticamente na primeira execução).
 
 **Nota de migração:** este plano adiciona a coluna `bula` à tabela
-`medicamento`. Se você já tinha um `zela.db` de uma execução anterior à
-deste plano, apague o arquivo (`rm zela.db`) antes de subir a API
-novamente — o schema não faz migração automática de colunas em tabelas já
-existentes, só cria tabelas novas.
+`medicamento`. Se você já tinha um `zela.db` de uma execução anterior a
+este plano, não é preciso apagar o arquivo — `zela/storage/db.py::conectar`
+verifica a presença da coluna `bula` a cada conexão e adiciona
+(`ALTER TABLE`) automaticamente caso ela não exista, além de criar tabelas
+novas via `CREATE TABLE IF NOT EXISTS`.
 
 Para que um medicamento tenha sua bula pesquisável pelo RAG, cadastre-o
 com o campo `bula` preenchido (ex.: via um script de seed usando
@@ -243,3 +246,48 @@ vector store acontece automaticamente a cada subida da API.
    emergência). Implementar isso exige um caminho determinístico (não
    dependente de LLM) para interpretar a resposta da idosa e resetar o
    estado de escalonamento — fica como item para um plano futuro.
+   **Atualização (Plano 4):** parcialmente endereçado — mensagens de texto
+   da idosa agora são classificadas por similaridade de embedding e
+   alimentam essa mesma máquina de escalonamento; uma resposta
+   classificada como `NORMAL` reseta o escalonamento para `RESOLVIDO`.
+   Ver "Limitações conhecidas do Plano 4" abaixo para as ressalvas.
+
+## Limitações conhecidas do Plano 4
+
+1. **Um risco originado por mensagem não avança sozinho até a família:**
+   a classificação por embedding de uma mensagem da idosa entra na mesma
+   escada de escalonamento dos sensores (`aplicar_escalonamento`), mas
+   nada além do job periódico de sensores (`verificar_e_escalonar_riscos`,
+   a cada 15 min) avança essa escada adiante. Na prática, isso produz um
+   de dois resultados: (a) se não houver leituras de presença recentes
+   (instalação sem ESP32, o cenário mais provável em demonstração), o
+   job de sensores trata isso como "sem dados" e nunca chama
+   `aplicar_escalonamento` de novo — a escada fica congelada em
+   `CONTATO_IDOSO` indefinidamente; (b) se as leituras de presença
+   parecerem normais, o próximo tick do job classifica `NORMAL` e reseta
+   o escalonamento para `RESOLVIDO` em até 15 minutos. Ou seja: uma
+   mensagem como "caí no banheiro e não consigo levantar" hoje gera a
+   pergunta de verificação para a idosa, mas não necessariamente chega a
+   notificar a família sozinha. Corrigir isso exige persistir o evento
+   que originou o escalonamento para que o próprio job de sensores possa
+   reconhecê-lo e continuar avançando a escada — fica como item para um
+   plano futuro.
+2. **Isso também atualiza (parcialmente) a Limitação 3 do Plano 3
+   ("resposta da idosa não interrompe o escalonamento"):** uma mensagem
+   da idosa classificada como `NORMAL` agora reseta qualquer
+   escalonamento em andamento (inclusive um iniciado por sensor) para
+   `RESOLVIDO` — de fato, uma forma de interrupção. Mas o classificador
+   por similaridade não tem um piso mínimo de similaridade: uma mensagem
+   fora do padrão dos exemplos de referência (ex.: "oi", enviada por uma
+   idosa desorientada) ainda recebe a classificação do exemplo mais
+   próximo, que pode ser `NORMAL` e fechar um escalonamento real por
+   engano. Calibrar um piso de similaridade exige testar contra
+   embeddings reais do Gemini — fica para um plano futuro.
+3. **Histórico de mensagens no RAG não sobrevive à perda do `chroma_db/`:**
+   a reindexação automática no boot (`reindexar_documentos`) só cobre
+   bulas de medicamentos (lidas do SQLite, fonte de verdade). Mensagens
+   passadas da idosa são indexadas apenas em tempo real, direto no
+   Chroma — não há cópia em SQLite. Se `./chroma_db/` for apagado ou
+   corrompido, o histórico de mensagens pesquisável pelo RAG se perde
+   (as bulas são reconstruídas automaticamente no próximo boot; as
+   mensagens, não).
