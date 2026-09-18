@@ -196,6 +196,27 @@ as mensagens não chegarem como esperado.
    configurar o app (ex.: logando o corpo da requisição temporariamente)
    e ajuste `zela/api/ingestao.py` se necessário.
 
+## Embeddings e RAG (Plano 4)
+
+A classificação de urgência por similaridade e o RAG usam a mesma chave de
+API do Gemini já configurada para os agentes ADK (`GOOGLE_API_KEY` ou
+`GEMINI_API_KEY` — veja a seção de setup acima). Nenhuma credencial nova é
+necessária.
+
+O vector store (Chroma) persiste localmente em `./chroma_db/` (ignorado
+pelo git, recriado automaticamente na primeira execução).
+
+**Nota de migração:** este plano adiciona a coluna `bula` à tabela
+`medicamento`. Se você já tinha um `zela.db` de uma execução anterior à
+deste plano, apague o arquivo (`rm zela.db`) antes de subir a API
+novamente — o schema não faz migração automática de colunas em tabelas já
+existentes, só cria tabelas novas.
+
+Para que um medicamento tenha sua bula pesquisável pelo RAG, cadastre-o
+com o campo `bula` preenchido (ex.: via um script de seed usando
+`Medicamento(..., bula="...")` e `salvar_medicamento`). A reindexação no
+vector store acontece automaticamente a cada subida da API.
+
 ## Limitações conhecidas do Plano 3
 
 1. **Sessão de conversa compartilhada entre idosa e família:** desde que o

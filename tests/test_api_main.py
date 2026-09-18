@@ -1,4 +1,10 @@
+from datetime import date, datetime
+
 from fastapi.testclient import TestClient
+
+import zela.api.main as main_module
+from zela.models.perfil import ContatoFamiliar, PerfilIdoso
+from zela.storage.perfil import salvar_perfil
 
 
 def test_app_inclui_rota_de_webhook():
@@ -21,9 +27,73 @@ def test_app_sobe_e_desce_com_lifespan(monkeypatch):
             pass
 
     monkeypatch.setattr("zela.api.main.iniciar_scheduler", lambda *a, **k: _AgendadorFalso())
+    monkeypatch.setattr("zela.api.main.reindexar_documentos", lambda *a, **k: 0)
 
     from zela.api.main import app
 
     with TestClient(app) as cliente:
         resposta = cliente.get("/docs")
         assert resposta.status_code == 200
+
+
+class _WahaFalsoMain:
+    def __init__(self):
+        self.enviados = []
+
+    def enviar_texto(self, telefone, texto):
+        self.enviados.append((telefone, texto))
+
+
+class _ClienteEmbeddingFalsoMain:
+    def obter_embedding(self, texto):
+        return [1.0, 0.0]
+
+
+class _RepositorioVetorialFalsoMain:
+    def __init__(self):
+        self.indexados = []
+
+    def indexar_documento(self, idoso_id, doc_id, texto, embedding, tipo):
+        self.indexados.append((idoso_id, doc_id, texto, embedding, tipo))
+
+
+def _preparar_main_com_perfil(monkeypatch, tmp_path):
+    banco = str(tmp_path / "teste.db")
+    monkeypatch.setattr(main_module, "CAMINHO_DB", banco)
+    conn = main_module.conectar(banco)
+    salvar_perfil(
+        conn,
+        PerfilIdoso(
+            nome="Maria", telefone="+5511911111111", data_nascimento=date(1945, 3, 12),
+            contatos_familiares=[ContatoFamiliar(nome="João", telefone="+5511987654321")],
+        ),
+        idoso_id=main_module.ID_IDOSO,
+    )
+    monkeypatch.setattr(main_module, "cliente_embedding", _ClienteEmbeddingFalsoMain())
+    monkeypatch.setattr(main_module, "_exemplos_com_embedding_cache", None)
+
+
+def test_processar_risco_ignora_mensagem_de_familiar(monkeypatch, tmp_path):
+    _preparar_main_com_perfil(monkeypatch, tmp_path)
+    waha_falso = _WahaFalsoMain()
+    monkeypatch.setattr(main_module, "waha_client", waha_falso)
+    monkeypatch.setattr(main_module, "repositorio_vetorial", _RepositorioVetorialFalsoMain())
+
+    # Número do familiar (João), não o do idoso: _processar_risco deve
+    # retornar antes de calcular qualquer embedding.
+    main_module._processar_risco("+5511987654321", "como ela está?", datetime(2026, 9, 17, 10, 0))
+
+    assert waha_falso.enviados == []
+
+
+def test_processar_risco_processa_mensagem_do_idoso(monkeypatch, tmp_path):
+    _preparar_main_com_perfil(monkeypatch, tmp_path)
+    repositorio_falso = _RepositorioVetorialFalsoMain()
+    monkeypatch.setattr(main_module, "waha_client", _WahaFalsoMain())
+    monkeypatch.setattr(main_module, "repositorio_vetorial", repositorio_falso)
+
+    # Número do próprio idoso: o fluxo completo deve rodar, incluindo a
+    # indexação da mensagem no vector store (fake).
+    main_module._processar_risco("+5511911111111", "estou bem", datetime(2026, 9, 17, 10, 0))
+
+    assert len(repositorio_falso.indexados) == 1
