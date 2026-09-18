@@ -76,14 +76,16 @@ def _preparar_main_com_perfil(monkeypatch, tmp_path):
 def test_processar_risco_ignora_mensagem_de_familiar(monkeypatch, tmp_path):
     _preparar_main_com_perfil(monkeypatch, tmp_path)
     waha_falso = _WahaFalsoMain()
+    repositorio_falso = _RepositorioVetorialFalsoMain()
     monkeypatch.setattr(main_module, "waha_client", waha_falso)
-    monkeypatch.setattr(main_module, "repositorio_vetorial", _RepositorioVetorialFalsoMain())
+    monkeypatch.setattr(main_module, "repositorio_vetorial", repositorio_falso)
 
     # Número do familiar (João), não o do idoso: _processar_risco deve
     # retornar antes de calcular qualquer embedding.
     main_module._processar_risco("+5511987654321", "como ela está?", datetime(2026, 9, 17, 10, 0))
 
     assert waha_falso.enviados == []
+    assert repositorio_falso.indexados == []
 
 
 def test_processar_risco_processa_mensagem_do_idoso(monkeypatch, tmp_path):
