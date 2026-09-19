@@ -2,8 +2,10 @@ from datetime import datetime, time
 
 from streamlit.testing.v1 import AppTest
 
+from zela.models.alertas import Alerta, CanalAlerta, NivelAlerta
 from zela.models.monitoramento import FonteSensor, LeituraSensor, TipoLeitura
 from zela.models.rotina import CanalConfirmacao, ConfirmacaoMedicacao, Dosagem, Medicamento, StatusConfirmacao
+from zela.storage.alertas import salvar_alerta
 from zela.storage.db import conectar
 from zela.storage.monitoramento import salvar_leitura
 from zela.storage.rotina import salvar_confirmacao, salvar_medicamento
@@ -86,3 +88,47 @@ renderizar_medicacao(conn, "idosa-1")
 
     assert at.exception == []
     assert any("Nenhum registro" in m.value for m in at.markdown)
+
+
+def test_renderizar_alertas_mostra_ultimos_alertas(tmp_path):
+    caminho = str(tmp_path / "teste.db")
+    conn = conectar(caminho)
+    salvar_alerta(
+        conn,
+        Alerta(
+            nivel=NivelAlerta.CRITICO, destinatario="João", canal=CanalAlerta.WHATSAPP,
+            mensagem="Sem resposta, notificando família.", timestamp=datetime(2026, 9, 18, 10, 0),
+        ),
+        idoso_id="idosa-1",
+    )
+
+    codigo = f"""
+from zela.storage.db import conectar
+from zela.streamlit_app.secoes import renderizar_alertas
+
+conn = conectar({caminho!r})
+renderizar_alertas(conn, "idosa-1")
+"""
+    at = AppTest.from_string(codigo)
+    at.run()
+
+    assert at.exception == []
+    assert any("Sem resposta, notificando família." in m.value for m in at.markdown)
+
+
+def test_renderizar_alertas_sem_alertas_mostra_mensagem(tmp_path):
+    caminho = str(tmp_path / "teste.db")
+    conectar(caminho)
+
+    codigo = f"""
+from zela.storage.db import conectar
+from zela.streamlit_app.secoes import renderizar_alertas
+
+conn = conectar({caminho!r})
+renderizar_alertas(conn, "idosa-1")
+"""
+    at = AppTest.from_string(codigo)
+    at.run()
+
+    assert at.exception == []
+    assert any("Nenhum alerta" in m.value for m in at.markdown)
