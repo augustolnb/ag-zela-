@@ -18,8 +18,8 @@ Este repositório está sendo construído em fases (planos sequenciais):
 3. **Ingestão de sensores reais** (ESP32 + Health Connect/Mi Band 9) ✓
 4. **Embeddings** (classificação de urgência + RAG) ✓
 5. **Painel Streamlit para a família** ✓
-6. Fluxo visual em n8n (substitui Langflow, citado no enunciado original
-   do curso — o curso migrou de ferramenta).
+6. **Fluxo visual em n8n** (substitui Langflow, citado no enunciado
+   original do curso — o curso migrou de ferramenta) ✓
 7. Empacotamento final, documentação e vídeo pitch.
 
 O design completo está em
@@ -362,3 +362,22 @@ este workflow à vontade não aciona nenhum alerta real à família.
    corrompido, o histórico de mensagens pesquisável pelo RAG se perde
    (as bulas são reconstruídas automaticamente no próximo boot; as
    mensagens, não).
+
+## Limitações conhecidas do Plano 6
+
+1. **Sem autenticação no endpoint `/api/classificar-mensagem`:** consistente
+   com a postura de MVP já documentada para `/ingest/esp32`,
+   `/ingest/health-connect` e `/webhook/whatsapp` (nenhum desses tem
+   autenticação também) — não é uma lacuna nova introduzida por este
+   plano. Mas, diferente dos endpoints de ingestão, este consome cota da
+   API do Gemini a cada chamada e não impõe um tamanho máximo para o
+   campo `texto` — antes de expor esse endpoint além da rede local, vale
+   adicionar um limite de tamanho e/ou autenticação.
+2. **Sem teste automatizado da execução real do workflow n8n:** o arquivo
+   `docs/n8n/zela-classificacao-mensagem.json` tem um teste estrutural
+   (`tests/test_n8n_workflow.py`, valida tipos de nó, parâmetros e
+   conexões), mas nenhum teste executa o workflow de verdade dentro do
+   n8n — isso não é possível a partir da suíte `pytest` deste repositório
+   (o n8n é uma ferramenta externa). A verificação de que o workflow
+   funciona de ponta a ponta é manual, feita pelo usuário ao importar e
+   testar o arquivo (veja "Workflow n8n (Plano 6)" acima).

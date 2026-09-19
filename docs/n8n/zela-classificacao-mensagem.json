@@ -24,7 +24,7 @@
         "method": "POST",
         "url": "http://localhost:8000/api/classificar-mensagem",
         "sendBody": true,
-        "contentType": "application/json",
+        "contentType": "json",
         "specifyBody": "json",
         "jsonBody": "={{ { texto: $json.body.texto } }}",
         "options": {}

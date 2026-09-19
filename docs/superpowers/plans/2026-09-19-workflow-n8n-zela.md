@@ -18,7 +18,7 @@
 - **O webhook do n8n é independente da integração real WAHA→FastAPI** (Plano 2) — não reconfigura o WAHA, não compartilha número/sessão. É um endpoint de teste separado, disparado manualmente (curl ou a ferramenta de teste do próprio n8n).
 - **Nenhum node type, `typeVersion` ou nome de parâmetro do n8n é usado sem verificação prévia.** Os valores usados neste plano (documentados abaixo, task a task) foram verificados durante o brainstorming contra exemplos reais e contra o código-fonte do n8n (`n8n-io/n8n` no GitHub):
   - Webhook: `n8n-nodes-base.webhook`, `typeVersion: 1.1`, parâmetros `httpMethod`/`path`/`responseMode`/`options`. **O corpo da requisição POST fica em `$json.body.*`, não em `$json.*` direto** — confirmado no código-fonte do nó (`Webhook/utils.ts`), não é uma suposição.
-  - HTTP Request: `n8n-nodes-base.httpRequest`, `typeVersion: 4.2` (mapeia para a implementação `HttpRequestV3`, que cobre 3/4/4.1/4.2/4.3/4.4/4.5). Para enviar um corpo JSON dinâmico: `sendBody: true`, `contentType: "application/json"`, `specifyBody: "json"`, `jsonBody` como uma expressão que retorna um objeto JS (`={{ {...} }}`) — não uma string com interpolação manual, para evitar bugs de escape.
+  - HTTP Request: `n8n-nodes-base.httpRequest`, `typeVersion: 4.2` (mapeia para a implementação `HttpRequestV3`, que cobre 3/4/4.1/4.2/4.3/4.4/4.5). Para enviar um corpo JSON dinâmico: `sendBody: true`, `contentType: "json"`, `specifyBody: "json"`, `jsonBody` como uma expressão que retorna um objeto JS (`={{ {...} }}`) — não uma string com interpolação manual, para evitar bugs de escape.
   - If: `n8n-nodes-base.if`, `typeVersion: 2` (typeVersions 2.0-2.3 usam a mesma implementação `IfV2`). Parâmetros: `conditions.combinator`, `conditions.conditions[].{leftValue, rightValue, operator: {type, operation}}`.
   - Respond to Webhook: `n8n-nodes-base.respondToWebhook`, `typeVersion: 1.1`. Para responder com um corpo JSON customizado: `respondWith: "json"`, `responseBody` como uma expressão que retorna um objeto JS.
 - **Sem teste automatizado para a execução do workflow n8n em si** (mesmo tratamento dado ao WAHA e ao firmware do ESP32) — verificação manual, documentada no README. O `.json` do workflow tem, porém, um teste estrutural (`tests/test_n8n_workflow.py`) que garante que o arquivo continua parseável e com os node types/conexões esperados, para pegar erros de edição futura.
@@ -369,7 +369,7 @@ Crie o diretório `docs/n8n/` e o arquivo com exatamente este conteúdo (os `id`
         "method": "POST",
         "url": "http://localhost:8000/api/classificar-mensagem",
         "sendBody": true,
-        "contentType": "application/json",
+        "contentType": "json",
         "specifyBody": "json",
         "jsonBody": "={{ { texto: $json.body.texto } }}",
         "options": {}

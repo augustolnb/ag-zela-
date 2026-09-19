@@ -61,3 +61,27 @@ def test_workflow_conexoes_ligam_os_nos_na_ordem_esperada():
     saidas_atencao = conexoes["If: atencao?"]["main"]
     assert saidas_atencao[0][0]["node"] == "Responder: verificar idosa"
     assert saidas_atencao[1][0]["node"] == "Responder: normal"
+
+
+def test_workflow_http_request_envia_texto_como_corpo_json():
+    workflow = _carregar_workflow()
+    http_request = next(no for no in workflow["nodes"] if no["name"] == "HTTP Request")
+    parametros = http_request["parameters"]
+
+    assert parametros["sendBody"] is True
+    assert parametros["contentType"] == "json"
+    assert parametros["specifyBody"] == "json"
+    assert "$json.body.texto" in parametros["jsonBody"]
+
+
+def test_workflow_condicoes_de_roteamento_usam_valores_do_enum_real():
+    from zela.models.monitoramento import StatusMonitoramento
+
+    workflow = _carregar_workflow()
+    tipos_por_nome = {no["name"]: no for no in workflow["nodes"]}
+
+    condicao_risco = tipos_por_nome["If: risco?"]["parameters"]["conditions"]["conditions"][0]
+    assert condicao_risco["rightValue"] == StatusMonitoramento.RISCO.value
+
+    condicao_atencao = tipos_por_nome["If: atencao?"]["parameters"]["conditions"]["conditions"][0]
+    assert condicao_atencao["rightValue"] == StatusMonitoramento.ATENCAO.value
