@@ -1,0 +1,132 @@
+{
+  "name": "Zela+ — Classificação de Mensagem (Plano 6)",
+  "nodes": [
+    {
+      "id": "no-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "zela-classificar-mensagem",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "no-http-request",
+      "name": "HTTP Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8000/api/classificar-mensagem",
+        "sendBody": true,
+        "contentType": "application/json",
+        "specifyBody": "json",
+        "jsonBody": "={{ { texto: $json.body.texto } }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "no-if-risco",
+      "name": "If: risco?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-risco",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "risco",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" }
+        }
+      }
+    },
+    {
+      "id": "no-if-atencao",
+      "name": "If: atencao?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 480],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-atencao",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "atencao",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" }
+        }
+      }
+    },
+    {
+      "id": "no-resposta-risco",
+      "name": "Responder: alertar familia",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [900, 220],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { acao: \"alertar_familia\", mensagem_ilustrativa: \"Alertar a família: possível risco detectado, sem confirmação da idosa.\", status: $json.status, motivo: $json.motivo } }}"
+      }
+    },
+    {
+      "id": "no-resposta-atencao",
+      "name": "Responder: verificar idosa",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [900, 420],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { acao: \"verificar_idosa\", mensagem_ilustrativa: \"Perguntar à idosa se está tudo bem.\", status: $json.status, motivo: $json.motivo } }}"
+      }
+    },
+    {
+      "id": "no-resposta-normal",
+      "name": "Responder: normal",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [900, 600],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { acao: \"nenhuma\", mensagem_ilustrativa: \"Tudo normal, nenhuma ação necessária.\", status: $json.status, motivo: $json.motivo } }}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "HTTP Request", "type": "main", "index": 0 }]]
+    },
+    "HTTP Request": {
+      "main": [[{ "node": "If: risco?", "type": "main", "index": 0 }]]
+    },
+    "If: risco?": {
+      "main": [
+        [{ "node": "Responder: alertar familia", "type": "main", "index": 0 }],
+        [{ "node": "If: atencao?", "type": "main", "index": 0 }]
+      ]
+    },
+    "If: atencao?": {
+      "main": [
+        [{ "node": "Responder: verificar idosa", "type": "main", "index": 0 }],
+        [{ "node": "Responder: normal", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}
