@@ -16,8 +16,8 @@ Este repositório está sendo construído em fases (planos sequenciais):
 2. **Comunicação real** (WhatsApp via WAHA) ✓ — áudio (STT/TTS) ainda não
    implementado.
 3. **Ingestão de sensores reais** (ESP32 + Health Connect/Mi Band 9) ✓
-4. Embeddings (classificação de urgência + RAG).
-5. Painel Streamlit para a família.
+4. **Embeddings** (classificação de urgência + RAG) ✓
+5. **Painel Streamlit para a família** ✓
 6. Fluxo visual em n8n (substitui Langflow, citado no enunciado original
    do curso — o curso migrou de ferramenta).
 7. Empacotamento final, documentação e vídeo pitch.
@@ -35,8 +35,11 @@ pip install -e ".[dev]"
 
 ## Cadastrando a idosa e os medicamentos
 
-Nenhum caminho do código em produção cadastra dados sozinho — é preciso
-popular o banco SQLite usando os repositórios de `zela/storage/`
+Até o Plano 5, nenhum caminho do código em produção cadastrava dados
+sozinho. Agora o painel Streamlit (veja a seção "Painel Streamlit" abaixo)
+permite cadastrar/editar medicamentos e compromissos pela interface. Para
+o cadastro inicial da idosa em si (perfil, contatos familiares), ou para
+popular dados via script, use os repositórios de `zela/storage/`
 diretamente. O `idoso_id` usado em todo o código (webhook, scheduler,
 ferramentas do agente de rotina) é `"idosa-1"` (veja a constante
 `ID_IDOSO` em `zela/api/main.py`); use o mesmo valor ao cadastrar:
@@ -218,9 +221,10 @@ verifica a presença da coluna `bula` a cada conexão e adiciona
 novas via `CREATE TABLE IF NOT EXISTS`.
 
 Para que um medicamento tenha sua bula pesquisável pelo RAG, cadastre-o
-com o campo `bula` preenchido (ex.: via um script de seed usando
-`Medicamento(..., bula="...")` e `salvar_medicamento`). A reindexação no
-vector store acontece automaticamente a cada subida da API.
+com o campo `bula` preenchido — pelo painel Streamlit (Plano 5, veja
+abaixo) ou via script de seed usando `Medicamento(..., bula="...")` e
+`salvar_medicamento`. A reindexação no vector store acontece
+automaticamente a cada subida da API.
 
 ## Painel Streamlit (Plano 5)
 
@@ -237,6 +241,13 @@ editar medicamentos e compromissos.
    streamlit run zela/streamlit_app/app.py
    ```
 3. Abra `http://localhost:8501` no navegador e digite a senha.
+
+**Nota sobre o banco de dados:** o painel usa a variável de ambiente
+`ZELA_DB_PATH` para achar o `zela.db` (mesmo padrão usado pelo backend
+FastAPI, `zela/api/main.py`) — se você definir `ZELA_DB_PATH` para um dos
+dois processos, defina a mesma variável para o outro, e rode ambos a
+partir do mesmo diretório de trabalho. Caso contrário, os dois podem
+apontar para arquivos diferentes sem nenhum aviso.
 
 **Nota:** a senha é única e compartilhada (não é um sistema de contas por
 usuário) — suficiente para o MVP, mas não deve ser considerado um controle

@@ -1,4 +1,5 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime
 
@@ -20,7 +21,7 @@ from zela.storage.perfil import obter_perfil
 
 logger = logging.getLogger(__name__)
 
-CAMINHO_DB = "zela.db"
+CAMINHO_DB = os.environ.get("ZELA_DB_PATH", "zela.db")
 ID_IDOSO = "idosa-1"
 WAHA_BASE_URL = "http://localhost:3000"
 

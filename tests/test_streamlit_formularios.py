@@ -143,6 +143,7 @@ def test_formulario_compromisso_cria_novo(tmp_path):
     assert compromissos[0].titulo == "Consulta cardiologista"
     assert compromissos[0].tipo == TipoCompromisso.CONSULTA
     assert compromissos[0].local == "Clínica Central"
+    assert compromissos[0].data_hora.date() == amanha
 
 
 def test_formulario_compromisso_edita_existente(tmp_path):

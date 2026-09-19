@@ -21,10 +21,18 @@ def test_exigir_autenticacao_bloqueia_sem_variavel_de_ambiente(monkeypatch):
 
 
 def test_exigir_autenticacao_bloqueia_senha_errada(monkeypatch):
+    from streamlit.proto.TextInput_pb2 import TextInput
+
     monkeypatch.setenv("STREAMLIT_SENHA", "correta123")
 
     at = AppTest.from_string(_CODIGO_TESTE)
     at.run()
+
+    # Antes de digitar qualquer coisa, não deve mostrar "senha incorreta" --
+    # o campo vazio é um estado distinto de "senha errada".
+    assert at.warning == []
+    assert at.text_input[0].proto.type == TextInput.PASSWORD
+
     at.text_input[0].set_value("errada").run()
 
     assert at.exception == []

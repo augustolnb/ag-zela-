@@ -15,6 +15,14 @@ from zela.streamlit_app.secoes import (
 CAMINHO_DB = os.environ.get("ZELA_DB_PATH", "zela.db")
 ID_IDOSO = "idosa-1"
 
+
+def _renderizar_secao_com_seguranca(funcao, *args) -> None:
+    try:
+        funcao(*args)
+    except Exception as exc:
+        st.error(f"Não foi possível carregar esta seção: {exc}")
+
+
 st.set_page_config(page_title="Zela+ — Painel da Família", page_icon="🩺")
 st.title("Zela+ — Painel da Família")
 
@@ -23,12 +31,12 @@ if not exigir_autenticacao():
 
 conn = conectar(CAMINHO_DB)
 
-renderizar_status(conn, ID_IDOSO)
-renderizar_medicacao(conn, ID_IDOSO)
-renderizar_alertas(conn, ID_IDOSO)
-renderizar_grafico(conn, ID_IDOSO)
+_renderizar_secao_com_seguranca(renderizar_status, conn, ID_IDOSO)
+_renderizar_secao_com_seguranca(renderizar_medicacao, conn, ID_IDOSO)
+_renderizar_secao_com_seguranca(renderizar_alertas, conn, ID_IDOSO)
+_renderizar_secao_com_seguranca(renderizar_grafico, conn, ID_IDOSO)
 
 st.divider()
 
-formulario_medicamento(conn, ID_IDOSO)
-formulario_compromisso(conn, ID_IDOSO)
+_renderizar_secao_com_seguranca(formulario_medicamento, conn, ID_IDOSO)
+_renderizar_secao_com_seguranca(formulario_compromisso, conn, ID_IDOSO)

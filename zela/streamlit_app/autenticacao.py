@@ -1,4 +1,5 @@
 import os
+import secrets
 
 import streamlit as st
 
@@ -20,14 +21,14 @@ def exigir_autenticacao() -> bool:
         )
         return False
 
-    if st.session_state.get("autenticado"):
+    if st.session_state.get("zela_autenticado"):
         return True
 
     senha_informada = st.text_input("Senha", type="password")
     if senha_informada == "":
         return False
-    if senha_informada == senha_esperada:
-        st.session_state["autenticado"] = True
+    if secrets.compare_digest(senha_informada, senha_esperada):
+        st.session_state["zela_autenticado"] = True
         return True
 
     st.warning("Senha incorreta.")

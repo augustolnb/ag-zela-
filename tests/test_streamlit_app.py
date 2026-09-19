@@ -23,4 +23,4 @@ def test_app_renderiza_secoes_apos_autenticacao(monkeypatch, tmp_path):
 
     assert at.exception == []
     assert len(at.metric) == 1  # seção de status atual
-    assert len(at.subheader) >= 4  # status, medicação, alertas, gráfico (+ formulários)
+    assert len(at.subheader) == 6  # status, medicação, alertas, gráfico, form. medicamento, form. compromisso

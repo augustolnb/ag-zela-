@@ -14,6 +14,11 @@ from zela.storage.rotina import (
 
 def formulario_medicamento(conn, idoso_id: str) -> None:
     st.subheader("Cadastrar ou editar medicamento")
+
+    mensagem_sucesso = st.session_state.pop("mensagem_sucesso_medicamento", None)
+    if mensagem_sucesso is not None:
+        st.success(mensagem_sucesso)
+
     medicamentos = listar_medicamentos(conn, idoso_id)
     opcoes = ["Novo medicamento"] + [m.nome for m in medicamentos]
     escolha = st.selectbox("Medicamento", opcoes, key="medicamento_selecionado")
@@ -28,7 +33,7 @@ def formulario_medicamento(conn, idoso_id: str) -> None:
             "edita apenas o primeiro horário — os demais serão removidos ao salvar."
         )
 
-    with st.form("form_medicamento"):
+    with st.form("form_medicamento", clear_on_submit=True):
         nome = st.text_input(
             "Nome", value=medicamento_existente.nome if medicamento_existente else ""
         )
@@ -66,9 +71,10 @@ def formulario_medicamento(conn, idoso_id: str) -> None:
             horarios=[horario],
             dias_semana=dias_semana,
             bula=bula or None,
+            ativo=medicamento_existente.ativo if medicamento_existente else True,
         )
         salvar_medicamento(conn, medicamento, idoso_id)
-        st.success(f"Medicamento '{nome}' salvo com sucesso.")
+        st.session_state["mensagem_sucesso_medicamento"] = f"Medicamento '{nome}' salvo com sucesso."
         st.rerun()
     except Exception as exc:
         st.error(f"Não foi possível salvar: {exc}")
@@ -76,6 +82,11 @@ def formulario_medicamento(conn, idoso_id: str) -> None:
 
 def formulario_compromisso(conn, idoso_id: str) -> None:
     st.subheader("Cadastrar ou editar compromisso")
+
+    mensagem_sucesso = st.session_state.pop("mensagem_sucesso_compromisso", None)
+    if mensagem_sucesso is not None:
+        st.success(mensagem_sucesso)
+
     compromissos = listar_compromissos(conn, idoso_id)
     opcoes = ["Novo compromisso"] + [c.titulo for c in compromissos]
     escolha = st.selectbox("Compromisso", opcoes, key="compromisso_selecionado")
@@ -84,7 +95,7 @@ def formulario_compromisso(conn, idoso_id: str) -> None:
     if escolha != "Novo compromisso":
         compromisso_existente = next(c for c in compromissos if c.titulo == escolha)
 
-    with st.form("form_compromisso"):
+    with st.form("form_compromisso", clear_on_submit=True):
         titulo = st.text_input(
             "Título", value=compromisso_existente.titulo if compromisso_existente else ""
         )
@@ -105,6 +116,10 @@ def formulario_compromisso(conn, idoso_id: str) -> None:
     if not enviado:
         return
 
+    if data is None or horario is None:
+        st.error("Informe a data e o horário.")
+        return
+
     try:
         compromisso = Compromisso(
             id=compromisso_existente.id if compromisso_existente else str(uuid.uuid4()),
@@ -114,7 +129,7 @@ def formulario_compromisso(conn, idoso_id: str) -> None:
             tipo=tipo,
         )
         salvar_compromisso(conn, compromisso, idoso_id)
-        st.success(f"Compromisso '{titulo}' salvo com sucesso.")
+        st.session_state["mensagem_sucesso_compromisso"] = f"Compromisso '{titulo}' salvo com sucesso."
         st.rerun()
     except Exception as exc:
         st.error(f"Não foi possível salvar: {exc}")
