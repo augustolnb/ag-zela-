@@ -132,3 +132,35 @@ renderizar_alertas(conn, "idosa-1")
 
     assert at.exception == []
     assert any("Nenhum alerta" in m.value for m in at.markdown)
+
+
+def test_renderizar_alertas_limita_a_dez_e_ordena_do_mais_recente(tmp_path):
+    caminho = str(tmp_path / "teste.db")
+    conn = conectar(caminho)
+    for i in range(11):
+        salvar_alerta(
+            conn,
+            Alerta(
+                nivel=NivelAlerta.INFO, destinatario="João", canal=CanalAlerta.WHATSAPP,
+                mensagem=f"Alerta numero {i}",
+                timestamp=datetime(2026, 9, 18, 10, i),
+            ),
+            idoso_id="idosa-1",
+        )
+
+    codigo = f"""
+from zela.storage.db import conectar
+from zela.streamlit_app.secoes import renderizar_alertas
+
+conn = conectar({caminho!r})
+renderizar_alertas(conn, "idosa-1")
+"""
+    at = AppTest.from_string(codigo)
+    at.run()
+
+    assert at.exception == []
+    textos = [m.value for m in at.markdown]
+    assert not any("Alerta numero 0" in t for t in textos)  # o mais antigo foi cortado pelo limite
+    indice_10 = next(i for i, t in enumerate(textos) if "Alerta numero 10" in t)
+    indice_9 = next(i for i, t in enumerate(textos) if "Alerta numero 9" in t)
+    assert indice_10 < indice_9  # o mais recente (10) aparece antes do penultimo (9)
