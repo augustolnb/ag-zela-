@@ -1,9 +1,11 @@
 from datetime import datetime
 
+import pandas as pd
 import streamlit as st
 
+from zela.models.monitoramento import TipoLeitura
 from zela.storage.alertas import listar_alertas
-from zela.storage.monitoramento import aplicar_classificacao
+from zela.storage.monitoramento import aplicar_classificacao, listar_leituras_recentes
 from zela.storage.rotina import listar_confirmacoes_do_dia, listar_medicamentos
 
 
@@ -41,3 +43,18 @@ def renderizar_alertas(conn, idoso_id: str) -> None:
     for alerta in reversed(alertas[-MAXIMO_ALERTAS_EXIBIDOS:]):
         data_hora = alerta.timestamp.strftime("%d/%m %H:%M")
         st.write(f"[{alerta.nivel.value.upper()}] {data_hora} — {alerta.mensagem}")
+
+
+def renderizar_grafico(conn, idoso_id: str) -> None:
+    st.subheader("Atividade de hoje")
+    inicio_do_dia = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    leituras = listar_leituras_recentes(conn, idoso_id, inicio_do_dia)
+    leituras_presenca = [l for l in leituras if l.tipo == TipoLeitura.PRESENCA]
+    if not leituras_presenca:
+        st.write("Nenhuma leitura de presença hoje ainda.")
+        return
+    dados = pd.DataFrame(
+        {"presença": [l.valor for l in leituras_presenca]},
+        index=[l.timestamp for l in leituras_presenca],
+    )
+    st.line_chart(dados)
