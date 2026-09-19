@@ -253,6 +253,44 @@ apontar para arquivos diferentes sem nenhum aviso.
 usuário) — suficiente para o MVP, mas não deve ser considerado um controle
 de acesso robusto se o painel for exposto além da rede local/doméstica.
 
+## Workflow n8n (Plano 6)
+
+Este workflow representa, de forma simplificada, a fatia "mensagem
+recebida → classificação de urgência → roteamento" do sistema — **não**
+substitui a integração real WhatsApp↔backend (WAHA→FastAPI, Plano 2), que
+continua funcionando de forma independente. É um webhook próprio, só para
+demonstrar a lógica de classificação/roteamento visualmente, conforme os
+itens 3.4/3.8 do card.
+
+1. Rode o backend normalmente (`uvicorn zela.api.main:app --reload`).
+2. No seu n8n, importe `docs/n8n/zela-classificacao-mensagem.json`
+   ("Import from File" ou colar o JSON em "Import from Clipboard").
+3. Confira a URL configurada no nó **HTTP Request**
+   (`http://localhost:8000/api/classificar-mensagem`) — se o n8n rodar em
+   um container Docker separado do backend, troque `localhost` por
+   `host.docker.internal` (ou o IP da máquina host); se rodar na mesma
+   máquina fora de container, o padrão já funciona.
+4. Ative o workflow (ou use "Execute Workflow"/"Listen for Test Event" no
+   próprio n8n) e dispare o webhook com uma mensagem de teste:
+   ```bash
+   curl -X POST http://localhost:5678/webhook/zela-classificar-mensagem \
+     -H "Content-Type: application/json" \
+     -d '{"telefone": "+5511999999999", "texto": "caí no banheiro e não consigo levantar"}'
+   ```
+   (ajuste a porta `5678` se seu n8n usar outra, e use
+   `/webhook-test/...` em vez de `/webhook/...` se estiver no modo de
+   teste do editor, conforme a própria interface do n8n indicar).
+5. Confirme que a resposta reflete o roteamento esperado (`"acao":
+   "alertar_familia"` para uma mensagem de risco, por exemplo) e tire uma
+   captura de tela do workflow no editor do n8n (com uma execução recente
+   visível) — salve como `docs/n8n/screenshot.png` para o item 3.4 do
+   card.
+
+**Nota:** o endpoint `/api/classificar-mensagem` só classifica — nunca
+decide nem dispara escalonamento de verdade (isso continua sendo
+responsabilidade exclusiva do scheduler determinístico, Plano 3/4). Testar
+este workflow à vontade não aciona nenhum alerta real à família.
+
 ## Limitações conhecidas do Plano 3
 
 1. **Sessão de conversa compartilhada entre idosa e família:** desde que o
