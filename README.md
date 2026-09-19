@@ -138,6 +138,8 @@ aritmética de datas da camada de domínio (`agora - ultima_presenca`,
   via WhatsApp.
 - `zela/api/` — webhook do WhatsApp, ponte com o ADK Runner, scheduler de
   lembretes e montagem do app FastAPI.
+- `zela/streamlit_app/` — painel Streamlit da família (status, medicação,
+  alertas, gráfico de presença, cadastro de medicamentos e compromissos).
 
 ## Configurando o WAHA (WhatsApp)
 
@@ -219,6 +221,26 @@ Para que um medicamento tenha sua bula pesquisável pelo RAG, cadastre-o
 com o campo `bula` preenchido (ex.: via um script de seed usando
 `Medicamento(..., bula="...")` e `salvar_medicamento`). A reindexação no
 vector store acontece automaticamente a cada subida da API.
+
+## Painel Streamlit (Plano 5)
+
+O painel da família mostra o status atual, a medicação do dia, os últimos
+alertas e um gráfico de presença, além de formulários para cadastrar ou
+editar medicamentos e compromissos.
+
+1. Defina uma senha de acesso (obrigatória — o painel recusa subir sem ela):
+   ```bash
+   export STREAMLIT_SENHA=sua-senha-aqui
+   ```
+2. Rode o painel (com o backend já rodando, para os dados existirem):
+   ```bash
+   streamlit run zela/streamlit_app/app.py
+   ```
+3. Abra `http://localhost:8501` no navegador e digite a senha.
+
+**Nota:** a senha é única e compartilhada (não é um sistema de contas por
+usuário) — suficiente para o MVP, mas não deve ser considerado um controle
+de acesso robusto se o painel for exposto além da rede local/doméstica.
 
 ## Limitações conhecidas do Plano 3
 
