@@ -261,11 +261,11 @@ código do MVP agora:
 | 3.1 Problema/escopo | Seção 2 |
 | 3.2 Arquitetura | Seção 3 |
 | 3.3 Pydantic | Seção 4 |
-| 3.4 Langflow (→ n8n) | Seção 5 |
+| 3.4 Langflow (→ n8n) | Seção 5, 17 |
 | 3.5 Embeddings | Seção 6 |
 | 3.6 Orquestração ADK | Seção 3, 5, 13, 14 |
-| 3.7 Streamlit | Seção 7 |
-| 3.8 Comunicação (→ n8n/WAHA) | Seção 7, 5, 13 |
+| 3.7 Streamlit | Seção 7, 16 |
+| 3.8 Comunicação (→ n8n/WAHA) | Seção 7, 5, 13, 17 |
 | 3.9 Desenvolvimento e testes | Seção 10 |
 | 3.10 Repositório e documentação | A definir no plano de implementação |
 
@@ -592,3 +592,80 @@ zela/agents/orchestrator.py — sem API HTTP nova.
 - **Fora do escopo de teste automatizado:** aparência visual e experiência
   de uso real no navegador — verificação manual, documentada no README
   (mesmo tratamento já dado ao WAHA e ao firmware do ESP32).
+
+## 17. Detalhamento do Plano 6 — Workflow n8n (itens 3.4/3.8 do card)
+
+A seção 5 previa o n8n como uma representação visual simplificada de uma
+fatia do sistema (entrada de mensagem → classificação de urgência →
+roteamento), adiada desde o Plano 2. Este plano entrega essa peça.
+
+### Arquitetura
+
+```
+n8n (instância já existente do usuário — fora do escopo deste plano)
+  │
+  ▼
+Webhook (trigger, POST, corpo: {"telefone": "...", "texto": "..."})
+  │  n8n aninha o corpo da requisição em $json.body.* (verificado no
+  │  código-fonte do nó Webhook, não assumido pela documentação)
+  ▼
+HTTP Request -> POST /api/classificar-mensagem (backend Zela+, novo)
+  │  corpo: {"texto": $json.body.texto} via expressão JS (evita bugs de
+  │  escape manual de string)
+  ▼
+zela/api/classificacao.py (NOVO)
+  │  obter_embedding (Plano 4) -> classificar_por_similaridade (Plano 4)
+  │  SOMENTE classifica -- nunca chama aplicar_escalonamento
+  ▼
+{"status": "normal"|"atencao"|"risco", "motivo": "..."}
+  │
+  ▼
+If #1: status == "risco"?  --sim--> Respond to Webhook (alertar família)
+  │ não
+  ▼
+If #2: status == "atencao"? --sim--> Respond to Webhook (verificar idosa)
+  │ não
+  ▼
+Respond to Webhook (normal, sem ação)
+```
+
+### Decisões
+
+- **Webhook próprio do n8n, independente da integração real WAHA→FastAPI
+  do Plano 2:** o fluxo n8n tem seu próprio endpoint de entrada (disparado
+  manualmente com `curl` ou pela ferramenta de teste do próprio n8n) — não
+  reconfigura o WAHA nem o webhook real, exatamente como a seção 13 já
+  havia decidido. Isso cumpre os itens 3.4/3.8 do card sem colocar em
+  risco a integração que já está funcionando.
+- **Novo endpoint `POST /api/classificar-mensagem`, somente classificação:**
+  reaproveita o classificador de embeddings do Plano 4
+  (`obter_embedding` + `classificar_por_similaridade`), mas **nunca** chama
+  `aplicar_escalonamento` — preserva a propriedade central de segurança do
+  projeto (nem o n8n, nem esse endpoint, decidem escalonamento de
+  verdade). Erros de embedding retornam HTTP 503 com corpo JSON de erro,
+  em vez de deixar a exceção propagar — mesma filosofia de falha graciosa
+  dos planos anteriores, expressa como código de status HTTP (não há
+  `st.error` fora do contexto Streamlit).
+- **Roteamento com 2 nós "If" encadeados, não um "Switch":** o schema JSON
+  do nó Switch do n8n não pôde ser verificado com confiança contra uma
+  versão real durante o brainstorming; o nó "If" (`n8n-nodes-base.if`,
+  typeVersion 2) foi verificado contra um exemplo real e contra o código-
+  fonte do n8n (GitHub). Dois "If" encadeados (risco? / atenção?) produzem
+  o mesmo roteamento de 3 ramos com um schema confiável.
+- **Todo o JSON do workflow foi verificado contra o código-fonte do n8n
+  antes de ser escrito** (tipos de nó, `typeVersion`, nomes exatos de
+  parâmetros, e o formato de saída do nó Webhook — `$json.body.*`, não
+  `$json.*` direto) — mesmo tratamento de rigor já dado a payloads de
+  APIs externas neste projeto (WAHA, Health Connect Webhook), evitando
+  entregar um `.json` que falha ao importar ou quebra silenciosamente na
+  primeira execução.
+- **Sem teste automatizado para o workflow n8n em si** (mesmo tratamento
+  já dado ao WAHA e ao firmware do ESP32): verificação manual — importar
+  o `.json`, disparar com uma mensagem de teste, confirmar o roteamento,
+  tirar o screenshot exigido pelo item 3.4 do card. O endpoint novo
+  (`classificar-mensagem`) tem teste `pytest` completo (sucesso e erro
+  503), com cliente de embedding fake — sem chamada real ao Gemini.
+- **Entregáveis:** `docs/n8n/zela-classificacao-mensagem.json` (workflow
+  exportável) e um screenshot (adicionado pelo usuário após testar no seu
+  n8n) — mesmo padrão de "arquivo + captura de tela" já pedido pelo item
+  3.4 do card original.
