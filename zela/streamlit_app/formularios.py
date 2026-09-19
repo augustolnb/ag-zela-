@@ -16,6 +16,12 @@ def formulario_medicamento(conn, idoso_id: str) -> None:
     if escolha != "Novo medicamento":
         medicamento_existente = next(m for m in medicamentos if m.nome == escolha)
 
+    if medicamento_existente is not None and len(medicamento_existente.horarios) > 1:
+        st.warning(
+            "Este medicamento tem mais de um horário cadastrado. Este formulário "
+            "edita apenas o primeiro horário — os demais serão removidos ao salvar."
+        )
+
     with st.form("form_medicamento"):
         nome = st.text_input(
             "Nome", value=medicamento_existente.nome if medicamento_existente else ""

@@ -64,6 +64,28 @@ def test_formulario_medicamento_edita_existente(tmp_path):
     assert medicamentos[0].dosagem.quantidade == 100.0
 
 
+def test_formulario_medicamento_avisa_sobre_multiplos_horarios(tmp_path):
+    caminho = str(tmp_path / "teste.db")
+    conn = conectar(caminho)
+    salvar_medicamento(
+        conn,
+        Medicamento(
+            id="med-1", nome="Losartana",
+            dosagem=Dosagem(quantidade=50, unidade="mg"),
+            horarios=[time(8, 0), time(20, 0)],
+        ),
+        idoso_id="idosa-1",
+    )
+
+    at = AppTest.from_string(_CODIGO_MEDICAMENTO.format(caminho=caminho))
+    at.run()
+
+    at.selectbox[0].set_value("Losartana").run()
+
+    assert at.exception == []
+    assert any("mais de um horário" in aviso.value for aviso in at.warning)
+
+
 def test_formulario_medicamento_erro_de_validacao_e_exibido(tmp_path):
     caminho = str(tmp_path / "teste.db")
     conectar(caminho)
