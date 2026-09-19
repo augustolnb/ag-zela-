@@ -6,10 +6,12 @@ from zela.domain.rotina import calcular_lembretes_pendentes
 from zela.domain.rotina import registrar_confirmacao as registrar_confirmacao_dominio
 from zela.models.rotina import (
     CanalConfirmacao,
+    Compromisso,
     ConfirmacaoMedicacao,
     Dosagem,
     Medicamento,
     StatusConfirmacao,
+    TipoCompromisso,
 )
 
 
@@ -123,3 +125,48 @@ def aplicar_confirmacao(
     confirmacao = registrar_confirmacao_dominio(medicamento, horario_previsto, agora, canal)
     salvar_confirmacao(conn, confirmacao)
     return confirmacao
+
+
+def salvar_compromisso(conn: sqlite3.Connection, compromisso: Compromisso, idoso_id: str) -> None:
+    conn.execute(
+        """
+        INSERT INTO compromisso (id, idoso_id, titulo, data_hora, local, tipo)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            titulo = excluded.titulo,
+            data_hora = excluded.data_hora,
+            local = excluded.local,
+            tipo = excluded.tipo
+        """,
+        (
+            compromisso.id,
+            idoso_id,
+            compromisso.titulo,
+            compromisso.data_hora.isoformat(),
+            compromisso.local,
+            compromisso.tipo.value,
+        ),
+    )
+    conn.commit()
+
+
+def _linha_para_compromisso(linha: sqlite3.Row) -> Compromisso:
+    # model_construct pula a validação Pydantic (inclusive o validador que
+    # rejeita data_hora no passado) — correto aqui porque um compromisso já
+    # registrado pode legitimamente estar no passado, e reconstruí-lo a
+    # partir do storage não deve falhar por causa disso. A validação
+    # continua valendo normalmente na criação, via Compromisso(...) direto.
+    return Compromisso.model_construct(
+        id=linha["id"],
+        titulo=linha["titulo"],
+        data_hora=datetime.fromisoformat(linha["data_hora"]),
+        local=linha["local"],
+        tipo=TipoCompromisso(linha["tipo"]),
+    )
+
+
+def listar_compromissos(conn: sqlite3.Connection, idoso_id: str) -> list[Compromisso]:
+    linhas = conn.execute(
+        "SELECT * FROM compromisso WHERE idoso_id = ? ORDER BY data_hora", (idoso_id,)
+    ).fetchall()
+    return [_linha_para_compromisso(linha) for linha in linhas]

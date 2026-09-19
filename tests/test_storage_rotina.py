@@ -1,12 +1,14 @@
 # tests/test_storage_rotina.py
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 
-from zela.models.rotina import Dosagem, Medicamento
+from zela.models.rotina import Compromisso, Dosagem, Medicamento, TipoCompromisso
 from zela.storage.db import conectar
 from zela.storage.rotina import (
     aplicar_confirmacao,
     aplicar_lembretes_pendentes,
+    listar_compromissos,
     listar_medicamentos,
+    salvar_compromisso,
     salvar_medicamento,
 )
 
@@ -83,3 +85,92 @@ def test_salvar_e_listar_medicamento_sem_bula():
     medicamentos = listar_medicamentos(conn, "idosa-1")
 
     assert medicamentos[0].bula is None
+
+
+def test_salvar_e_listar_compromisso_futuro():
+    conn = conectar(":memory:")
+    compromisso = Compromisso(
+        id="comp-1",
+        titulo="Consulta cardiologista",
+        data_hora=datetime.now() + timedelta(days=1),
+        local="Clínica Central",
+        tipo=TipoCompromisso.CONSULTA,
+    )
+
+    salvar_compromisso(conn, compromisso, idoso_id="idosa-1")
+    compromissos = listar_compromissos(conn, "idosa-1")
+
+    assert len(compromissos) == 1
+    assert compromissos[0].titulo == "Consulta cardiologista"
+    assert compromissos[0].tipo == TipoCompromisso.CONSULTA
+    assert compromissos[0].local == "Clínica Central"
+
+
+def test_listar_compromisso_ja_passado_nao_levanta_erro():
+    conn = conectar(":memory:")
+    # Insere direto via SQL (não via Compromisso(...), que rejeitaria uma data
+    # no passado) para simular um compromisso já registrado que já aconteceu.
+    # listar_compromissos precisa conseguir reconstruí-lo sem levantar erro.
+    conn.execute(
+        "INSERT INTO compromisso (id, idoso_id, titulo, data_hora, local, tipo) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (
+            "comp-2", "idosa-1", "Exame de sangue",
+            (datetime.now() - timedelta(days=1)).isoformat(),
+            "Laboratório X", "exame",
+        ),
+    )
+    conn.commit()
+
+    compromissos = listar_compromissos(conn, "idosa-1")
+
+    assert len(compromissos) == 1
+    assert compromissos[0].titulo == "Exame de sangue"
+    assert compromissos[0].tipo == TipoCompromisso.EXAME
+
+
+def test_salvar_compromisso_atualiza_existente():
+    conn = conectar(":memory:")
+    original = Compromisso(
+        id="comp-3", titulo="Consulta", data_hora=datetime.now() + timedelta(days=1),
+        local="Local A", tipo=TipoCompromisso.CONSULTA,
+    )
+    salvar_compromisso(conn, original, idoso_id="idosa-1")
+
+    atualizado = Compromisso(
+        id="comp-3", titulo="Consulta (remarcada)", data_hora=datetime.now() + timedelta(days=2),
+        local="Local B", tipo=TipoCompromisso.CONSULTA,
+    )
+    salvar_compromisso(conn, atualizado, idoso_id="idosa-1")
+
+    compromissos = listar_compromissos(conn, "idosa-1")
+
+    assert len(compromissos) == 1
+    assert compromissos[0].titulo == "Consulta (remarcada)"
+    assert compromissos[0].local == "Local B"
+
+
+def test_listar_compromissos_ordena_por_data_hora():
+    conn = conectar(":memory:")
+    salvar_compromisso(
+        conn,
+        Compromisso(
+            id="comp-tarde", titulo="Compromisso à tarde",
+            data_hora=datetime.now() + timedelta(days=2),
+            local="Local", tipo=TipoCompromisso.OUTRO,
+        ),
+        idoso_id="idosa-1",
+    )
+    salvar_compromisso(
+        conn,
+        Compromisso(
+            id="comp-cedo", titulo="Compromisso mais cedo",
+            data_hora=datetime.now() + timedelta(days=1),
+            local="Local", tipo=TipoCompromisso.OUTRO,
+        ),
+        idoso_id="idosa-1",
+    )
+
+    compromissos = listar_compromissos(conn, "idosa-1")
+
+    assert [c.id for c in compromissos] == ["comp-cedo", "comp-tarde"]
