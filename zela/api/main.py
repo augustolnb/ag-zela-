@@ -5,6 +5,7 @@ from datetime import datetime
 
 from fastapi import FastAPI
 
+from zela.api.classificacao import montar_roteador_classificacao
 from zela.api.ingestao import montar_roteador_ingestao
 from zela.api.monitoramento_mensagem import processar_risco_mensagem
 from zela.api.reindexacao import reindexar_documentos
@@ -98,3 +99,4 @@ app.include_router(
     )
 )
 app.include_router(montar_roteador_ingestao(_salvar_leitura, id_idoso=ID_IDOSO))
+app.include_router(montar_roteador_classificacao(cliente_embedding, _obter_exemplos_com_embedding))

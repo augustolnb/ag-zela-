@@ -21,6 +21,13 @@ def test_app_inclui_rota_de_webhook():
     assert "/ingest/health-connect" in caminhos
 
 
+def test_app_inclui_rota_de_classificacao():
+    from zela.api.main import app
+
+    caminhos = set(app.openapi()["paths"])
+    assert "/api/classificar-mensagem" in caminhos
+
+
 def test_app_sobe_e_desce_com_lifespan(monkeypatch):
     class _AgendadorFalso:
         def shutdown(self):
