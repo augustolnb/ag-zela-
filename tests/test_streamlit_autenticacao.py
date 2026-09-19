@@ -61,3 +61,14 @@ def test_exigir_autenticacao_mantem_liberado_apos_novo_run(monkeypatch):
 
     assert at.exception == []
     assert [m.value for m in at.markdown] == ["liberado"]
+
+
+def test_exigir_autenticacao_aceita_senha_com_acento(monkeypatch):
+    monkeypatch.setenv("STREAMLIT_SENHA", "senha-coração")
+
+    at = AppTest.from_string(_CODIGO_TESTE)
+    at.run()
+    at.text_input[0].set_value("senha-coração").run()
+
+    assert at.exception == []
+    assert [m.value for m in at.markdown] == ["liberado"]

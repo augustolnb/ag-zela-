@@ -27,7 +27,7 @@ def exigir_autenticacao() -> bool:
     senha_informada = st.text_input("Senha", type="password")
     if senha_informada == "":
         return False
-    if secrets.compare_digest(senha_informada, senha_esperada):
+    if secrets.compare_digest(senha_informada.encode("utf-8"), senha_esperada.encode("utf-8")):
         st.session_state["zela_autenticado"] = True
         return True
 
