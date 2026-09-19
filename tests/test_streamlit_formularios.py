@@ -1,10 +1,15 @@
-from datetime import time
+from datetime import date, datetime, time, timedelta
 
 from streamlit.testing.v1 import AppTest
 
-from zela.models.rotina import Dosagem, Medicamento
+from zela.models.rotina import Compromisso, Dosagem, Medicamento, TipoCompromisso
 from zela.storage.db import conectar
-from zela.storage.rotina import listar_medicamentos, salvar_medicamento
+from zela.storage.rotina import (
+    listar_compromissos,
+    listar_medicamentos,
+    salvar_compromisso,
+    salvar_medicamento,
+)
 
 _CODIGO_MEDICAMENTO = """
 from zela.storage.db import conectar
@@ -106,3 +111,61 @@ def test_formulario_medicamento_erro_de_validacao_e_exibido(tmp_path):
     assert len(at.error) >= 1
     medicamentos = listar_medicamentos(conectar(caminho), "idosa-1")
     assert medicamentos == []
+
+
+_CODIGO_COMPROMISSO = """
+from zela.storage.db import conectar
+from zela.streamlit_app.formularios import formulario_compromisso
+
+conn = conectar({caminho!r})
+formulario_compromisso(conn, "idosa-1")
+"""
+
+
+def test_formulario_compromisso_cria_novo(tmp_path):
+    caminho = str(tmp_path / "teste.db")
+    conectar(caminho)
+
+    at = AppTest.from_string(_CODIGO_COMPROMISSO.format(caminho=caminho))
+    at.run()
+
+    at.text_input[0].set_value("Consulta cardiologista")
+    amanha = date.today() + timedelta(days=1)
+    at.date_input[0].set_value(amanha)
+    at.time_input[0].set_value(datetime.now().time().replace(second=0, microsecond=0))
+    at.text_input[1].set_value("Clínica Central")
+    at.selectbox[1].set_value(TipoCompromisso.CONSULTA)
+    at.button[0].click().run()
+
+    assert at.exception == []
+    compromissos = listar_compromissos(conectar(caminho), "idosa-1")
+    assert len(compromissos) == 1
+    assert compromissos[0].titulo == "Consulta cardiologista"
+    assert compromissos[0].tipo == TipoCompromisso.CONSULTA
+    assert compromissos[0].local == "Clínica Central"
+
+
+def test_formulario_compromisso_edita_existente(tmp_path):
+    caminho = str(tmp_path / "teste.db")
+    conn = conectar(caminho)
+    salvar_compromisso(
+        conn,
+        Compromisso(
+            id="comp-1", titulo="Exame", data_hora=datetime.now() + timedelta(days=1),
+            local="Laboratório X", tipo=TipoCompromisso.EXAME,
+        ),
+        idoso_id="idosa-1",
+    )
+
+    at = AppTest.from_string(_CODIGO_COMPROMISSO.format(caminho=caminho))
+    at.run()
+
+    at.selectbox[0].set_value("Exame").run()
+    at.text_input[1].set_value("Laboratório Y")
+    at.button[0].click().run()
+
+    assert at.exception == []
+    compromissos = listar_compromissos(conectar(caminho), "idosa-1")
+    assert len(compromissos) == 1
+    assert compromissos[0].id == "comp-1"
+    assert compromissos[0].local == "Laboratório Y"

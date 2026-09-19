@@ -1,9 +1,15 @@
 import uuid
+from datetime import datetime
 
 import streamlit as st
 
-from zela.models.rotina import Dosagem, Medicamento
-from zela.storage.rotina import listar_medicamentos, salvar_medicamento
+from zela.models.rotina import Compromisso, Dosagem, Medicamento, TipoCompromisso
+from zela.storage.rotina import (
+    listar_compromissos,
+    listar_medicamentos,
+    salvar_compromisso,
+    salvar_medicamento,
+)
 
 
 def formulario_medicamento(conn, idoso_id: str) -> None:
@@ -63,6 +69,52 @@ def formulario_medicamento(conn, idoso_id: str) -> None:
         )
         salvar_medicamento(conn, medicamento, idoso_id)
         st.success(f"Medicamento '{nome}' salvo com sucesso.")
+        st.rerun()
+    except Exception as exc:
+        st.error(f"Não foi possível salvar: {exc}")
+
+
+def formulario_compromisso(conn, idoso_id: str) -> None:
+    st.subheader("Cadastrar ou editar compromisso")
+    compromissos = listar_compromissos(conn, idoso_id)
+    opcoes = ["Novo compromisso"] + [c.titulo for c in compromissos]
+    escolha = st.selectbox("Compromisso", opcoes, key="compromisso_selecionado")
+
+    compromisso_existente = None
+    if escolha != "Novo compromisso":
+        compromisso_existente = next(c for c in compromissos if c.titulo == escolha)
+
+    with st.form("form_compromisso"):
+        titulo = st.text_input(
+            "Título", value=compromisso_existente.titulo if compromisso_existente else ""
+        )
+        data = st.date_input(
+            "Data", value=compromisso_existente.data_hora.date() if compromisso_existente else None
+        )
+        horario = st.time_input(
+            "Horário", value=compromisso_existente.data_hora.time() if compromisso_existente else None
+        )
+        local = st.text_input(
+            "Local", value=compromisso_existente.local if compromisso_existente else ""
+        )
+        tipos = list(TipoCompromisso)
+        indice_padrao = tipos.index(compromisso_existente.tipo) if compromisso_existente else 0
+        tipo = st.selectbox("Tipo", tipos, format_func=lambda t: t.value, index=indice_padrao)
+        enviado = st.form_submit_button("Salvar")
+
+    if not enviado:
+        return
+
+    try:
+        compromisso = Compromisso(
+            id=compromisso_existente.id if compromisso_existente else str(uuid.uuid4()),
+            titulo=titulo,
+            data_hora=datetime.combine(data, horario),
+            local=local,
+            tipo=tipo,
+        )
+        salvar_compromisso(conn, compromisso, idoso_id)
+        st.success(f"Compromisso '{titulo}' salvo com sucesso.")
         st.rerun()
     except Exception as exc:
         st.error(f"Não foi possível salvar: {exc}")
