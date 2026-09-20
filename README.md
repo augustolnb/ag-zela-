@@ -20,10 +20,13 @@ Este repositório está sendo construído em fases (planos sequenciais):
 5. **Painel Streamlit para a família** ✓
 6. **Fluxo visual em n8n** (substitui Langflow, citado no enunciado
    original do curso — o curso migrou de ferramenta) ✓
-7. Empacotamento final, documentação e vídeo pitch.
+7. **Empacotamento final, documentação e vídeo pitch** ✓
 
 O design completo está em
-`docs/superpowers/specs/2026-09-10-cuida-mais-agente-idoso-design.md`.
+`docs/superpowers/specs/2026-09-10-cuida-mais-agente-idoso-design.md`. O
+relatório final do trabalho está em `RELATORIO.md` (também disponível em
+`RELATORIO.pdf`, gerado via `scripts/gerar_relatorio_pdf.py`), e o roteiro
+do vídeo pitch em `docs/pitch/roteiro.md`.
 
 ## Instalação
 
