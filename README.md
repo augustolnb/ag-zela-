@@ -287,6 +287,19 @@ abaixo) ou via script de seed usando `Medicamento(..., bula="...")` e
 `salvar_medicamento`. A reindexação no vector store acontece
 automaticamente a cada subida da API.
 
+Os embeddings usam o modelo `gemini-embedding-2` (constante `MODELO_PADRAO`
+em `zela/embeddings/client.py` — o projeto começou usando
+`text-embedding-004`, mas esse modelo foi descontinuado pela API do
+Gemini durante o desenvolvimento, com erro `404 NOT_FOUND ... is not
+found for API version v1beta, or is not supported for embedContent`; se
+isso acontecer de novo no futuro, rode
+`.venv/bin/python -c "from google import genai; [print(m.name) for m in genai.Client().models.list() if 'embedContent' in (m.supported_actions or [])]"`
+para listar os modelos atuais com suporte a `embedContent` e atualize essa
+constante). Se você trocar o modelo de embeddings depois de já ter
+documentos indexados, apague `./chroma_db/` antes de subir a API de novo
+— modelos diferentes podem gerar vetores de dimensão diferente, e o
+Chroma rejeita misturar dimensões na mesma coleção.
+
 ## Painel Streamlit (Plano 5)
 
 O painel da família mostra o status atual, a medicação do dia, os últimos

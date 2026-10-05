@@ -33,7 +33,7 @@ def test_obter_embedding_usa_o_sdk_injetado():
     resultado = cliente.obter_embedding("estou bem hoje")
 
     assert resultado == [0.1, 0.2, 0.3]
-    assert sdk_falso.models.chamadas == [("text-embedding-004", "estou bem hoje")]
+    assert sdk_falso.models.chamadas == [("gemini-embedding-2", "estou bem hoje")]
 
 
 def test_obter_embedding_usa_modelo_customizado():

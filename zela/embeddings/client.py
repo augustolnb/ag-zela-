@@ -1,6 +1,6 @@
 from google import genai
 
-MODELO_PADRAO = "text-embedding-004"
+MODELO_PADRAO = "gemini-embedding-2"
 
 
 class ClienteEmbeddingGemini:
