@@ -85,6 +85,11 @@ fase posterior (ver "Status do projeto" acima).
 pytest -v
 ```
 
+Para o detalhamento completo da suíte (o que cada camada testa, por que
+foi testada dessa forma, cobertura por arquivo, resultado da última
+execução e o que fica de fora dos testes automatizados), ver
+`docs/testes/estrategia-e-resultados.md`.
+
 ## Verificando o comportamento do agente (adk run)
 
 A suíte automatizada cobre apenas a camada de domínio (lógica pura, sem

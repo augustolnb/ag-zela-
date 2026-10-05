@@ -240,6 +240,10 @@ configuração (Docker Compose + QR code + webhook).
 
 ## 4. Resultados obtidos
 
+*(Detalhamento completo — estratégia de testes, justificativa de cada
+decisão de design, cobertura por arquivo e o que fica fora da suíte
+automatizada — em `docs/testes/estrategia-e-resultados.md`.)*
+
 - **186 testes automatizados** passando (`pytest -v`), cobrindo modelos
   Pydantic, lógica de domínio pura (rotina, monitoramento, emergência,
   comunicação), repositórios de armazenamento (SQLite), API (webhook,
