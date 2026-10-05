@@ -1,7 +1,10 @@
 import logging
+import os
 from datetime import datetime
+from typing import Union
 
 from google.adk.agents import Agent
+from google.adk.models.base_llm import BaseLlm
 
 from zela.embeddings.client import ClienteEmbeddingGemini
 from zela.embeddings.vetorial import RepositorioVetorial
@@ -10,7 +13,31 @@ from zela.storage.db import conectar
 from zela.storage.monitoramento import aplicar_classificacao
 from zela.storage.rotina import aplicar_confirmacao, aplicar_lembretes_pendentes, listar_medicamentos
 
-MODELO_PADRAO = "gemini-3.8-flash"
+MODELO_GEMINI = "gemini-3.8-flash"
+MODELO_DEEPSEEK = "deepseek/deepseek-chat"
+
+
+def _montar_modelo_padrao() -> Union[str, BaseLlm]:
+    """Escolhe o LLM de orquestração/conversação conforme ZELA_LLM_PROVEDOR.
+
+    Padrão (variável ausente ou "gemini") usa o Gemini diretamente pelo
+    nome do modelo. "deepseek" usa o DeepSeek via LiteLLM — serve como
+    alternativa manual quando a API do Gemini está instável/indisponível
+    (ver README). O RAG (consultar_conhecimento) continua usando
+    embeddings do Gemini (ClienteEmbeddingGemini) independentemente desta
+    variável, então uma chave do Gemini ainda é necessária nesse caso. O
+    import do LiteLlm só acontece aqui dentro, para não exigir o pacote
+    `litellm` (extra `deepseek`) de quem só usa o Gemini.
+    """
+    provedor = os.environ.get("ZELA_LLM_PROVEDOR", "gemini").lower()
+    if provedor == "deepseek":
+        from google.adk.models.lite_llm import LiteLlm
+
+        return LiteLlm(model=MODELO_DEEPSEEK)
+    return MODELO_GEMINI
+
+
+MODELO_PADRAO = _montar_modelo_padrao()
 
 _CAMINHO_DB = "zela.db"
 
@@ -98,7 +125,7 @@ def consultar_historico_alertas(idoso_id: str) -> list[dict]:
     return [a.model_dump(mode="json") for a in alertas]
 
 
-def montar_agente_rotina(model: str = MODELO_PADRAO) -> Agent:
+def montar_agente_rotina(model: Union[str, BaseLlm] = MODELO_PADRAO) -> Agent:
     return Agent(
         name="agente_rotina",
         model=model,
@@ -122,7 +149,7 @@ def montar_agente_rotina(model: str = MODELO_PADRAO) -> Agent:
     )
 
 
-def montar_agente_monitoramento(model: str = MODELO_PADRAO) -> Agent:
+def montar_agente_monitoramento(model: Union[str, BaseLlm] = MODELO_PADRAO) -> Agent:
     return Agent(
         name="agente_monitoramento",
         model=model,
@@ -143,7 +170,7 @@ def montar_agente_monitoramento(model: str = MODELO_PADRAO) -> Agent:
     )
 
 
-def montar_agente_comunicacao(model: str = MODELO_PADRAO) -> Agent:
+def montar_agente_comunicacao(model: Union[str, BaseLlm] = MODELO_PADRAO) -> Agent:
     return Agent(
         name="agente_comunicacao",
         model=model,
@@ -169,7 +196,7 @@ def montar_agente_comunicacao(model: str = MODELO_PADRAO) -> Agent:
     )
 
 
-def montar_agente_emergencia(model: str = MODELO_PADRAO) -> Agent:
+def montar_agente_emergencia(model: Union[str, BaseLlm] = MODELO_PADRAO) -> Agent:
     return Agent(
         name="agente_emergencia",
         model=model,
@@ -191,7 +218,7 @@ def montar_agente_emergencia(model: str = MODELO_PADRAO) -> Agent:
     )
 
 
-def montar_orquestrador(model: str = MODELO_PADRAO) -> Agent:
+def montar_orquestrador(model: Union[str, BaseLlm] = MODELO_PADRAO) -> Agent:
     return Agent(
         name="orquestrador_zela",
         model=model,

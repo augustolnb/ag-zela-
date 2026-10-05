@@ -122,6 +122,54 @@ Este passo é manual e **não é coberto pelos testes automatizados**
 (`pytest -v`), que evitam de propósito qualquer chamada real a
 LLM/rede.
 
+### Alternativa: usando o DeepSeek em vez do Gemini
+
+Se a API do Gemini estiver instável/indisponível (ex.: `503 UNAVAILABLE —
+high demand`) e você precisar continuar testando os agentes, é possível
+trocar o LLM de orquestração/conversação para o DeepSeek, via
+[LiteLLM](https://docs.litellm.ai/):
+
+```bash
+pip install -e ".[deepseek]"   # instala o litellm (extra google-adk[extensions])
+export DEEPSEEK_API_KEY="sua-chave-aqui"
+export ZELA_LLM_PROVEDOR=deepseek
+adk run zela/agents
+```
+
+Sem `ZELA_LLM_PROVEDOR` (ou com `ZELA_LLM_PROVEDOR=gemini`), o
+comportamento padrão com Gemini continua inalterado. A escolha é feita
+em `_montar_modelo_padrao()` (`zela/agents/orchestrator.py`), que monta
+`MODELO_PADRAO` como a string `"gemini-3.8-flash"` ou como um
+`LiteLlm(model="deepseek/deepseek-chat")`, conforme essa variável.
+
+**Importante:** essa troca afeta só o LLM dos agentes ADK. O RAG
+(ferramenta `consultar_conhecimento`, usada pelo agente de comunicação)
+continua usando embeddings do Gemini (`ClienteEmbeddingGemini`, modelo
+`text-embedding-004`) independentemente dessa variável — ou seja, mesmo
+testando com `ZELA_LLM_PROVEDOR=deepseek`, ainda é necessária uma
+`GOOGLE_API_KEY`/`GEMINI_API_KEY` válida para essa ferramenta específica
+funcionar. Além disso, como as instruções dos agentes foram escritas e
+validadas com o Gemini, o comportamento de delegação entre sub-agentes
+(quando chamar qual ferramenta, como interpretar o prefixo de contexto)
+pode variar um pouco com o DeepSeek — isso é diferença de modelo, não um
+bug do projeto.
+
+**Atenção ao testar com `adk run`:** em produção (webhook do WhatsApp,
+painel Streamlit), toda mensagem passa por `zela/api/runner.py`, que
+monta automaticamente uma linha de contexto no formato
+`[contexto do sistema: idoso_id=<id>; agora=<timestamp ISO 8601>]` antes
+de enviar a mensagem ao agente — é assim que os agentes sabem de qual
+idoso se trata e extraem os argumentos das ferramentas. O `adk run` fala
+direto com o agente, sem passar por `runner.py`, então **essa linha não
+é adicionada automaticamente**. Para testar o roteamento/chamadas de
+ferramenta de verdade (e não só se o agente responde algo), digite essa
+linha de contexto você mesmo antes da pergunta, por exemplo:
+`[contexto do sistema: idoso_id=idosa-1; agora=2026-01-01T08:00:00] já tomei o remédio`
+(use `idosa-1`, o `idoso_id` fixo do projeto — ver seção "Cadastrando a
+idosa e os medicamentos"). Sem essa linha, o teste só valida que o
+agente não trava com uma mensagem fora do padrão, não a orquestração em
+si.
+
 ## Nota sobre fusos horários
 
 Todos os `datetime` deste código são "naive" (sem informação de fuso
