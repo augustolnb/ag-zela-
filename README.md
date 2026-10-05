@@ -365,6 +365,17 @@ decide nem dispara escalonamento de verdade (isso continua sendo
 responsabilidade exclusiva do scheduler determinístico, Plano 3/4). Testar
 este workflow à vontade não aciona nenhum alerta real à família.
 
+**Nota sobre o painel do n8n (bug aparente, não real):** nos nós "Respond
+to Webhook" na versão `typeVersion` 1.1 (a usada neste workflow), o
+painel do editor e o histórico de execuções mostram os dados de
+**entrada** do nó (o `{status, motivo}` cru vindo do nó HTTP Request
+anterior), não a resposta HTTP que ele de fato monta e envia. Isso pode
+parecer que o campo `acao`/`mensagem_ilustrativa` não foi gerado — mas a
+resposta HTTP real (a que chega pelo `curl` ou chegaria para quem chamou
+o webhook) já contém o JSON completo. Para conferir a resposta de
+verdade, não confie no painel: dispare o webhook via `curl -i` (como no
+passo 4 acima) e leia o corpo da resposta ali.
+
 ## Limitações conhecidas do Plano 3
 
 1. **Sessão de conversa compartilhada entre idosa e família:** desde que o
