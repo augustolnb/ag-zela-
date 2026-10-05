@@ -10,7 +10,7 @@ from zela.storage.db import conectar
 from zela.storage.monitoramento import aplicar_classificacao
 from zela.storage.rotina import aplicar_confirmacao, aplicar_lembretes_pendentes, listar_medicamentos
 
-MODELO_PADRAO = "gemini-2.0-flash"
+MODELO_PADRAO = "gemini-3.8-flash"
 
 _CAMINHO_DB = "zela.db"
 

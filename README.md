@@ -104,7 +104,12 @@ export GOOGLE_API_KEY="sua-chave-aqui"   # ou GEMINI_API_KEY
 adk run zela/agents
 ```
 
-Os agentes usam o modelo `gemini-2.0-flash`, então é necessária uma
+Os agentes usam o modelo `gemini-3.8-flash` (constante `MODELO_PADRAO` em
+`zela/agents/orchestrator.py` — o projeto começou usando `gemini-2.0-flash`,
+mas esse modelo foi descontinuado pela API do Gemini durante o
+desenvolvimento; se a mesma mensagem de erro `404 NOT_FOUND ... no longer
+available` aparecer de novo no futuro, atualize essa constante para o
+modelo recomendado pelo próprio erro), então é necessária uma
 chave de API do Gemini disponível como variável de ambiente
 (`GOOGLE_API_KEY` tem prioridade; `GEMINI_API_KEY` também é aceita —
 confira `adk run --help` ou a documentação do `google-adk` instalado
