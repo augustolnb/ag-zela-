@@ -224,6 +224,13 @@ aritmética de datas da camada de domínio (`agora - ultima_presenca`,
    ```bash
    export GOOGLE_API_KEY=sua-chave-aqui
    ```
+4.1. Se a instância do WAHA exigir autenticação na API REST (variável
+   `WAHA_API_KEY` definida no container — comum em imagens mais recentes),
+   defina a mesma chave para o backend, senão todo envio de resposta
+   falha com `401 Unauthorized`:
+   ```bash
+   export ZELA_WAHA_API_KEY=a-mesma-chave-do-container-waha
+   ```
 5. Rode o backend:
    ```bash
    uvicorn zela.api.main:app --reload
@@ -338,6 +345,32 @@ entre os dois formatos de entrada.
 resposta enviada para o JID correto) e `tests/test_api_main.py`
 (`_processar_risco` e `_obter_lids_permitidos` com um perfil que tem LID
 cadastrado).
+
+### Segundo problema encontrado na mesma validação: WAHA exige API key
+
+Depois de corrigir o LID, o teste de ponta a ponta ainda não respondia.
+Reproduzindo o payload real diretamente contra o backend (com
+`TestClient(app, raise_server_exceptions=True)`, que propaga a exceção em
+vez de só devolver um 500 genérico), o traceback mostrou exatamente onde
+parava: a mensagem chegava, passava pelo filtro de permissão (LID já
+corrigido), o agente ADK processava e gerava a resposta — e o envio de
+volta pelo WAHA (`POST /api/sendText`) falhava com `401 Unauthorized`.
+
+**Causa:** `WahaClient` (`zela/integrations/waha_client.py`) nunca enviava
+nenhum cabeçalho de autenticação, e esta instância do WAHA está configurada
+com `WAHA_API_KEY` (variável de ambiente do container), que passou a
+exigir o cabeçalho `X-Api-Key` em toda chamada da API REST — inclusive
+`/api/sendText`. Isso não tem relação com o LID; é um problema distinto,
+só visível depois que o primeiro foi corrigido e a mensagem passou a
+chegar até esse ponto do fluxo.
+
+**Solução:** `WahaClient.__init__` ganhou o parâmetro opcional `api_key`,
+incluído como `X-Api-Key` em todas as chamadas (`enviar_texto`,
+`enviar_audio`) quando configurado. O backend lê o valor da nova variável
+de ambiente `ZELA_WAHA_API_KEY` (`zela/api/main.py`) — veja o passo 4.1
+em "Configurando o WAHA (WhatsApp)" acima. Quando não configurada, o
+cliente não envia o cabeçalho, preservando o comportamento de instâncias
+do WAHA sem autenticação (como as usadas nos testes automatizados).
 
 ## Configurando a ingestão de sensores
 

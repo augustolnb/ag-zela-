@@ -25,8 +25,9 @@ logger = logging.getLogger(__name__)
 CAMINHO_DB = os.environ.get("ZELA_DB_PATH", "zela.db")
 ID_IDOSO = "idosa-1"
 WAHA_BASE_URL = "http://localhost:3000"
+WAHA_API_KEY = os.environ.get("ZELA_WAHA_API_KEY")
 
-waha_client = WahaClient(base_url=WAHA_BASE_URL)
+waha_client = WahaClient(base_url=WAHA_BASE_URL, api_key=WAHA_API_KEY)
 cliente_embedding = ClienteEmbeddingGemini()
 repositorio_vetorial = RepositorioVetorial()
 _runner = obter_runner_zela()

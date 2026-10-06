@@ -2,14 +2,19 @@ import httpx
 
 
 class WahaClient:
-    def __init__(self, base_url: str, session: str = "default"):
+    def __init__(self, base_url: str, session: str = "default", api_key: str | None = None):
         self.base_url = base_url.rstrip("/")
         self.session = session
+        self.api_key = api_key
+
+    def _headers(self) -> dict:
+        return {"X-Api-Key": self.api_key} if self.api_key else {}
 
     def enviar_texto(self, telefone: str, texto: str) -> dict:
         resposta = httpx.post(
             f"{self.base_url}/api/sendText",
             json={"chatId": self._para_chat_id(telefone), "text": texto, "session": self.session},
+            headers=self._headers(),
             timeout=30,
         )
         resposta.raise_for_status()
@@ -23,6 +28,7 @@ class WahaClient:
                 "file": {"mimetype": mimetype, "data": audio_base64},
                 "session": self.session,
             },
+            headers=self._headers(),
             timeout=30,
         )
         resposta.raise_for_status()
