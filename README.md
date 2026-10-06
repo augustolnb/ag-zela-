@@ -372,6 +372,28 @@ em "Configurando o WAHA (WhatsApp)" acima. Quando não configurada, o
 cliente não envia o cabeçalho, preservando o comportamento de instâncias
 do WAHA sem autenticação (como as usadas nos testes automatizados).
 
+**Status:** ⚠️ bloqueado. O código já está pronto para enviar a chave,
+mas a chave real desta instância do WAHA ainda não foi localizada — a
+seção "Registro de erros da validação manual" abaixo detalha o que foi
+tentado e o que falta decidir.
+
+### Registro de erros da validação manual (WhatsApp/WAHA)
+
+Esta validação manual de ponta a ponta (não coberta pelos 200 testes
+automatizados, que usam dublês/payloads sintéticos) encontrou uma série
+de problemas reais, cada um só visível depois que o anterior foi
+corrigido e o fluxo avançou um passo. Lista cronológica, com causa,
+correção e status de cada um:
+
+| # | Erro encontrado | Causa raiz | Correção | Status |
+|---|---|---|---|---|
+| 1 | `404 NOT_FOUND` ao chamar o modelo Gemini do orquestrador | Modelo `gemini-2.0-flash` descontinuado pela API | Trocado para `gemini-3.8-flash` (`zela/agents/orchestrator.py`) | ✅ Corrigido |
+| 2 | `404 NOT_FOUND` ao gerar embeddings no boot da API | Modelo `text-embedding-004` descontinuado | Trocado para `gemini-embedding-2`, confirmado via `ListModels` (`zela/embeddings/client.py`) | ✅ Corrigido |
+| 3 | Painel de execução do n8n mostra o dado de entrada em vez da resposta real do nó "Respond to Webhook" | Particularidade documentada no próprio código do nó (`RespondToWebhook.node.js`, `typeVersion` 1.1): o painel sempre exibe o input, não o HTTP de fato enviado | Não é um bug do projeto — comportamento confirmado como correto via `curl -i` direto no webhook ativo | ✅ Documentado como comportamento esperado |
+| 4 | Mensagem real do WhatsApp nunca gerava resposta; payload capturado mostrava `"from": "<id>@lid"` em vez de `"<telefone>@c.us"` | Recurso de privacidade do WhatsApp (LID): o número real não é mais revelado para certos remetentes; o código assumia sempre o formato de telefone | Campo `lid_whatsapp` cadastrado manualmente no perfil; webhook e `WahaClient` passaram a tratar `@lid` como identificador válido (ver seção "Identificador de privacidade do WhatsApp (LID)" acima) | ✅ Corrigido (commit `6dcb545`) |
+| 5 | Com o LID corrigido, a mensagem era processada e respondida pelo agente, mas o envio de volta falhava com `401 Unauthorized` em `POST /api/sendText` | `WahaClient` nunca enviava nenhum cabeçalho de autenticação; esta instância do WAHA exige `X-Api-Key` | `WahaClient` ganhou suporte a `api_key` (header `X-Api-Key`), lido de `ZELA_WAHA_API_KEY` (commit `7d06393`) | ⚠️ Código corrigido, **chave real ainda não localizada** |
+| 6 | Não foi possível encontrar a chave de API do WAHA pelo dashboard | A versão do dashboard usada (`2026.9.1`) não expõe claramente a `WAHA_API_KEY` configurada no container em nenhuma tela de configurações visitada até agora | Tentativas de adivinhar a chave via `curl` (`local-dev-key`, Basic Auth com a senha do dashboard) retornaram `401` até em endpoints públicos como `/` e `/api-json`, o que sugere que a chave configurada é diferente da esperada ou há outro mecanismo de autenticação em jogo | ❌ Pendente — próximo passo é inspecionar a variável de ambiente diretamente no container (`docker inspect <container> --format '{{json .Config.Env}}'`) ou recriar o container com uma chave conhecida, decisão que requer confirmação explícita por afetar a sessão do WhatsApp já conectada |
+
 ## Configurando a ingestão de sensores
 
 ### ESP32 (sensor de presença)
