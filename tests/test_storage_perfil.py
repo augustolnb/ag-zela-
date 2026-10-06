@@ -40,3 +40,20 @@ def test_salvar_perfil_atualiza_registro_existente():
 
     recuperado = obter_perfil(conn, "idosa-1")
     assert recuperado.nome == "Maria S. Silva"
+
+
+def test_perfil_sem_lid_whatsapp_recupera_como_none():
+    conn = conectar(":memory:")
+    salvar_perfil(conn, _perfil(), idoso_id="idosa-1")
+
+    recuperado = obter_perfil(conn, "idosa-1")
+    assert recuperado.lid_whatsapp is None
+
+
+def test_salvar_e_obter_perfil_com_lid_whatsapp():
+    conn = conectar(":memory:")
+    perfil_com_lid = _perfil().model_copy(update={"lid_whatsapp": "109281332445239@lid"})
+    salvar_perfil(conn, perfil_com_lid, idoso_id="idosa-1")
+
+    recuperado = obter_perfil(conn, "idosa-1")
+    assert recuperado.lid_whatsapp == "109281332445239@lid"

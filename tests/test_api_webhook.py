@@ -200,6 +200,83 @@ def test_webhook_nao_falha_quando_processar_risco_nao_e_fornecido():
     assert resposta.status_code == 200
 
 
+def test_webhook_ignora_lid_fora_da_lista_permitida():
+    waha_falso = _WahaFalso()
+
+    def processar_falso(*args):
+        raise AssertionError("não deveria ser chamado para LID não permitido")
+
+    app = FastAPI()
+    app.include_router(
+        montar_roteador(processar_falso, waha_falso, lids_permitidos=["999999999999999@lid"])
+    )
+    cliente = TestClient(app)
+
+    resposta = cliente.post(
+        "/webhook/whatsapp",
+        json={
+            "event": "message",
+            "payload": {"from": "109281332445239@lid", "body": "tomei o remedio", "fromMe": False},
+        },
+    )
+
+    assert resposta.status_code == 200
+    assert resposta.json() == {"status": "ignorado"}
+    assert waha_falso.enviados == []
+
+
+def test_webhook_processa_lid_da_lista_permitida_e_responde_para_o_mesmo_jid():
+    waha_falso = _WahaFalso()
+
+    def processar_falso(id_idoso, texto, agora):
+        return "Que bom! Confirmado."
+
+    app = FastAPI()
+    app.include_router(
+        montar_roteador(
+            processar_falso, waha_falso, lids_permitidos=["109281332445239@lid"]
+        )
+    )
+    cliente = TestClient(app)
+
+    resposta = cliente.post(
+        "/webhook/whatsapp",
+        json={
+            "event": "message",
+            "payload": {"from": "109281332445239@lid", "body": "tomei o remedio", "fromMe": False},
+        },
+    )
+
+    assert resposta.status_code == 200
+    assert resposta.json() == {"status": "processado"}
+    assert waha_falso.enviados == [("109281332445239@lid", "Que bom! Confirmado.")]
+
+
+def test_webhook_aceita_lid_quando_lista_de_lid_nao_e_configurada():
+    waha_falso = _WahaFalso()
+
+    def processar_falso(id_idoso, texto, agora):
+        return "ok"
+
+    app = FastAPI()
+    app.include_router(
+        montar_roteador(processar_falso, waha_falso, telefones_permitidos=["+5511911111111"])
+    )
+    cliente = TestClient(app)
+
+    resposta = cliente.post(
+        "/webhook/whatsapp",
+        json={
+            "event": "message",
+            "payload": {"from": "109281332445239@lid", "body": "oi", "fromMe": False},
+        },
+    )
+
+    assert resposta.status_code == 200
+    assert resposta.json() == {"status": "processado"}
+    assert waha_falso.enviados == [("109281332445239@lid", "ok")]
+
+
 def test_webhook_nao_falha_quando_processar_risco_levanta_excecao():
     waha_falso = _WahaFalso()
 

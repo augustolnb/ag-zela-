@@ -75,6 +75,7 @@ def conectar(caminho_db: str = "zela.db") -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.executescript(ESQUEMA)
     _migrar_coluna_bula(conn)
+    _migrar_coluna_lid_whatsapp(conn)
     return conn
 
 
@@ -82,4 +83,11 @@ def _migrar_coluna_bula(conn: sqlite3.Connection) -> None:
     colunas = {linha["name"] for linha in conn.execute("PRAGMA table_info(medicamento)")}
     if "bula" not in colunas:
         conn.execute("ALTER TABLE medicamento ADD COLUMN bula TEXT")
+        conn.commit()
+
+
+def _migrar_coluna_lid_whatsapp(conn: sqlite3.Connection) -> None:
+    colunas = {linha["name"] for linha in conn.execute("PRAGMA table_info(perfil_idoso)")}
+    if "lid_whatsapp" not in colunas:
+        conn.execute("ALTER TABLE perfil_idoso ADD COLUMN lid_whatsapp TEXT")
         conn.commit()

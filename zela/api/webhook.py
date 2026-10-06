@@ -10,6 +10,14 @@ _ID_IDOSO_PADRAO = "idosa-1"
 
 
 def _extrair_telefone_e_texto(payload: dict) -> tuple[str, str] | None:
+    """Extrai o identificador do remetente e o texto da mensagem.
+
+    O WhatsApp normalmente identifica o remetente por telefone
+    ("<dígitos>@c.us"), convertido aqui para E.164 ("+<dígitos>"). Quando o
+    contato tem a privacidade de LID ativada, o WAHA entrega em vez disso um
+    identificador opaco ("<dígitos>@lid") e nunca revela o telefone real —
+    nesse caso o JID completo é devolvido como identificador, sem conversão.
+    """
     dados = payload.get("payload", {})
     if dados.get("fromMe"):
         return None
@@ -17,7 +25,10 @@ def _extrair_telefone_e_texto(payload: dict) -> tuple[str, str] | None:
     texto = dados.get("body")
     if not remetente or not texto:
         return None
-    telefone = "+" + remetente.split("@")[0]
+    if remetente.endswith("@lid"):
+        telefone = remetente
+    else:
+        telefone = "+" + remetente.split("@")[0]
     return telefone, texto
 
 
@@ -26,6 +37,7 @@ def montar_roteador(
     waha_client,
     id_idoso: str = _ID_IDOSO_PADRAO,
     telefones_permitidos: list[str] | None = None,
+    lids_permitidos: list[str] | None = None,
     processar_risco=None,
 ) -> APIRouter:
     roteador = APIRouter()
@@ -37,7 +49,8 @@ def montar_roteador(
         if extraido is None:
             return {"status": "ignorado"}
         telefone, texto = extraido
-        if telefones_permitidos is not None and telefone not in telefones_permitidos:
+        lista_permitida = lids_permitidos if telefone.endswith("@lid") else telefones_permitidos
+        if lista_permitida is not None and telefone not in lista_permitida:
             return {"status": "ignorado"}
 
         agora = datetime.now()

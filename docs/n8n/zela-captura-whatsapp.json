@@ -1,0 +1,83 @@
+{
+  "name": "Zela+ — Captura de Mensagem WhatsApp (debug WAHA)",
+  "nodes": [
+    {
+      "id": "no-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "zela-captura-whatsapp",
+        "responseMode": "lastNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "no-extrair-campos",
+      "name": "Extrair campos da mensagem",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 300],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "campo-evento",
+              "name": "evento",
+              "type": "string",
+              "value": "={{ $json.body.event }}"
+            },
+            {
+              "id": "campo-sessao",
+              "name": "sessao",
+              "type": "string",
+              "value": "={{ $json.body.session }}"
+            },
+            {
+              "id": "campo-from",
+              "name": "remetente_bruto",
+              "type": "string",
+              "value": "={{ $json.body.payload.from }}"
+            },
+            {
+              "id": "campo-eh-lid",
+              "name": "remetente_e_lid",
+              "type": "boolean",
+              "value": "={{ ($json.body.payload.from || '').endsWith('@lid') }}"
+            },
+            {
+              "id": "campo-fromme",
+              "name": "from_me",
+              "type": "boolean",
+              "value": "={{ $json.body.payload.fromMe }}"
+            },
+            {
+              "id": "campo-texto",
+              "name": "texto_mensagem",
+              "type": "string",
+              "value": "={{ $json.body.payload.body }}"
+            },
+            {
+              "id": "campo-payload-completo",
+              "name": "payload_completo",
+              "type": "object",
+              "value": "={{ $json.body }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Extrair campos da mensagem", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}

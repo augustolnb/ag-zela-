@@ -41,7 +41,16 @@ def _obter_telefones_permitidos() -> list[str] | None:
     return [perfil.telefone] + [c.telefone for c in perfil.contatos_familiares]
 
 
+def _obter_lids_permitidos() -> list[str] | None:
+    conexao = conectar(CAMINHO_DB)
+    perfil = obter_perfil(conexao, ID_IDOSO)
+    if perfil is None or perfil.lid_whatsapp is None:
+        return None
+    return [perfil.lid_whatsapp]
+
+
 _TELEFONES_PERMITIDOS = _obter_telefones_permitidos()
+_LIDS_PERMITIDOS = _obter_lids_permitidos()
 
 
 def _processar(id_idoso: str, texto: str, agora) -> str:
@@ -60,7 +69,7 @@ def _obter_exemplos_com_embedding():
 def _processar_risco(telefone: str, texto: str, agora: datetime) -> None:
     conexao = conectar(CAMINHO_DB)
     perfil = obter_perfil(conexao, ID_IDOSO)
-    if perfil is None or telefone != perfil.telefone:
+    if perfil is None or telefone not in (perfil.telefone, perfil.lid_whatsapp):
         return
     try:
         exemplos = _obter_exemplos_com_embedding()
@@ -95,7 +104,8 @@ app = FastAPI(lifespan=ciclo_de_vida)
 app.include_router(
     montar_roteador(
         _processar, waha_client, id_idoso=ID_IDOSO,
-        telefones_permitidos=_TELEFONES_PERMITIDOS, processar_risco=_processar_risco,
+        telefones_permitidos=_TELEFONES_PERMITIDOS, lids_permitidos=_LIDS_PERMITIDOS,
+        processar_risco=_processar_risco,
     )
 )
 app.include_router(montar_roteador_ingestao(_salvar_leitura, id_idoso=ID_IDOSO))

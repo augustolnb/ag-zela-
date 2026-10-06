@@ -50,3 +50,24 @@ def test_perfil_idoso_condicoes_medicas_e_opcional_e_vazia_por_padrao():
         contatos_familiares=[ContatoFamiliar(nome="João", telefone="+5511987654321")],
     )
     assert perfil.condicoes_medicas == []
+
+
+def test_perfil_idoso_lid_whatsapp_e_opcional_e_none_por_padrao():
+    perfil = PerfilIdoso(
+        nome="Maria da Silva",
+        telefone="+5511911111111",
+        data_nascimento=date(1945, 3, 12),
+        contatos_familiares=[ContatoFamiliar(nome="João", telefone="+5511987654321")],
+    )
+    assert perfil.lid_whatsapp is None
+
+
+def test_perfil_idoso_aceita_lid_whatsapp_cadastrado():
+    perfil = PerfilIdoso(
+        nome="Maria da Silva",
+        telefone="+5511911111111",
+        data_nascimento=date(1945, 3, 12),
+        contatos_familiares=[ContatoFamiliar(nome="João", telefone="+5511987654321")],
+        lid_whatsapp="109281332445239@lid",
+    )
+    assert perfil.lid_whatsapp == "109281332445239@lid"

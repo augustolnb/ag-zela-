@@ -16,3 +16,4 @@ class PerfilIdoso(BaseModel):
     data_nascimento: date
     contatos_familiares: list[ContatoFamiliar] = Field(min_length=1)
     condicoes_medicas: list[str] = Field(default_factory=list)
+    lid_whatsapp: str | None = None

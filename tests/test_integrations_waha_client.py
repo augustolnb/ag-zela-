@@ -55,3 +55,23 @@ def test_enviar_audio_monta_payload_correto(monkeypatch):
 
 def test_para_chat_id_remove_sinal_de_mais():
     assert WahaClient._para_chat_id("+5511987654321") == "5511987654321@c.us"
+
+
+def test_para_chat_id_repassa_jid_lid_sem_reformatar():
+    assert WahaClient._para_chat_id("109281332445239@lid") == "109281332445239@lid"
+
+
+def test_enviar_texto_para_remetente_lid_nao_reformata_chat_id(monkeypatch):
+    chamadas = []
+
+    def post_falso(url, json, timeout):
+        chamadas.append((url, json, timeout))
+        return _RespostaFalsa({"id": "msg-3"})
+
+    monkeypatch.setattr(httpx, "post", post_falso)
+
+    cliente = WahaClient(base_url="http://localhost:3000")
+    cliente.enviar_texto("109281332445239@lid", "Olá!")
+
+    _, payload, _ = chamadas[0]
+    assert payload["chatId"] == "109281332445239@lid"

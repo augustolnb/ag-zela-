@@ -106,3 +106,43 @@ def test_processar_risco_processa_mensagem_do_idoso(monkeypatch, tmp_path):
     main_module._processar_risco("+5511911111111", "estou bem", datetime(2026, 9, 17, 10, 0))
 
     assert len(repositorio_falso.indexados) == 1
+
+
+def _preparar_main_com_perfil_lid(monkeypatch, tmp_path):
+    banco = str(tmp_path / "teste_lid.db")
+    monkeypatch.setattr(main_module, "CAMINHO_DB", banco)
+    conn = main_module.conectar(banco)
+    salvar_perfil(
+        conn,
+        PerfilIdoso(
+            nome="Maria", telefone="+5511911111111", data_nascimento=date(1945, 3, 12),
+            contatos_familiares=[ContatoFamiliar(nome="João", telefone="+5511987654321")],
+            lid_whatsapp="109281332445239@lid",
+        ),
+        idoso_id=main_module.ID_IDOSO,
+    )
+    monkeypatch.setattr(main_module, "cliente_embedding", _ClienteEmbeddingFalsoMain())
+    monkeypatch.setattr(main_module, "_exemplos_com_embedding_cache", None)
+
+
+def test_processar_risco_processa_mensagem_do_idoso_via_lid(monkeypatch, tmp_path):
+    _preparar_main_com_perfil_lid(monkeypatch, tmp_path)
+    repositorio_falso = _RepositorioVetorialFalsoMain()
+    monkeypatch.setattr(main_module, "waha_client", _WahaFalsoMain())
+    monkeypatch.setattr(main_module, "repositorio_vetorial", repositorio_falso)
+
+    # Contato cujo WhatsApp usa LID (telefone real nunca é revelado pelo
+    # WAHA): o fluxo completo deve rodar igual ao de um número normal.
+    main_module._processar_risco("109281332445239@lid", "estou bem", datetime(2026, 9, 17, 10, 0))
+
+    assert len(repositorio_falso.indexados) == 1
+
+
+def test_obter_lids_permitidos_retorna_none_sem_lid_cadastrado(monkeypatch, tmp_path):
+    _preparar_main_com_perfil(monkeypatch, tmp_path)
+    assert main_module._obter_lids_permitidos() is None
+
+
+def test_obter_lids_permitidos_retorna_lid_cadastrado(monkeypatch, tmp_path):
+    _preparar_main_com_perfil_lid(monkeypatch, tmp_path)
+    assert main_module._obter_lids_permitidos() == ["109281332445239@lid"]

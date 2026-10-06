@@ -236,6 +236,109 @@ precisar de pequenos ajustes contra a versão específica da imagem Docker
 usada — confira o Swagger da sua instância (`http://localhost:3000/`) se
 as mensagens não chegarem como esperado.
 
+### Identificador de privacidade do WhatsApp (LID)
+
+Esta seção documenta um problema real descoberto durante a validação manual
+de ponta a ponta (não um defeito teórico): nenhum dos 199 testes
+automatizados do projeto o detectou, porque todos usam payloads sintéticos
+no formato "esperado". Só apareceu ao mandar uma mensagem de verdade pelo
+WhatsApp.
+
+**O problema.** Ao testar o fluxo real (WhatsApp → WAHA → webhook → ADK →
+resposta), a mensagem enviada pelo número cadastrado nunca gerava resposta.
+Capturando o payload bruto do webhook (um servidor HTTP mínimo colocado
+temporariamente no lugar do backend), o campo do remetente veio como:
+
+```json
+"from": "109281332445239@lid"
+```
+
+em vez do formato esperado `"<telefone>@c.us"`. Isso é o **LID (Linked
+ID)**, um identificador de privacidade que o WhatsApp passou a usar em
+parte das conversas: em vez do número de telefone, a conta mostra ao
+"destinatário" (aqui, o número que representa o Zela+) um código numérico
+opaco e estável, sem revelar o telefone real. Não é um bug do WAHA — é o
+próprio cliente WhatsApp que deixa de enviar o número.
+
+Isso quebrava dois pontos do código, ambos escritos assumindo que todo
+remetente seria sempre `"<telefone>@c.us"`:
+
+1. `_extrair_telefone_e_texto` (`zela/api/webhook.py`) convertia qualquer
+   remetente para um pseudo-telefone `"+" + dígitos`. Para um LID, isso
+   gera uma string que nunca bate com o telefone cadastrado no perfil →
+   a mensagem era silenciosamente descartada (`{"status": "ignorado"}`).
+2. Mesmo ignorando o filtro, a resposta teria sido enviada para o chat
+   errado: `WahaClient._para_chat_id` sempre completava o destino com
+   `@c.us`, o que aponta para um chat por telefone — inexistente nesse
+   caso — em vez do chat `@lid` real de onde a mensagem veio.
+
+**Solução implementada.** Em vez de tentar resolver o LID para um telefone
+(o WhatsApp não expõe essa informação para contas com esse recurso de
+privacidade ativado — não existe chamada de API que recupere isso), o
+projeto passou a tratar o LID como um identificador alternativo,
+cadastrado manualmente uma única vez, da mesma forma que já cadastramos o
+telefone:
+
+- Novo campo opcional `lid_whatsapp: str | None` em `PerfilIdoso`
+  (`zela/models/perfil.py`).
+- Migração de schema idempotente para a coluna `lid_whatsapp` em
+  `perfil_idoso` (`zela/storage/db.py`), seguindo o mesmo padrão já usado
+  para a coluna `bula` de medicamentos — roda a cada `conectar()` e não
+  falha se a coluna já existir.
+- `_extrair_telefone_e_texto` agora ramifica pelo sufixo do remetente:
+  `...@c.us` continua convertido para E.164 (`+<dígitos>`, comportamento
+  inalterado); `...@lid` é devolvido como o JID completo, sem conversão.
+- `montar_roteador` ganhou o parâmetro `lids_permitidos`, verificado
+  apenas quando o remetente é um LID — a lista de telefones permitidos
+  continua sendo a única regra para remetentes normais.
+- `WahaClient._para_chat_id` passou a reconhecer um JID já completo
+  (contém `"@"`) e repassá-lo sem reformatar, em vez de sempre anexar
+  `@c.us`. Isso corrige o roteamento da resposta para remetentes LID sem
+  alterar nenhuma chamada existente que já passa um telefone puro (os
+  lembretes/alertas proativos do `scheduler.py`, por exemplo).
+- `_processar_risco` (`zela/api/main.py`) passou a comparar o identificador
+  recebido tanto contra `perfil.telefone` quanto contra
+  `perfil.lid_whatsapp`.
+- O `lid_whatsapp` real capturado durante a validação foi gravado no
+  perfil da `idosa-1` no banco local, permitindo testar o fluxo completo
+  de verdade pelo WhatsApp.
+
+**Por que essas decisões.** O cadastro manual do LID (em vez de resolução
+automática) é proporcional ao escopo de MVP de tenant único: o WhatsApp
+não expõe o telefone real por trás de um LID como recurso deliberado de
+privacidade, então qualquer automação aqui estaria tentando contornar essa
+proteção. Preservar o formato `"+telefone"` para remetentes `@c.us` evitou
+tocar na lógica de comparação já testada em `_processar_risco` e no
+contrato de lista de permitidos cobertos pelos testes existentes — a
+correção ficou isolada por tipo de identificador, reduzindo o risco de
+regressão. E a verificação `"@" in valor` em `_para_chat_id` é segura
+porque todo JID válido do WAHA contém `"@"`, enquanto um telefone puro
+(usado pelo agendador de lembretes) nunca contém — não há ambiguidade
+entre os dois formatos de entrada.
+
+**Como funciona agora, passo a passo:**
+1. WAHA entrega o webhook com `payload.from` no formato `@c.us` ou `@lid`.
+2. `_extrair_telefone_e_texto` identifica o formato e devolve o
+   identificador correspondente (telefone E.164 ou JID LID completo).
+3. `montar_roteador` escolhe a lista de permissão certa (`telefones_permitidos`
+   ou `lids_permitidos`) de acordo com o sufixo do identificador.
+4. Se permitido, a mensagem é processada normalmente pelo agente e a
+   resposta é enviada de volta usando o mesmo identificador — `_para_chat_id`
+   decide se precisa completar com `@c.us` (telefone puro) ou repassar o
+   JID como está (já completo).
+5. `_processar_risco` aplica a mesma lógica de "é a própria idosa?" nos dois
+   formatos, mantendo o escalonamento de risco funcionando
+   independentemente de como o WhatsApp identifica o remetente.
+
+**Testes adicionados** cobrindo esse fluxo: `tests/test_storage_db.py`
+(migração da coluna), `tests/test_storage_perfil.py` e
+`tests/test_models_perfil.py` (persistência e validação do campo),
+`tests/test_integrations_waha_client.py` (repasse do JID sem reformatar),
+`tests/test_api_webhook.py` (filtro por LID permitido/não permitido, e
+resposta enviada para o JID correto) e `tests/test_api_main.py`
+(`_processar_risco` e `_obter_lids_permitidos` com um perfil que tem LID
+cadastrado).
+
 ## Configurando a ingestão de sensores
 
 ### ESP32 (sensor de presença)

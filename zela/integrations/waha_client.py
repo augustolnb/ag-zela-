@@ -30,5 +30,10 @@ class WahaClient:
 
     @staticmethod
     def _para_chat_id(telefone: str) -> str:
+        if "@" in telefone:
+            # Já é um JID completo (ex.: "...@c.us" ou "...@lid" quando o
+            # remetente usa o identificador de privacidade do WhatsApp) —
+            # repassa sem reformatar.
+            return telefone
         numero = telefone.lstrip("+")
         return f"{numero}@c.us"
