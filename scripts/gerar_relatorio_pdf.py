@@ -1,13 +1,15 @@
-"""Gera RELATORIO.pdf a partir de RELATORIO.md.
+"""Gera um PDF a partir de um Markdown (por padrão, RELATORIO.md).
 
 Uso:
     pip install -e ".[relatorio]"
     python scripts/gerar_relatorio_pdf.py
+    python scripts/gerar_relatorio_pdf.py <entrada.md> <saida.pdf>
 
-Regenere sempre que editar RELATORIO.md — o PDF não é atualizado
+Regenere sempre que editar o Markdown — o PDF não é atualizado
 automaticamente.
 """
 
+import sys
 from pathlib import Path
 
 import markdown
@@ -16,8 +18,8 @@ from reportlab.pdfbase.ttfonts import TTFont
 from xhtml2pdf import pisa
 
 RAIZ = Path(__file__).parent.parent
-CAMINHO_MD = RAIZ / "RELATORIO.md"
-CAMINHO_PDF = RAIZ / "RELATORIO.pdf"
+CAMINHO_MD = Path(sys.argv[1]) if len(sys.argv) > 1 else RAIZ / "RELATORIO.md"
+CAMINHO_PDF = Path(sys.argv[2]) if len(sys.argv) > 2 else RAIZ / "RELATORIO.pdf"
 DIR_FONTES = Path(__file__).parent / "fontes"
 
 # O diagrama de arquitetura usa caracteres Unicode de desenho de caixa
