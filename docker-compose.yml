@@ -3,6 +3,15 @@ services:
     image: devlikeapro/waha
     ports:
       - "3000:3000"
+    environment:
+      # Sem isso, o WAHA gera uma API key aleatória nova a cada start do
+      # container e imprime nos logs — quebrando a integração sempre que o
+      # container reinicia. Valores reais ficam no .env (não versionado).
+      - WAHA_API_KEY=${WAHA_API_KEY}
+      - WAHA_DASHBOARD_USERNAME=${WAHA_DASHBOARD_USERNAME}
+      - WAHA_DASHBOARD_PASSWORD=${WAHA_DASHBOARD_PASSWORD}
+      - WHATSAPP_SWAGGER_USERNAME=${WAHA_DASHBOARD_USERNAME}
+      - WHATSAPP_SWAGGER_PASSWORD=${WAHA_DASHBOARD_PASSWORD}
     volumes:
       - waha_data:/app/.sessions
 
