@@ -61,6 +61,34 @@ def test_verificar_e_enviar_lembretes_envia_para_o_telefone_do_idoso(tmp_path, m
     assert waha_falso.enviados[0][0] == "+5511911111111"
 
 
+def test_verificar_e_enviar_lembretes_usa_lid_quando_disponivel(tmp_path, monkeypatch):
+    monkeypatch.setattr("zela.api.scheduler._lembretes_ja_enviados", set())
+
+    caminho_db = str(tmp_path / "teste.db")
+    conn = conectar(caminho_db)
+    perfil = _perfil()
+    perfil.lid_whatsapp = "109281332445239@lid"
+    salvar_perfil(conn, perfil, idoso_id="idosa-1")
+    medicamento = Medicamento(
+        id="med-lid-1", nome="Losartana",
+        dosagem=Dosagem(quantidade=50, unidade="mg"), horarios=[time(8, 0)],
+    )
+    salvar_medicamento(conn, medicamento, idoso_id="idosa-1")
+
+    class _DatetimeFixo:
+        @staticmethod
+        def now():
+            from datetime import datetime as _dt
+            return _dt(2026, 9, 14, 8, 5)
+
+    monkeypatch.setattr("zela.api.scheduler.datetime", _DatetimeFixo)
+
+    waha_falso = _WahaFalso()
+    verificar_e_enviar_lembretes(caminho_db, "idosa-1", waha_falso)
+
+    assert waha_falso.enviados[0][0] == "109281332445239@lid"
+
+
 def test_verificar_e_enviar_lembretes_sem_perfil_retorna_lista_vazia(tmp_path):
     caminho_db = str(tmp_path / "teste.db")
     conectar(caminho_db)
@@ -269,6 +297,21 @@ def test_despachar_alertas_salva_e_envia_alertas_nao_simulados():
 
     assert waha_falso.enviados == [("+5511987654321", "Atenção, sem resposta.")]
     assert len(listar_alertas(conn, "idosa-1")) == 1
+
+
+def test_despachar_alertas_usa_lid_da_idosa_quando_disponivel():
+    conn = conectar(":memory:")
+    perfil = _perfil()
+    perfil.lid_whatsapp = "109281332445239@lid"
+    waha_falso = _WahaFalso()
+    alerta_idosa = Alerta(
+        nivel=NivelAlerta.ATENCAO, destinatario=perfil.nome, canal=CanalAlerta.WHATSAPP,
+        mensagem="Está tudo bem?", timestamp=datetime(2026, 9, 17, 10, 0),
+    )
+
+    despachar_alertas(conn, [alerta_idosa], perfil, "idosa-1", waha_falso)
+
+    assert waha_falso.enviados == [("109281332445239@lid", "Está tudo bem?")]
 
 
 def test_despachar_alertas_nao_envia_alerta_simulado():

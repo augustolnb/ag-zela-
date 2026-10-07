@@ -56,7 +56,7 @@ def verificar_e_enviar_lembretes(caminho_db: str, id_idoso: str, waha_client) ->
         if chave in _lembretes_ja_enviados:
             continue
         texto = formatar_lembrete(medicamento)
-        waha_client.enviar_texto(perfil.telefone, texto)
+        waha_client.enviar_texto(perfil.lid_whatsapp or perfil.telefone, texto)
         _lembretes_ja_enviados.add(chave)
         enviadas.append(texto)
     return enviadas
@@ -64,7 +64,7 @@ def verificar_e_enviar_lembretes(caminho_db: str, id_idoso: str, waha_client) ->
 
 def _telefone_por_nome(perfil: PerfilIdoso, nome: str) -> str | None:
     if nome == perfil.nome:
-        return perfil.telefone
+        return perfil.lid_whatsapp or perfil.telefone
     for contato in perfil.contatos_familiares:
         if contato.nome == nome:
             return contato.telefone
