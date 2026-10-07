@@ -205,9 +205,6 @@ classificação/roteamento, como pede o card.
 
 ![Workflow n8n — captura do editor](docs/relatorio/imagens/n8n_workflow.png)
 
-*(capturar após importar o workflow no n8n — instruções em `README.md`,
-seção "Workflow n8n (Plano 6)")*
-
 ### 3.5 Interface de usuário com Streamlit (card 3.7)
 
 O painel Streamlit (`zela/streamlit_app/`) é a interface da família:
@@ -222,10 +219,7 @@ stack traces para qualquer seção que falhe.
 | Status atual | ![Status](docs/relatorio/imagens/streamlit_status.png) |
 | Medicação do dia | ![Medicação](docs/relatorio/imagens/streamlit_medicacao.png) |
 | Histórico de alertas | ![Alertas](docs/relatorio/imagens/streamlit_alertas.png) |
-| Gráfico de presença | ![Gráfico](docs/relatorio/imagens/streamlit_grafico.png) |
-
-*(capturas a adicionar em `docs/relatorio/imagens/` — instruções de como
-rodar o painel em `README.md`, seção "Painel Streamlit (Plano 5)")*
+| Atividade de hoje (presença) | ![Atividade](docs/relatorio/imagens/streamlit_grafico.png) |
 
 ### 3.6 Comunicação via WhatsApp (card 3.8)
 
@@ -236,6 +230,8 @@ roteia ao agente apropriado; o cliente WAHA (`zela/integrations/waha_client.py`)
 envia as respostas de volta. Ver README para o passo a passo de
 configuração (Docker Compose + QR code + webhook).
 
+![Dashboard do WAHA — sessão conectada](docs/relatorio/imagens/waha_dashboard.png)
+
 ---
 
 ## 4. Resultados obtidos
@@ -244,7 +240,7 @@ configuração (Docker Compose + QR code + webhook).
 decisão de design, cobertura por arquivo e o que fica fora da suíte
 automatizada — em `docs/testes/estrategia-e-resultados.md`.)*
 
-- **186 testes automatizados** passando (`pytest -v`), cobrindo modelos
+- **202 testes automatizados** passando (`pytest -v`), cobrindo modelos
   Pydantic, lógica de domínio pura (rotina, monitoramento, emergência,
   comunicação), repositórios de armazenamento (SQLite), API (webhook,
   ingestão de sensores, classificação, scheduler), embeddings
@@ -276,7 +272,7 @@ Resumo rápido — o `README.md` do repositório tem o passo a passo completo
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -v                              # roda a suíte de 186 testes
+pytest -v                              # roda a suíte de 202 testes
 uvicorn zela.api.main:app --reload     # backend (webhook, API, scheduler)
 streamlit run zela/streamlit_app/app.py  # painel da família
 ```

@@ -11,7 +11,7 @@ referência para quem for dar manutenção no projeto depois.
 ## 1. Visão geral
 
 - **Framework:** `pytest`.
-- **Tamanho da suíte:** 186 testes, em 38 arquivos, cobrindo todo o
+- **Tamanho da suíte:** 202 testes, em 38 arquivos, cobrindo todo o
   código de produção do repositório (`zela/`).
 - **Execução:** `pytest -v` (ou `.venv/bin/pytest -v` sem ativar o
   ambiente), a partir da raiz do repositório. Tempo de execução: ~20
@@ -134,35 +134,35 @@ da correção.
 
 | Arquivo | Testes |
 |---|---:|
-| `test_api_scheduler.py` | 10 |
+| `test_api_webhook.py` | 12 |
+| `test_api_scheduler.py` | 12 |
 | `test_api_ingestao.py` | 10 |
 | `test_storage_rotina.py` | 9 |
-| `test_api_webhook.py` | 9 |
 | `test_streamlit_secoes.py` | 8 |
 | `test_models_rotina.py` | 8 |
+| `test_api_main.py` | 8 |
 | `test_agents_orchestrator_tools_monitoramento.py` | 8 |
 | `test_storage_monitoramento.py` | 7 |
+| `test_models_perfil.py` | 7 |
 | `test_embeddings_classificador.py` | 7 |
 | `test_streamlit_formularios.py` | 6 |
 | `test_n8n_workflow.py` | 6 |
+| `test_integrations_waha_client.py` | 6 |
 | `test_domain_rotina.py` | 6 |
 | `test_domain_emergencia.py` | 6 |
 | `test_agents_orchestrator_tools.py` | 6 |
 | `test_streamlit_autenticacao.py` | 5 |
-| `test_models_perfil.py` | 5 |
+| `test_storage_perfil.py` | 5 |
 | `test_api_runner.py` | 5 |
-| `test_api_main.py` | 5 |
 | `test_storage_escalonamento.py` | 4 |
+| `test_storage_db.py` | 4 |
 | `test_storage_alertas.py` | 4 |
 | `test_models_monitoramento.py` | 4 |
 | `test_embeddings_vetorial.py` | 4 |
 | `test_domain_monitoramento.py` | 4 |
 | `test_domain_comunicacao.py` | 4 |
 | `test_agents_orchestrator_tools_comunicacao.py` | 4 |
-| `test_storage_perfil.py` | 3 |
-| `test_storage_db.py` | 3 |
 | `test_models_comunicacao_alertas.py` | 3 |
-| `test_integrations_waha_client.py` | 3 |
 | `test_embeddings_exemplos_referencia.py` | 3 |
 | `test_embeddings_client.py` | 3 |
 | `test_api_monitoramento_mensagem.py` | 3 |
@@ -171,7 +171,7 @@ da correção.
 | `test_simulacao.py` | 2 |
 | `test_api_reindexacao.py` | 2 |
 | `test_agents_orchestrator.py` | 2 |
-| **Total** | **186** |
+| **Total** | **202** |
 
 *(Não há uma ferramenta de medição de cobertura de linha, tipo
 `pytest-cov`, configurada no projeto — a tabela acima mede quantidade de
@@ -185,7 +185,7 @@ seção 7 para essa limitação.)*
 ```
 $ pytest -v
 ...
-186 passed, 3 warnings in 19.99s
+202 passed, 2 warnings in ~40s
 ```
 
 - **Ambiente:** Python 3.12, dentro do `.venv` do projeto
@@ -193,7 +193,7 @@ $ pytest -v
 - **Versões relevantes:** pytest 9.1.1, FastAPI 0.141.1, Pydantic 2.13.5,
   google-adk 2.9.0, google-genai 2.23.0, chromadb 1.5.9, APScheduler
   3.11.3, Streamlit 1.64.0.
-- **Falhas:** nenhuma. 0 de 186 testes falhando.
+- **Falhas:** nenhuma. 0 de 202 testes falhando.
 - **Erros de coleta:** nenhum, desde que a suíte seja executada com o
   `.venv` ativado (ver nota abaixo).
 
@@ -244,7 +244,7 @@ depois da entrega, mas reconhecidas durante o próprio desenvolvimento.
 
 **Nota sobre cobertura de linha:** o projeto não usa `pytest-cov` nem
 nenhuma outra ferramenta de medição de cobertura. A extensão da suíte
-(186 testes cobrindo toda camada do código, da validação de dados até a
+(202 testes cobrindo toda camada do código, da validação de dados até a
 interface) foi verificada por leitura e pela prática de TDD usada durante
 o desenvolvimento (teste escrito antes da implementação, a cada tarefa),
 não por uma métrica percentual. Adicionar `pytest-cov` é uma melhoria
