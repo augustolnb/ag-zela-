@@ -1,7 +1,7 @@
 # Zela+ — Relatório do Trabalho Final (Agentes de IA)
 
 **Autor:** Lucas Augusto
-**Repositório:** (link do GitHub a ser preenchido na entrega do card)
+**Repositório:** https://github.com/augustolnb/ag-zela-
 **Vídeo pitch:** ver `docs/pitch/roteiro.md` para o roteiro; o arquivo de vídeo fica em `docs/pitch/zela-pitch.mp4` no repositório.
 
 ---
