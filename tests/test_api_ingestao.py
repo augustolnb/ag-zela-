@@ -157,3 +157,78 @@ def test_ingest_health_connect_timestamp_invalido_retorna_400():
 
     assert resposta.status_code == 400
     assert armazenamento.salvas == []
+
+
+def test_ingest_esp32_com_token_configurado_sem_header_retorna_401():
+    armazenamento = _ArmazenamentoFalso()
+    app = FastAPI()
+    app.include_router(montar_roteador_ingestao(armazenamento.salvar, token="segredo"))
+    cliente = TestClient(app)
+
+    resposta = cliente.post("/ingest/esp32", json={"valor": 1, "timestamp": "2026-09-16T10:00:00"})
+
+    assert resposta.status_code == 401
+    assert armazenamento.salvas == []
+
+
+def test_ingest_esp32_com_token_configurado_header_errado_retorna_401():
+    armazenamento = _ArmazenamentoFalso()
+    app = FastAPI()
+    app.include_router(montar_roteador_ingestao(armazenamento.salvar, token="segredo"))
+    cliente = TestClient(app)
+
+    resposta = cliente.post(
+        "/ingest/esp32",
+        json={"valor": 1, "timestamp": "2026-09-16T10:00:00"},
+        headers={"X-Api-Key": "errado"},
+    )
+
+    assert resposta.status_code == 401
+    assert armazenamento.salvas == []
+
+
+def test_ingest_esp32_com_token_configurado_header_correto_retorna_200():
+    armazenamento = _ArmazenamentoFalso()
+    app = FastAPI()
+    app.include_router(montar_roteador_ingestao(armazenamento.salvar, token="segredo"))
+    cliente = TestClient(app)
+
+    resposta = cliente.post(
+        "/ingest/esp32",
+        json={"valor": 1, "timestamp": "2026-09-16T10:00:00"},
+        headers={"X-Api-Key": "segredo"},
+    )
+
+    assert resposta.status_code == 200
+    assert len(armazenamento.salvas) == 1
+
+
+def test_ingest_health_connect_com_token_configurado_sem_header_retorna_401():
+    armazenamento = _ArmazenamentoFalso()
+    app = FastAPI()
+    app.include_router(montar_roteador_ingestao(armazenamento.salvar, token="segredo"))
+    cliente = TestClient(app)
+
+    resposta = cliente.post(
+        "/ingest/health-connect",
+        json={"value": 72, "unit": "bpm", "timestamp": "2026-09-16T10:00:00"},
+    )
+
+    assert resposta.status_code == 401
+    assert armazenamento.salvas == []
+
+
+def test_ingest_health_connect_com_token_configurado_header_correto_retorna_200():
+    armazenamento = _ArmazenamentoFalso()
+    app = FastAPI()
+    app.include_router(montar_roteador_ingestao(armazenamento.salvar, token="segredo"))
+    cliente = TestClient(app)
+
+    resposta = cliente.post(
+        "/ingest/health-connect",
+        json={"value": 72, "unit": "bpm", "timestamp": "2026-09-16T10:00:00"},
+        headers={"X-Api-Key": "segredo"},
+    )
+
+    assert resposta.status_code == 200
+    assert len(armazenamento.salvas) == 1

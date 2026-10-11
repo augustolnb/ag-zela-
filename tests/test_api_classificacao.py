@@ -65,3 +65,53 @@ def test_classificar_mensagem_falha_de_embedding_retorna_503():
 
     assert resposta.status_code == 503
     assert "erro" in resposta.json()
+
+
+def test_classificar_mensagem_com_token_configurado_sem_header_retorna_401():
+    app = FastAPI()
+    app.include_router(
+        montar_roteador_classificacao(
+            _ClienteEmbeddingFalso([0.0, 1.0]), _exemplos_com_embedding, token="segredo"
+        )
+    )
+    cliente = TestClient(app)
+
+    resposta = cliente.post("/api/classificar-mensagem", json={"texto": "caí no banheiro"})
+
+    assert resposta.status_code == 401
+
+
+def test_classificar_mensagem_com_token_configurado_header_errado_retorna_401():
+    app = FastAPI()
+    app.include_router(
+        montar_roteador_classificacao(
+            _ClienteEmbeddingFalso([0.0, 1.0]), _exemplos_com_embedding, token="segredo"
+        )
+    )
+    cliente = TestClient(app)
+
+    resposta = cliente.post(
+        "/api/classificar-mensagem",
+        json={"texto": "caí no banheiro"},
+        headers={"X-Api-Key": "errado"},
+    )
+
+    assert resposta.status_code == 401
+
+
+def test_classificar_mensagem_com_token_configurado_header_correto_retorna_200():
+    app = FastAPI()
+    app.include_router(
+        montar_roteador_classificacao(
+            _ClienteEmbeddingFalso([0.0, 1.0]), _exemplos_com_embedding, token="segredo"
+        )
+    )
+    cliente = TestClient(app)
+
+    resposta = cliente.post(
+        "/api/classificar-mensagem",
+        json={"texto": "caí no banheiro"},
+        headers={"X-Api-Key": "segredo"},
+    )
+
+    assert resposta.status_code == 200

@@ -15,6 +15,9 @@
 const char *WIFI_SSID = "SUA_REDE_WIFI";
 const char *WIFI_SENHA = "SUA_SENHA_WIFI";
 const char *URL_INGESTAO = "http://SEU_SERVIDOR:8000/ingest/esp32";
+// Mesmo valor configurado em ZELA_INGESTAO_TOKEN no backend. Deixe "" se o
+// backend estiver rodando sem a variavel definida (ex.: rede local/MVP).
+const char *TOKEN_INGESTAO = "";
 
 const int PINO_TRIGGER = 5;
 const int PINO_ECHO = 18;
@@ -56,6 +59,9 @@ bool enviarLeitura(bool presenca) {
   HTTPClient http;
   http.begin(URL_INGESTAO);
   http.addHeader("Content-Type", "application/json");
+  if (strlen(TOKEN_INGESTAO) > 0) {
+    http.addHeader("X-Api-Key", TOKEN_INGESTAO);
+  }
 
   String corpo = String("{\"valor\": ") + (presenca ? "1" : "0") +
                  ", \"timestamp\": \"" + obterTimestampIso() + "\"}";

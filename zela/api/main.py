@@ -26,6 +26,7 @@ CAMINHO_DB = os.environ.get("ZELA_DB_PATH", "zela.db")
 ID_IDOSO = "idosa-1"
 WAHA_BASE_URL = "http://localhost:3000"
 WAHA_API_KEY = os.environ.get("ZELA_WAHA_API_KEY")
+TOKEN_INGESTAO = os.environ.get("ZELA_INGESTAO_TOKEN")
 
 waha_client = WahaClient(base_url=WAHA_BASE_URL, api_key=WAHA_API_KEY)
 cliente_embedding = ClienteEmbeddingGemini()
@@ -109,5 +110,7 @@ app.include_router(
         processar_risco=_processar_risco,
     )
 )
-app.include_router(montar_roteador_ingestao(_salvar_leitura, id_idoso=ID_IDOSO))
-app.include_router(montar_roteador_classificacao(cliente_embedding, _obter_exemplos_com_embedding))
+app.include_router(montar_roteador_ingestao(_salvar_leitura, id_idoso=ID_IDOSO, token=TOKEN_INGESTAO))
+app.include_router(
+    montar_roteador_classificacao(cliente_embedding, _obter_exemplos_com_embedding, token=TOKEN_INGESTAO)
+)

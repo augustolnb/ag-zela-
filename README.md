@@ -231,9 +231,24 @@ aritmética de datas da camada de domínio (`agora - ultima_presenca`,
    ```bash
    export ZELA_WAHA_API_KEY=a-mesma-chave-do-container-waha
    ```
+4.2. Opcional em rede local, **obrigatório se o backend for exposto fora
+   dela** (ex.: VPS): defina um token para proteger `/ingest/esp32`,
+   `/ingest/health-connect` e `/api/classificar-mensagem`. Sem essa
+   variável, esses três endpoints não exigem nenhuma autenticação.
+   ```bash
+   export ZELA_INGESTAO_TOKEN=um-token-aleatorio-forte
+   ```
+   Requisições a esses endpoints devem enviar o header `X-Api-Key` com o
+   mesmo valor. O firmware do ESP32 (`firmware/zela_presenca/zela_presenca.ino`)
+   já suporta isso — preencha a constante `TOKEN_INGESTAO` com o mesmo token.
 5. Rode o backend:
    ```bash
    uvicorn zela.api.main:app --reload
+   ```
+   Para o ESP32 (ou qualquer outro dispositivo na rede) conseguir alcançar
+   o backend, ele não pode escutar só em `127.0.0.1`. Use:
+   ```bash
+   uvicorn zela.api.main:app --reload --host 0.0.0.0 --port 8000
    ```
 
 **Nota:** o formato exato dos endpoints/payloads do WAHA usado no código
@@ -546,12 +561,12 @@ passo 4 acima) e leia o corpo da resposta ali.
    fosse a própria idosa confirmando. Corrigir isso exige repensar o
    design de sessão do Plano 2 (ex.: uma sessão por número de telefone) —
    fica como item para um plano futuro.
-2. **Sem autenticação nos endpoints de ingestão:** `/ingest/esp32` e
-   `/ingest/health-connect` não exigem nenhuma autenticação — qualquer
-   requisição que alcance a porta pode injetar leituras de sensor
-   fabricadas. Para um MVP local isso é aceitável, mas antes de qualquer
-   exposição além da rede local, esses endpoints precisam de um mecanismo
-   de autenticação (ex.: um token compartilhado).
+2. **Autenticação dos endpoints de ingestão é opcional:** `/ingest/esp32`
+   e `/ingest/health-connect` aceitam um token compartilhado via
+   `ZELA_INGESTAO_TOKEN` (header `X-Api-Key`), mas só passam a exigi-lo se
+   essa variável estiver definida no backend — por padrão (rede local,
+   MVP) continuam abertos. Antes de expor o backend fora da rede local
+   (ex.: VPS), defina essa variável.
 3. **Resposta da idosa não interrompe o escalonamento:** quando o Agente
    de Emergência envia a mensagem inicial de verificação ("Tudo bem? Pode
    confirmar que está tudo certo?"), uma resposta da idosa por WhatsApp
@@ -608,14 +623,14 @@ passo 4 acima) e leia o corpo da resposta ali.
 
 ## Limitações conhecidas do Plano 6
 
-1. **Sem autenticação no endpoint `/api/classificar-mensagem`:** consistente
-   com a postura de MVP já documentada para `/ingest/esp32`,
-   `/ingest/health-connect` e `/webhook/whatsapp` (nenhum desses tem
-   autenticação também) — não é uma lacuna nova introduzida por este
-   plano. Mas, diferente dos endpoints de ingestão, este consome cota da
-   API do Gemini a cada chamada e não impõe um tamanho máximo para o
-   campo `texto` — antes de expor esse endpoint além da rede local, vale
-   adicionar um limite de tamanho e/ou autenticação.
+1. **Autenticação do `/api/classificar-mensagem` também é opcional:**
+   protegido pelo mesmo `ZELA_INGESTAO_TOKEN` dos endpoints de ingestão
+   (ver seção de configuração), mas só exige o header se a variável
+   estiver definida. `/webhook/whatsapp` continua sem equivalente — é
+   protegido pela allowlist de telefones/LID, não por token. Diferente
+   dos endpoints de ingestão, este consome cota da API do Gemini a cada
+   chamada e não impõe um tamanho máximo para o campo `texto` — vale
+   adicionar um limite de tamanho antes de expor publicamente.
 2. **Sem teste automatizado da execução real do workflow n8n:** o arquivo
    `docs/n8n/zela-classificacao-mensagem.json` tem um teste estrutural
    (`tests/test_n8n_workflow.py`, valida tipos de nó, parâmetros e
