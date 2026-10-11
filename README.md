@@ -239,8 +239,9 @@ aritmética de datas da camada de domínio (`agora - ultima_presenca`,
    export ZELA_INGESTAO_TOKEN=um-token-aleatorio-forte
    ```
    Requisições a esses endpoints devem enviar o header `X-Api-Key` com o
-   mesmo valor. O firmware do ESP32 (`firmware/zela_presenca/zela_presenca.ino`)
-   já suporta isso — preencha a constante `TOKEN_INGESTAO` com o mesmo token.
+   mesmo valor. O firmware do ESP32 já suporta isso — preencha
+   `TOKEN_INGESTAO` com o mesmo token em `firmware/zela_presenca/config.h`
+   (ver seção "Configurando a ingestão de sensores").
 5. Rode o backend:
    ```bash
    uvicorn zela.api.main:app --reload
@@ -414,12 +415,18 @@ correção e status de cada um:
 ### ESP32 (sensor de presença)
 
 1. Monte o circuito: HC-SR04 com `TRIG` no GPIO 5 e `ECHO` no GPIO 18 do
-   ESP32 (use um divisor de tensão no `ECHO` se o seu módulo for de 5V).
-2. Abra `firmware/zela_presenca/zela_presenca.ino` no Arduino IDE, com a
-   placa "ESP32 Dev Module" selecionada.
-3. Edite `WIFI_SSID`, `WIFI_SENHA` e `URL_INGESTAO` (aponte para o
-   endereço da máquina rodando o backend do Zela+, ex.:
-   `http://192.168.0.10:8000/ingest/esp32`).
+   ESP32, com um divisor de tensão (1kΩ + 2kΩ) no `ECHO` — o módulo opera
+   em 5V, mas os GPIOs do ESP32 toleram no máximo 3,3V. Diagrama completo
+   em `docs/hardware/automacao_esp32.pdf`.
+2. Copie `firmware/zela_presenca/config.h.example` para
+   `firmware/zela_presenca/config.h` (esse arquivo não é versionado —
+   evita vazar sua senha de Wi-Fi no repositório público) e preencha
+   `WIFI_SSID`, `WIFI_SENHA`, `URL_INGESTAO` (endereço da máquina rodando
+   o backend, ex.: `http://192.168.0.10:8000/ingest/esp32`) e, se o
+   backend exigir, `TOKEN_INGESTAO` (mesmo valor de `ZELA_INGESTAO_TOKEN`).
+3. Abra `firmware/zela_presenca/zela_presenca.ino` no Arduino IDE
+   (precisa do pacote de placas "esp32" por Espressif Systems instalado
+   via Boards Manager), com a placa "ESP32 Dev Module" selecionada.
 4. Grave no ESP32 e abra o Serial Monitor (115200 bps) para confirmar a
    conexão WiFi, a sincronização de hora via NTP, e os envios
    (`POST /ingest/esp32 -> 200`) ao mover a mão na frente do sensor.

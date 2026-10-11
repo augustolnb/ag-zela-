@@ -1,0 +1,10 @@
+// Copie este arquivo para "config.h" (mesma pasta) e preencha com os
+// valores reais. "config.h" está no .gitignore — nunca é commitado.
+#pragma once
+
+const char *WIFI_SSID = "SUA_REDE_WIFI";
+const char *WIFI_SENHA = "SUA_SENHA_WIFI";
+const char *URL_INGESTAO = "http://SEU_SERVIDOR:8000/ingest/esp32";
+// Mesmo valor configurado em ZELA_INGESTAO_TOKEN no backend. Deixe "" se o
+// backend estiver rodando sem a variavel definida (ex.: rede local/MVP).
+const char *TOKEN_INGESTAO = "";

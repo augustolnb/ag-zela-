@@ -12,12 +12,9 @@
 #include <HTTPClient.h>
 #include <time.h>
 
-const char *WIFI_SSID = "SUA_REDE_WIFI";
-const char *WIFI_SENHA = "SUA_SENHA_WIFI";
-const char *URL_INGESTAO = "http://SEU_SERVIDOR:8000/ingest/esp32";
-// Mesmo valor configurado em ZELA_INGESTAO_TOKEN no backend. Deixe "" se o
-// backend estiver rodando sem a variavel definida (ex.: rede local/MVP).
-const char *TOKEN_INGESTAO = "";
+// Credenciais e endereco do backend: ver config.h.example. Copie para
+// "config.h" (nao versionado) e preencha antes de compilar/gravar.
+#include "config.h"
 
 const int PINO_TRIGGER = 5;
 const int PINO_ECHO = 18;
