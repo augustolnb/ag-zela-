@@ -83,6 +83,10 @@ bool enviarLeitura(bool presenca) {
 
 void setup() {
   Serial.begin(115200);
+  // Em placas com USB nativo (ex.: ESP32-S3), a porta serial-USB
+  // reenumera logo apos o boot — sem essa pausa, os primeiros Serial.print
+  // deste setup() saem antes do Serial Monitor reconectar e se perdem.
+  delay(1500);
   for (int i = 0; i < QUANTIDADE_SENSORES; i++) {
     pinMode(PINOS_SENSORES[i], INPUT);
   }

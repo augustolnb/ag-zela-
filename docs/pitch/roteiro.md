@@ -40,8 +40,8 @@ diagrama de arquitetura do `RELATORIO.md` (seção 2) enquanto fala.
 **Fala sugerida:**
 > "O Zela+ resolve isso com 5 agentes de IA orquestrados pelo Google ADK:
 > um cuida da rotina de medicação, outro monitora sinais de risco vindos
-> de um smartwatch e de um sensor de presença ESP32, um conversa com o
-> idoso e a família por WhatsApp, e um cuida dos alertas de emergência.
+> de um smartwatch, um conversa com o idoso e a família por WhatsApp, e
+> um cuida dos alertas de emergência.
 > Por exemplo, quando o idoso manda uma mensagem como 'caí no banheiro e
 > não consigo levantar', o sistema classifica essa mensagem por
 > similaridade de embeddings e aciona a escada de alerta."
@@ -74,12 +74,12 @@ terminal rodando `pytest -v` com a suíte passando.
 ## Cena 5 — Resultados (2:20–2:50)
 
 **Fala sugerida:**
-> "O projeto tem 202 testes automatizados, foi construído em 6 fases
+> "O projeto tem 210 testes automatizados, foi construído em 6 fases
 > incrementais, cada uma testada e integrada separadamente, e está
 > documentado no GitHub com instruções completas de instalação e
 > execução. Obrigado!"
 
-**Tela:** terminal com `pytest -v` mostrando o resumo final (`202 passed`),
+**Tela:** terminal com `pytest -v` mostrando o resumo final (`210 passed`),
 ou a tela do GitHub do repositório.
 
 ---
