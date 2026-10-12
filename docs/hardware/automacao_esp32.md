@@ -7,52 +7,66 @@ presença/movimento do Zela+. Firmware em
 
 ## 1. Visão geral
 
-Um ESP32 com um sensor ultrassônico HC-SR04 monitora continuamente se há
-alguém no cômodo (presença detectada quando um objeto/pessoa está a até
-150cm do sensor). O firmware só envia uma leitura quando o estado muda
-(presente ↔ ausente), evitando tráfego desnecessário. Essa leitura
-alimenta a regra de risco do sistema: se não houver nenhuma presença
-registrada nas últimas 6 horas, o Zela+ classifica o evento como
-`RISCO` (`zela/domain/monitoramento.py`) e aciona a escada de
-escalonamento de alerta para a família.
+Um ESP32 lê 4 sensores PIR (infravermelho passivo) — 2 por cômodo, em 2
+cômodos — e monitora continuamente se há alguém se movendo. Cada cômodo
+tem um sensor **SR602** e um **HC-SR505**: dois modelos diferentes no
+mesmo cômodo, por redundância (reduz falso-negativo caso um dos dois
+falhe em detectar um movimento específico). O firmware combina os 4
+sensores com um OR lógico — presença é considerada "detectada" se
+**qualquer um** dos 4 disparar — e só envia uma leitura ao backend
+quando esse resultado combinado muda de estado (presente ↔ ausente),
+evitando tráfego desnecessário. Essa leitura alimenta a regra de risco
+do sistema: se não houver nenhuma presença registrada nas últimas 6
+horas, o Zela+ classifica o evento como `RISCO`
+(`zela/domain/monitoramento.py`) e aciona a escada de escalonamento de
+alerta para a família.
+
+**Observação de escopo:** com 1 único ESP32 cobrindo os 2 cômodos, o
+sistema não distingue *em qual* cômodo houve o movimento — o payload
+enviado ao backend continua sendo um único booleano de presença,
+combinado dos 4 sensores. Detecção por cômodo exigiria um ESP32 por
+cômodo (cada um com sua própria leitura de presença).
 
 ## 2. Lista de materiais (BOM)
 
 | Qtd. | Componente | Observação |
 |---|---|---|
 | 1 | ESP32 Dev Module (ex.: ESP32-WROOM-32 DevKit) | com WiFi integrado |
-| 1 | Sensor ultrassônico HC-SR04 | alcance ~2cm–400cm |
-| 1 | Resistor 1kΩ (R1) | divisor de tensão da linha ECHO |
-| 1 | Resistor 2kΩ (R2) | pode usar 2× 1kΩ em série se não tiver 2kΩ à mão |
-| — | Jumpers macho-fêmea + protoboard | para montagem sem solda |
+| 2 | Sensor PIR SR602 | 1 por cômodo; alcance ~5m, alimentação 3,3–15V |
+| 2 | Sensor PIR HC-SR505 | 1 por cômodo; alcance ~3m, alimentação 4,5–20V |
+| — | Jumpers macho-fêmea + protoboard | para montagem sem solda; fiação entre cômodos precisa de cabo mais longo |
 | 1 | Cabo USB (alimentação/gravação) | conforme o conector da placa (micro-USB ou USB-C) |
+
+Nenhum resistor é necessário — ver seção 5.
 
 ## 3. Diagrama elétrico
 
-![Diagrama elétrico ESP32 + HC-SR04](docs/hardware/imagens/zela_presenca_diagrama_eletrico.png)
+![Diagrama elétrico ESP32 + 4x PIR (SR602/HC-SR505)](docs/hardware/imagens/zela_presenca_diagrama_eletrico.png)
 
 ## 4. Tabela de pinagem
 
-| HC-SR04 | ESP32 | Tipo de sinal | Observação |
-|---|---|---|---|
-| VCC | 5V (VIN) | Alimentação | |
-| GND | GND | Terra | Terra comum entre os dois componentes e o divisor |
-| TRIG | GPIO 5 | Saída digital 3,3V | Ligação direta, sem divisor |
-| ECHO | GPIO 18 (via R1/R2) | Entrada digital | **Precisa do divisor de tensão** — ver seção 5 |
+| Sensor | Cômodo | VCC | OUT → ESP32 | GND |
+|---|---|---|---|---|
+| SR602 | A | 3,3V | GPIO 13 | GND |
+| HC-SR505 | A | 5V (VIN) | GPIO 14 | GND |
+| SR602 | B | 3,3V | GPIO 26 | GND |
+| HC-SR505 | B | 5V (VIN) | GPIO 27 | GND |
 
-## 5. Por que o divisor de tensão
+GND é um trilho comum entre o ESP32 e os 4 sensores.
 
-O HC-SR04 opera a linha `ECHO` em 5V, mas os GPIOs do ESP32 toleram no
-máximo ~3,3V (ultrapassar isso pode danificar a placa permanentemente).
-O divisor resistivo R1 (1kΩ) + R2 (2kΩ) entre `ECHO` e `GPIO 18`
-reduz a tensão para um nível seguro:
+## 5. Por que não precisa de divisor de tensão (diferente do HC-SR04)
 
-```
-Vout = 5V × R2 / (R1 + R2) = 5V × 2kΩ / 3kΩ ≈ 3,33V
-```
+Tanto o SR602 quanto o HC-SR505 têm uma saída `OUT` **fixa em ~3,3V**,
+independente da tensão de alimentação (`VCC`) — isso é diferente do
+HC-SR04 (usado numa versão anterior deste módulo), cujo `ECHO` segue a
+tensão de alimentação (5V) e exigia um divisor resistivo antes do GPIO.
+Aqui, `OUT` conecta **direto** ao GPIO do ESP32 nos dois sensores, sem
+nenhum componente adicional.
 
-A linha `TRIG` não precisa de divisor porque é o ESP32 (3,3V) enviando
-o pulso *para* o sensor, não o contrário.
+Cada sensor ainda precisa da tensão de alimentação correta: o SR602
+aceita 3,3V (pode sair do pino `3,3V` do ESP32); o HC-SR505 pede no
+mínimo 4,5V segundo o datasheet, por isso é alimentado pelo pino `5V
+(VIN)`.
 
 ## 6. Lógica do firmware
 
@@ -61,18 +75,21 @@ Resumo de `firmware/zela_presenca/zela_presenca.ino`:
 1. No boot: conecta ao WiFi (timeout de 30s) e sincroniza o relógio via
    NTP (`pool.ntp.org`) — o ESP32 não tem RTC com bateria própria, então
    sem isso os timestamps enviados seriam inválidos (época Unix).
-2. A cada 2 segundos (`INTERVALO_LEITURA_MS`), dispara um pulso no
-   `TRIG` e mede o tempo de retorno no `ECHO` para calcular a distância.
-3. Considera "presença" quando a distância é > 0 e ≤ 150cm
-   (`DISTANCIA_LIMIAR_CM`).
-4. **Só envia ao backend quando o estado muda** (presente↔ausente) —
-   não a cada leitura.
+2. **Aguarda ~60s de aquecimento** (`TEMPO_AQUECIMENTO_MS`) antes de
+   confiar em qualquer leitura — sensores PIR costumam oscilar/disparar
+   falso positivo logo após ligar.
+3. A cada 2 segundos (`INTERVALO_LEITURA_MS`), lê os 4 pinos digitais
+   (`digitalRead`) e calcula presença = OR entre os 4.
+4. **Só envia ao backend quando o estado combinado muda** (presente ↔
+   ausente) — não a cada leitura.
 5. Se o WiFi cair, tenta reconectar a cada 15s (`INTERVALO_RECONEXAO_MS`)
    sem bloquear o loop principal.
 
 ## 7. Configuração de rede e segurança
 
-Antes de gravar o firmware, preencher em `zela_presenca.ino`:
+Antes de gravar o firmware, copiar `firmware/zela_presenca/config.h.example`
+para `firmware/zela_presenca/config.h` (não versionado — evita vazar
+credenciais no repositório público) e preencher:
 
 | Constante | Valor |
 |---|---|
@@ -87,7 +104,7 @@ requisição sem o token correto.
 ## 8. Fluxo de dados no sistema
 
 ```
-ESP32 (mudança de estado) -> POST /ingest/esp32 (X-Api-Key)
+4x PIR (OR, mudança de estado) -> ESP32 -> POST /ingest/esp32 (X-Api-Key)
   -> LeituraSensor(fonte=ESP32, tipo=PRESENCA) salva no SQLite
   -> job periódico (a cada 15 min, zela/api/scheduler.py)
      -> classificar_por_regra(): >=6h sem presença? -> StatusMonitoramento.RISCO
@@ -96,12 +113,17 @@ ESP32 (mudança de estado) -> POST /ingest/esp32 (X-Api-Key)
 
 ## 9. Checklist de montagem e teste
 
-1. Montar o circuito conforme o diagrama da seção 3.
-2. Abrir `firmware/zela_presenca/zela_presenca.ino` no Arduino IDE,
-   placa "ESP32 Dev Module", preencher as constantes da seção 7.
-3. Gravar e abrir o Serial Monitor (115200 bps).
-4. Confirmar no log: conexão WiFi, sincronização NTP.
-5. Mover a mão na frente do sensor (cruzando o limiar de 150cm) e
-   confirmar `POST /ingest/esp32 -> 200` no Serial Monitor.
-6. Confirmar que a leitura chegou no backend (painel Streamlit ou
+1. Montar o circuito conforme o diagrama da seção 3 (2 sensores em cada
+   um dos 2 cômodos, fiação de volta até o ESP32).
+2. Copiar `config.h.example` para `config.h` e preencher conforme a
+   seção 7.
+3. Abrir `firmware/zela_presenca/zela_presenca.ino` no Arduino IDE,
+   placa "ESP32 Dev Module" (pacote "esp32 by Espressif Systems"
+   instalado via Boards Manager).
+4. Gravar e abrir o Serial Monitor (115200 bps).
+5. Confirmar no log: conexão WiFi, sincronização NTP, e a mensagem de
+   aquecimento dos sensores (~60s).
+6. Após o aquecimento, provocar movimento perto de qualquer um dos 4
+   sensores e confirmar `POST /ingest/esp32 -> 200` no Serial Monitor.
+7. Confirmar que a leitura chegou no backend (painel Streamlit ou
    consulta direta ao `zela.db`).
