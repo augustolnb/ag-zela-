@@ -414,10 +414,11 @@ correção e status de cada um:
 
 ### ESP32 (sensor de presença)
 
-1. Monte o circuito: HC-SR04 com `TRIG` no GPIO 5 e `ECHO` no GPIO 18 do
-   ESP32, com um divisor de tensão (1kΩ + 2kΩ) no `ECHO` — o módulo opera
-   em 5V, mas os GPIOs do ESP32 toleram no máximo 3,3V. Diagrama completo
-   em `docs/hardware/automacao_esp32.pdf`.
+1. Monte o circuito: 4 sensores PIR (2 por cômodo, em 2 cômodos) — um
+   SR602 (`OUT` no GPIO 13/26) e um HC-SR505 (`OUT` no GPIO 14/27) por
+   cômodo. Nenhum divisor de tensão é necessário — os dois modelos têm
+   saída `OUT` fixa em 3,3V, independente da alimentação. Diagrama
+   completo em `docs/hardware/automacao_esp32.pdf`.
 2. Copie `firmware/zela_presenca/config.h.example` para
    `firmware/zela_presenca/config.h` (esse arquivo não é versionado —
    evita vazar sua senha de Wi-Fi no repositório público) e preencha
