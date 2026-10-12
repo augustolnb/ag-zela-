@@ -29,9 +29,9 @@ conjunto de funcionalidades que já demonstra valor de ponta a ponta:
 
 - Lembretes de medicamentos/compromissos via WhatsApp, com confirmação
   pelo próprio idoso.
-- Monitoramento de risco combinando sensores reais (presença via ESP32,
-  sinais vitais via smartwatch) e a interpretação de mensagens de texto do
-  idoso (classificadas por similaridade de embeddings).
+- Monitoramento de risco combinando sinais vitais reais via smartwatch
+  (Mi Band, via Health Connect) e a interpretação de mensagens de texto
+  do idoso (classificadas por similaridade de embeddings).
 - Uma escada de escalonamento determinística (nunca decidida por um LLM)
   que avisa a família e, em último caso, simula contato com um serviço de
   emergência.
@@ -76,10 +76,9 @@ Pydantic próprio:
                          │  classificar risco)│ │  simulado)         │
                          └─────────┬───────────┘ └────────────────────┘
                                    │
-                     ┌─────────────┴─────────────┐
-                     ▼                            ▼
-           Mi Band 9 (Health Connect,       ESP32 (HC-SR04 presença)
-           via Health Connect Webhook)
+                                   ▼
+                         Mi Band 9 (Health Connect,
+                         via Health Connect Webhook)
 ```
 
 **Decisão de design mais importante do projeto:** a decisão de escalonar
@@ -111,9 +110,9 @@ de domínio (`zela/domain/`), pura e testável sem LLM nem rede.
 1. Hora de um remédio → Agente de Rotina dispara lembrete → Agente de
    Comunicação envia a mensagem via WhatsApp ao idoso.
 2. Idoso confirma por WhatsApp → Orquestrador registra a confirmação.
-3. Em paralelo, o Agente de Monitoramento consome leituras do smartwatch e
-   do ESP32 (a cada 15 min) e mensagens de texto do idoso (classificadas
-   por embeddings), gerando um status: `normal` / `atenção` / `risco`.
+3. Em paralelo, o Agente de Monitoramento consome leituras do smartwatch
+   (a cada 15 min) e mensagens de texto do idoso (classificadas por
+   embeddings), gerando um status: `normal` / `atenção` / `risco`.
 4. `atenção` → aviso à família via Streamlit/histórico de alertas.
 5. `risco` → escalonamento determinístico: contato com o idoso → família →
    simulação de contato de emergência.
@@ -240,7 +239,7 @@ configuração (Docker Compose + QR code + webhook).
 decisão de design, cobertura por arquivo e o que fica fora da suíte
 automatizada — em `docs/testes/estrategia-e-resultados.md`.)*
 
-- **202 testes automatizados** passando (`pytest -v`), cobrindo modelos
+- **210 testes automatizados** passando (`pytest -v`), cobrindo modelos
   Pydantic, lógica de domínio pura (rotina, monitoramento, emergência,
   comunicação), repositórios de armazenamento (SQLite), API (webhook,
   ingestão de sensores, classificação, scheduler), embeddings
@@ -272,14 +271,14 @@ Resumo rápido — o `README.md` do repositório tem o passo a passo completo
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -v                              # roda a suíte de 202 testes
+pytest -v                              # roda a suíte de 210 testes
 uvicorn zela.api.main:app --reload     # backend (webhook, API, scheduler)
 streamlit run zela/streamlit_app/app.py  # painel da família
 ```
 
 Para o comportamento real dos agentes (com chamadas de verdade ao Gemini),
-configuração do WAHA/WhatsApp, ingestão de sensores (ESP32/Health
-Connect) e importação do workflow n8n, ver as seções correspondentes no
+configuração do WAHA/WhatsApp, ingestão de sensores (Health Connect) e
+importação do workflow n8n, ver as seções correspondentes no
 `README.md`.
 
 ---
@@ -298,12 +297,27 @@ N"); resumo das mais relevantes:
    ainda recebe a classificação do vizinho mais próximo.
 3. Sessão de conversa do ADK Runner é única por idoso, não por remetente
    (idoso e família compartilham o mesmo histórico de contexto do LLM).
-4. Sem autenticação nos endpoints internos (`/ingest/*`,
-   `/api/classificar-mensagem`, `/webhook/whatsapp`) — aceitável para um
-   MVP local, mas necessário antes de qualquer exposição além da rede
-   doméstica.
+4. Autenticação por token nos endpoints `/ingest/*` e
+   `/api/classificar-mensagem` (header `X-Api-Key`, variável
+   `ZELA_INGESTAO_TOKEN`) foi implementada, mas é opcional — sem a
+   variável configurada, os endpoints continuam abertos (padrão de MVP em
+   rede local). `/webhook/whatsapp` continua protegido só pela allowlist
+   de telefones/LID, sem token. Nenhum dos três exige autenticação por
+   padrão até serem expostos fora da rede local (ex.: VPS).
 5. Transcrição de áudio (STT/TTS) no WhatsApp ainda não implementada —
    hoje a comunicação é só por texto.
+6. Sensor de presença via ESP32: o backend, o firmware e a documentação
+   (diagrama elétrico, BOM, lógica de leitura) estão implementados e
+   testados (`POST /ingest/esp32`, `zela/domain/monitoramento.py`), mas a
+   validação com hardware físico não foi concluída nesta entrega — a
+   placa física disponível (ESP32-S3) apresentou resets repetidos por
+   watchdog (`TG1WDT_SYS_RST`/`TG0WDT_SYS_RST`) logo no boot, mesmo após
+   isolar e descartar as causas de software mais prováveis (tamanho de
+   flash, modo/frequência de flash, PSRAM, gravação corrompida —
+   confirmada via verificação de hash byte a byte com `esptool`), o que
+   aponta para um problema de hardware (alimentação, cabo ou placa) fora
+   do escopo de diagnóstico remoto. O monitoramento de risco desta
+   entrega usa exclusivamente o smartwatch (Mi Band).
 
 Essas limitações foram descobertas e documentadas durante o próprio
 desenvolvimento (revisões de código dedicadas ao final de cada fase), não

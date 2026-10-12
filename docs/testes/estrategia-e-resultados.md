@@ -11,7 +11,7 @@ referência para quem for dar manutenção no projeto depois.
 ## 1. Visão geral
 
 - **Framework:** `pytest`.
-- **Tamanho da suíte:** 202 testes, em 38 arquivos, cobrindo todo o
+- **Tamanho da suíte:** 210 testes, em 37 arquivos, cobrindo todo o
   código de produção do repositório (`zela/`).
 - **Execução:** `pytest -v` (ou `.venv/bin/pytest -v` sem ativar o
   ambiente), a partir da raiz do repositório. Tempo de execução: ~20
@@ -134,9 +134,9 @@ da correção.
 
 | Arquivo | Testes |
 |---|---:|
+| `test_api_ingestao.py` | 15 |
 | `test_api_webhook.py` | 12 |
 | `test_api_scheduler.py` | 12 |
-| `test_api_ingestao.py` | 10 |
 | `test_storage_rotina.py` | 9 |
 | `test_streamlit_secoes.py` | 8 |
 | `test_models_rotina.py` | 8 |
@@ -150,6 +150,7 @@ da correção.
 | `test_integrations_waha_client.py` | 6 |
 | `test_domain_rotina.py` | 6 |
 | `test_domain_emergencia.py` | 6 |
+| `test_api_classificacao.py` | 6 |
 | `test_agents_orchestrator_tools.py` | 6 |
 | `test_streamlit_autenticacao.py` | 5 |
 | `test_storage_perfil.py` | 5 |
@@ -166,12 +167,11 @@ da correção.
 | `test_embeddings_exemplos_referencia.py` | 3 |
 | `test_embeddings_client.py` | 3 |
 | `test_api_monitoramento_mensagem.py` | 3 |
-| `test_api_classificacao.py` | 3 |
 | `test_streamlit_app.py` | 2 |
 | `test_simulacao.py` | 2 |
 | `test_api_reindexacao.py` | 2 |
 | `test_agents_orchestrator.py` | 2 |
-| **Total** | **202** |
+| **Total** | **210** |
 
 *(Não há uma ferramenta de medição de cobertura de linha, tipo
 `pytest-cov`, configurada no projeto — a tabela acima mede quantidade de
@@ -185,7 +185,7 @@ seção 7 para essa limitação.)*
 ```
 $ pytest -v
 ...
-202 passed, 2 warnings in ~40s
+210 passed, 2 warnings in ~40s
 ```
 
 - **Ambiente:** Python 3.12, dentro do `.venv` do projeto
@@ -193,7 +193,7 @@ $ pytest -v
 - **Versões relevantes:** pytest 9.1.1, FastAPI 0.141.1, Pydantic 2.13.5,
   google-adk 2.9.0, google-genai 2.23.0, chromadb 1.5.9, APScheduler
   3.11.3, Streamlit 1.64.0.
-- **Falhas:** nenhuma. 0 de 202 testes falhando.
+- **Falhas:** nenhuma. 0 de 210 testes falhando.
 - **Erros de coleta:** nenhum, desde que a suíte seja executada com o
   `.venv` ativado (ver nota abaixo).
 
@@ -234,7 +234,7 @@ não erros.
 | Resposta/roteamento real de um LLM (Gemini) | Não-determinístico, custa cota de API | `adk run zela/agents` (ver README) |
 | Execução real do workflow n8n | n8n é uma ferramenta externa ao processo Python | Importar o `.json` no n8n e disparar o webhook de teste (ver README, "Workflow n8n") |
 | Integração real com o WAHA/WhatsApp | Depende de um servidor WAHA rodando e de um número de WhatsApp real | Seguir "Configurando o WAHA" no README, com um backend rodando de verdade |
-| Leitura real de hardware (ESP32, smartwatch) | Depende de hardware físico | Firmware em `firmware/zela_presenca/`, app "Health Connect Webhook" (ver README) |
+| Leitura real de hardware (smartwatch) | Depende de hardware físico | App "Health Connect Webhook" (ver README) |
 | Qualidade visual da interface Streamlit | `AppTest` verifica a árvore de widgets, não a aparência renderizada | Rodar `streamlit run zela/streamlit_app/app.py` e inspecionar visualmente |
 | Cobertura de linha (% do código exercitado) | Nenhuma ferramenta de cobertura configurada no projeto | Não medido — ver nota abaixo |
 
@@ -244,7 +244,7 @@ depois da entrega, mas reconhecidas durante o próprio desenvolvimento.
 
 **Nota sobre cobertura de linha:** o projeto não usa `pytest-cov` nem
 nenhuma outra ferramenta de medição de cobertura. A extensão da suíte
-(202 testes cobrindo toda camada do código, da validação de dados até a
+(210 testes cobrindo toda camada do código, da validação de dados até a
 interface) foi verificada por leitura e pela prática de TDD usada durante
 o desenvolvimento (teste escrito antes da implementação, a cada tarefa),
 não por uma métrica percentual. Adicionar `pytest-cov` é uma melhoria
