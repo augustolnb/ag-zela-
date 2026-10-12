@@ -8,3 +8,4 @@ venv/
 zela.db
 chroma_db/
 zela/agents/.adk/
+firmware/zela_presenca/config.h

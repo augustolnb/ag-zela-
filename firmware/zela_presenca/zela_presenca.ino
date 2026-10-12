@@ -12,9 +12,9 @@
 #include <HTTPClient.h>
 #include <time.h>
 
-const char *WIFI_SSID = "SUA_REDE_WIFI";
-const char *WIFI_SENHA = "SUA_SENHA_WIFI";
-const char *URL_INGESTAO = "http://SEU_SERVIDOR:8000/ingest/esp32";
+// Credenciais e endereco do backend: ver config.h.example. Copie para
+// "config.h" (nao versionado) e preencha antes de compilar/gravar.
+#include "config.h"
 
 const int PINO_TRIGGER = 5;
 const int PINO_ECHO = 18;
@@ -56,6 +56,9 @@ bool enviarLeitura(bool presenca) {
   HTTPClient http;
   http.begin(URL_INGESTAO);
   http.addHeader("Content-Type", "application/json");
+  if (strlen(TOKEN_INGESTAO) > 0) {
+    http.addHeader("X-Api-Key", TOKEN_INGESTAO);
+  }
 
   String corpo = String("{\"valor\": ") + (presenca ? "1" : "0") +
                  ", \"timestamp\": \"" + obterTimestampIso() + "\"}";

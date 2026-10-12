@@ -29,11 +29,19 @@ def _validar_timestamp_plausivel(timestamp: datetime) -> None:
         raise ValueError(f"timestamp implausivelmente antigo: {timestamp.isoformat()!r}")
 
 
-def montar_roteador_ingestao(salvar_leitura, id_idoso: str = _ID_IDOSO_PADRAO) -> APIRouter:
+def _token_valido(request: Request, token: str | None) -> bool:
+    return token is None or request.headers.get("X-Api-Key") == token
+
+
+def montar_roteador_ingestao(
+    salvar_leitura, id_idoso: str = _ID_IDOSO_PADRAO, token: str | None = None
+) -> APIRouter:
     roteador = APIRouter()
 
     @roteador.post("/ingest/esp32")
     async def receber_esp32(request: Request):
+        if not _token_valido(request, token):
+            return JSONResponse(status_code=401, content={"status": "erro", "detalhe": "token inválido"})
         try:
             corpo = await request.json()
             timestamp = datetime.fromisoformat(corpo["timestamp"])
@@ -52,6 +60,8 @@ def montar_roteador_ingestao(salvar_leitura, id_idoso: str = _ID_IDOSO_PADRAO) -
 
     @roteador.post("/ingest/health-connect")
     async def receber_health_connect(request: Request):
+        if not _token_valido(request, token):
+            return JSONResponse(status_code=401, content={"status": "erro", "detalhe": "token inválido"})
         try:
             corpo = await request.json()
             timestamp = datetime.fromisoformat(corpo["timestamp"])

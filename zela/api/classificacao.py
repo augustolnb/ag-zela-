@@ -10,11 +10,15 @@ from zela.embeddings.classificador import classificar_por_similaridade
 logger = logging.getLogger(__name__)
 
 
-def montar_roteador_classificacao(cliente_embedding, obter_exemplos_com_embedding) -> APIRouter:
+def montar_roteador_classificacao(
+    cliente_embedding, obter_exemplos_com_embedding, token: str | None = None
+) -> APIRouter:
     roteador = APIRouter()
 
     @roteador.post("/api/classificar-mensagem")
     async def classificar_mensagem(request: Request):
+        if token is not None and request.headers.get("X-Api-Key") != token:
+            return JSONResponse(status_code=401, content={"erro": "token inválido"})
         try:
             corpo = await request.json()
             texto = corpo["texto"]
