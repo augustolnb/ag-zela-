@@ -1,0 +1,21 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Instala as dependências num passo isolado da cópia do código: enquanto
+# pyproject.toml não mudar, o Docker reaproveita este layer e não baixa de
+# novo os ~1.3GB de deps (google-adk, chromadb, streamlit, ...) a cada
+# alteração de código — importante para redeploys rápidos na VPS.
+COPY pyproject.toml ./
+RUN mkdir zela && touch zela/__init__.py \
+    && pip install --no-cache-dir --default-timeout=100 . \
+    && rm -rf zela
+
+COPY zela ./zela
+RUN pip install --no-cache-dir --no-deps .
+
+# Backend e Streamlit compartilham a mesma imagem — o docker-compose.yml
+# sobrescreve CMD para o serviço "streamlit" (evita manter dois
+# Dockerfiles quase idênticos para um projeto deste tamanho).
+EXPOSE 8000
+CMD ["uvicorn", "zela.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
