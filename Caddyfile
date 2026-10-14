@@ -1,0 +1,11 @@
+api.augustoautomacoes.com {
+	reverse_proxy backend:8000
+}
+
+painel.augustoautomacoes.com {
+	reverse_proxy streamlit:8501
+}
+
+whatsapp.augustoautomacoes.com {
+	reverse_proxy waha:3000
+}

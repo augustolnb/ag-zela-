@@ -1,6 +1,10 @@
 services:
   waha:
     image: devlikeapro/waha
+    # Porta só fica exposta ao host (dev local); em produção (VPS) o
+    # Caddy alcança o container pela rede interna do compose, então essa
+    # porta nunca precisa ficar pública — ver "profiles" não é necessário
+    # porque "expose" já é implícito via a rede do compose.
     ports:
       - "3000:3000"
     environment:
@@ -15,5 +19,52 @@ services:
     volumes:
       - waha_data:/app/.sessions
 
+  backend:
+    build: .
+    depends_on:
+      - waha
+    ports:
+      - "8000:8000"
+    environment:
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - ZELA_WAHA_API_KEY=${WAHA_API_KEY}
+      - ZELA_WAHA_BASE_URL=http://waha:3000
+      - ZELA_INGESTAO_TOKEN=${ZELA_INGESTAO_TOKEN}
+      - ZELA_DB_PATH=/app/data/zela.db
+    volumes:
+      - zela_data:/app/data
+      - chroma_data:/app/chroma_db
+
+  streamlit:
+    build: .
+    command: ["streamlit", "run", "zela/streamlit_app/app.py", "--server.address=0.0.0.0", "--server.port=8501"]
+    depends_on:
+      - backend
+    ports:
+      - "8501:8501"
+    environment:
+      - STREAMLIT_SENHA=${STREAMLIT_SENHA}
+      - ZELA_DB_PATH=/app/data/zela.db
+    volumes:
+      - zela_data:/app/data
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - backend
+      - streamlit
+      - waha
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+
 volumes:
   waha_data:
+  zela_data:
+  chroma_data:
+  caddy_data:
+  caddy_config:

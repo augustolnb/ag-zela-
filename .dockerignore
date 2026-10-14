@@ -1,0 +1,13 @@
+.venv/
+.git/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+zela.db
+chroma_db/
+docs/
+tests/
+firmware/
+*.pdf
+*.docx

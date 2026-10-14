@@ -2,9 +2,11 @@
 
 Trabalho final de pós-graduação em Agentes de IA. Zela+ é um agente
 multiagente (ADK) que ajuda idosos que moram sozinhos a não esquecer
-medicamentos e compromissos, monitora sinais de risco (saúde e
-presença/movimento) via smartwatch e ESP32, e mantém a família informada,
-podendo escalar alertas até simular contato com serviço de emergência.
+medicamentos e compromissos, monitora sinais de risco de saúde via
+smartwatch (há também um endpoint e firmware de presença via ESP32,
+implementados mas sem validação em hardware real — ver seção "ESP32"
+abaixo), e mantém a família informada, podendo escalar alertas até
+simular contato com serviço de emergência.
 
 ## Status do projeto
 
@@ -15,7 +17,9 @@ Este repositório está sendo construído em fases (planos sequenciais):
    sem hardware nem APIs externas.
 2. **Comunicação real** (WhatsApp via WAHA) ✓ — áudio (STT/TTS) ainda não
    implementado.
-3. **Ingestão de sensores reais** (ESP32 + Health Connect/Mi Band 9) ✓
+3. **Ingestão de sensores reais** (Health Connect/Mi Band 9 ✓; ESP32
+   implementado mas sem hardware validado nesta entrega — ver seção
+   "ESP32" abaixo)
 4. **Embeddings** (classificação de urgência + RAG) ✓
 5. **Painel Streamlit para a família** ✓
 6. **Fluxo visual em n8n** (substitui Langflow, citado no enunciado
@@ -207,9 +211,15 @@ aritmética de datas da camada de domínio (`agora - ultima_presenca`,
 
 ## Configurando o WAHA (WhatsApp)
 
+> **Nota:** desde que o projeto ganhou suporte a deploy em VPS (ver seção
+> "Deploy em produção (VPS)" abaixo), o `docker-compose.yml` também define
+> os serviços `backend`, `streamlit` e `caddy` — úteis em produção, mas
+> redundantes em desenvolvimento local (onde backend/Streamlit rodam
+> direto no `.venv`, com `--reload`). Em dev local, suba só o WAHA:
+
 1. Suba o container do WAHA:
    ```bash
-   docker compose up -d
+   docker compose up -d waha
    ```
 2. Abra `http://localhost:3000/` no navegador — o WAHA expõe um painel/Swagger
    com um QR code. Escaneie com o WhatsApp do número que vai representar o
@@ -556,6 +566,20 @@ resposta HTTP real (a que chega pelo `curl` ou chegaria para quem chamou
 o webhook) já contém o JSON completo. Para conferir a resposta de
 verdade, não confie no painel: dispare o webhook via `curl -i` (como no
 passo 4 acima) e leia o corpo da resposta ali.
+
+## Deploy em produção (VPS)
+
+Para deixar o sistema completo (backend, Streamlit, WAHA) online com
+HTTPS e domínio próprio — útil para a apresentação do MVP aos
+avaliadores — o `docker-compose.yml` também define os serviços
+`backend`, `streamlit` e `caddy` (proxy reverso com certificado
+automático via Let's Encrypt). Guia passo a passo completo, incluindo
+DNS, firewall e checklist pré-apresentação, em
+[`docs/deploy/vps.md`](docs/deploy/vps.md).
+
+Resumo: `cp .env.example .env`, preencher as variáveis (`ZELA_INGESTAO_TOKEN`
+passa a ser **obrigatório** nesse cenário), ajustar os 3 domínios no
+`Caddyfile` e `docker compose up -d --build`.
 
 ## Limitações conhecidas do Plano 3
 

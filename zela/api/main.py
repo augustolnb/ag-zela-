@@ -24,9 +24,17 @@ logger = logging.getLogger(__name__)
 
 CAMINHO_DB = os.environ.get("ZELA_DB_PATH", "zela.db")
 ID_IDOSO = "idosa-1"
-WAHA_BASE_URL = "http://localhost:3000"
+# Default cobre o uso local (venv + WAHA via docker-compose expondo a porta
+# no host); em docker-compose, backend e waha são containers separados e
+# "localhost" não alcança o waha — ver ZELA_WAHA_BASE_URL=http://waha:3000
+# no .env de produção.
+WAHA_BASE_URL = os.environ.get("ZELA_WAHA_BASE_URL", "http://localhost:3000")
 WAHA_API_KEY = os.environ.get("ZELA_WAHA_API_KEY")
-TOKEN_INGESTAO = os.environ.get("ZELA_INGESTAO_TOKEN")
+# "or None" (em vez de só os.environ.get) porque docker-compose define a
+# variável como string vazia quando ela não está no .env (em vez de omiti-la
+# do ambiente do container) — sem isso, "" vira um token que nenhum cliente
+# jamais envia, bloqueando os 3 endpoints com 401 por padrão.
+TOKEN_INGESTAO = os.environ.get("ZELA_INGESTAO_TOKEN") or None
 
 waha_client = WahaClient(base_url=WAHA_BASE_URL, api_key=WAHA_API_KEY)
 cliente_embedding = ClienteEmbeddingGemini()
