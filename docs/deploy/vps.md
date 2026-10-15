@@ -77,6 +77,9 @@ nomes de host no `Caddyfile` antes de subir.
 
 ## 4. Subir os containers
 
+Se a VPS for dedicada (sem nenhum outro serviço usando as portas 80/443),
+suba tudo incluindo o Caddy:
+
 ```bash
 docker compose up -d --build
 docker compose ps
@@ -87,6 +90,56 @@ Acompanhe os logs do Caddy até ver a emissão do certificado:
 ```bash
 docker compose logs -f caddy
 ```
+
+### Alternativa: VPS compartilhada com nginx já existente
+
+Se a VPS já tiver um nginx no host servindo outros projetos (portas 80/443
+já ocupadas), **não** suba o serviço `caddy` — ele não vai conseguir
+bindar essas portas. Suba só os outros 3:
+
+```bash
+docker compose up -d --build waha backend streamlit
+```
+
+Se as portas padrão (3000/8000/8501) já estiverem em uso por outro
+projeto no host, defina `BACKEND_PORT`/`STREAMLIT_PORT`/`WAHA_PORT` no
+`.env` antes de subir (ver comentários em `.env.example`). Os serviços
+ficam acessíveis só em `127.0.0.1` (não na internet) — o nginx do host é
+quem expõe ao público.
+
+Adicione um server block por subdomínio em
+`/etc/nginx/sites-available/` (ajuste as portas se você mudou os
+defaults):
+
+```nginx
+server {
+    listen 80;
+    server_name api.augustoautomacoes.com;
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+(Repita para `painel.augustoautomacoes.com` → `127.0.0.1:8501` e
+`whatsapp.augustoautomacoes.com` → `127.0.0.1:3000`, cada um em seu
+próprio arquivo.)
+
+Ative e emita os certificados:
+
+```bash
+ln -s /etc/nginx/sites-available/zela-api /etc/nginx/sites-enabled/
+ln -s /etc/nginx/sites-available/zela-painel /etc/nginx/sites-enabled/
+ln -s /etc/nginx/sites-available/zela-whatsapp /etc/nginx/sites-enabled/
+nginx -t && systemctl reload nginx
+certbot --nginx -d api.augustoautomacoes.com -d painel.augustoautomacoes.com -d whatsapp.augustoautomacoes.com
+```
+
+O `certbot --nginx` edita os server blocks para adicionar `listen 443
+ssl` e o redirecionamento HTTP→HTTPS automaticamente, e configura a
+renovação automática do certificado.
 
 ## 5. Conectar o WhatsApp
 
