@@ -277,6 +277,66 @@ def test_webhook_aceita_lid_quando_lista_de_lid_nao_e_configurada():
     assert waha_falso.enviados == [("109281332445239@lid", "ok")]
 
 
+def test_webhook_com_token_configurado_sem_header_retorna_401():
+    waha_falso = _WahaFalso()
+
+    def processar_falso(*args):
+        raise AssertionError("não deveria ser chamado sem token válido")
+
+    app = FastAPI()
+    app.include_router(montar_roteador(processar_falso, waha_falso, token="segredo-waha"))
+    cliente = TestClient(app)
+
+    resposta = cliente.post(
+        "/webhook/whatsapp",
+        json={"event": "message", "payload": {"from": "5511987654321@c.us", "body": "oi", "fromMe": False}},
+    )
+
+    assert resposta.status_code == 401
+    assert waha_falso.enviados == []
+
+
+def test_webhook_com_token_configurado_header_errado_retorna_401():
+    waha_falso = _WahaFalso()
+
+    def processar_falso(*args):
+        raise AssertionError("não deveria ser chamado com token inválido")
+
+    app = FastAPI()
+    app.include_router(montar_roteador(processar_falso, waha_falso, token="segredo-waha"))
+    cliente = TestClient(app)
+
+    resposta = cliente.post(
+        "/webhook/whatsapp",
+        json={"event": "message", "payload": {"from": "5511987654321@c.us", "body": "oi", "fromMe": False}},
+        headers={"X-Api-Key": "errado"},
+    )
+
+    assert resposta.status_code == 401
+    assert waha_falso.enviados == []
+
+
+def test_webhook_com_token_configurado_header_correto_processa_normalmente():
+    waha_falso = _WahaFalso()
+
+    def processar_falso(id_idoso, texto, agora):
+        return "ok"
+
+    app = FastAPI()
+    app.include_router(montar_roteador(processar_falso, waha_falso, token="segredo-waha"))
+    cliente = TestClient(app)
+
+    resposta = cliente.post(
+        "/webhook/whatsapp",
+        json={"event": "message", "payload": {"from": "5511987654321@c.us", "body": "oi", "fromMe": False}},
+        headers={"X-Api-Key": "segredo-waha"},
+    )
+
+    assert resposta.status_code == 200
+    assert resposta.json() == {"status": "processado"}
+    assert waha_falso.enviados == [("+5511987654321", "ok")]
+
+
 def test_webhook_nao_falha_quando_processar_risco_levanta_excecao():
     waha_falso = _WahaFalso()
 

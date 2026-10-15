@@ -2,6 +2,7 @@ import logging
 from datetime import datetime
 
 from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
 logger = logging.getLogger(__name__)
@@ -39,11 +40,20 @@ def montar_roteador(
     telefones_permitidos: list[str] | None = None,
     lids_permitidos: list[str] | None = None,
     processar_risco=None,
+    token: str | None = None,
 ) -> APIRouter:
     roteador = APIRouter()
 
     @roteador.post("/webhook/whatsapp")
     async def receber_mensagem(request: Request):
+        # Sem isso, qualquer um que descubra esta URL pública aciona o
+        # agente de IA de verdade (custo de API) e tenta mandar WhatsApp em
+        # nome do Zela+ — a allowlist de telefones não basta como defesa
+        # sozinha porque, antes de qualquer perfil ser cadastrado, ela vem
+        # None (sem filtro) por design (ver testes sem token configurado).
+        if token is not None and request.headers.get("X-Api-Key") != token:
+            return JSONResponse(status_code=401, content={"erro": "token inválido"})
+
         payload = await request.json()
         extraido = _extrair_telefone_e_texto(payload)
         if extraido is None:
