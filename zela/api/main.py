@@ -115,7 +115,7 @@ app.include_router(
     montar_roteador(
         _processar, waha_client, id_idoso=ID_IDOSO,
         telefones_permitidos=_TELEFONES_PERMITIDOS, lids_permitidos=_LIDS_PERMITIDOS,
-        processar_risco=_processar_risco,
+        processar_risco=_processar_risco, token=TOKEN_INGESTAO,
     )
 )
 app.include_router(montar_roteador_ingestao(_salvar_leitura, id_idoso=ID_IDOSO, token=TOKEN_INGESTAO))

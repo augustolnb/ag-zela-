@@ -243,15 +243,24 @@ aritmética de datas da camada de domínio (`agora - ultima_presenca`,
    ```
 4.2. Opcional em rede local, **obrigatório se o backend for exposto fora
    dela** (ex.: VPS): defina um token para proteger `/ingest/esp32`,
-   `/ingest/health-connect` e `/api/classificar-mensagem`. Sem essa
-   variável, esses três endpoints não exigem nenhuma autenticação.
+   `/ingest/health-connect`, `/api/classificar-mensagem` e
+   `/webhook/whatsapp`. Sem essa variável, esses quatro endpoints não
+   exigem nenhuma autenticação — **`/webhook/whatsapp` em particular
+   aceita qualquer remetente quando nenhum perfil ainda foi cadastrado**
+   (a allowlist de telefones só existe depois do primeiro cadastro via
+   Streamlit), então deixar essa variável vazia numa VPS pública permite
+   que qualquer um acione o agente de IA de verdade (custo de API) só
+   mandando um POST.
    ```bash
    export ZELA_INGESTAO_TOKEN=um-token-aleatorio-forte
    ```
    Requisições a esses endpoints devem enviar o header `X-Api-Key` com o
    mesmo valor. O firmware do ESP32 já suporta isso — preencha
    `TOKEN_INGESTAO` com o mesmo token em `firmware/zela_presenca/config.h`
-   (ver seção "Configurando a ingestão de sensores").
+   (ver seção "Configurando a ingestão de sensores"). Para
+   `/webhook/whatsapp`, configure o WAHA para enviar esse mesmo valor como
+   header `X-Api-Key` em toda chamada de webhook (campo de headers
+   customizados na configuração do webhook da sessão/dashboard do WAHA).
 5. Rode o backend:
    ```bash
    uvicorn zela.api.main:app --reload
@@ -658,11 +667,19 @@ passa a ser **obrigatório** nesse cenário), ajustar os 3 domínios no
 1. **Autenticação do `/api/classificar-mensagem` também é opcional:**
    protegido pelo mesmo `ZELA_INGESTAO_TOKEN` dos endpoints de ingestão
    (ver seção de configuração), mas só exige o header se a variável
-   estiver definida. `/webhook/whatsapp` continua sem equivalente — é
-   protegido pela allowlist de telefones/LID, não por token. Diferente
-   dos endpoints de ingestão, este consome cota da API do Gemini a cada
-   chamada e não impõe um tamanho máximo para o campo `texto` — vale
-   adicionar um limite de tamanho antes de expor publicamente.
+   estiver definida. Diferente dos endpoints de ingestão, este consome
+   cota da API do Gemini a cada chamada e não impõe um tamanho máximo
+   para o campo `texto` — vale adicionar um limite de tamanho antes de
+   expor publicamente.
+   **Atualização (deploy em VPS):** `/webhook/whatsapp` também passou a
+   aceitar o mesmo `ZELA_INGESTAO_TOKEN` (header `X-Api-Key`, validado
+   pelo WAHA ao chamar o webhook). Isso foi necessário porque a allowlist
+   de telefones/LID por si só falha "aberta": antes do primeiro perfil
+   ser cadastrado via Streamlit, ela vem `None` (sem filtro), e qualquer
+   POST não autenticado nessa URL pública aciona o agente de IA de
+   verdade — confirmado na prática durante o deploy real, não é só
+   teórico. Ver `docs/deploy/vps.md` para como configurar o header
+   customizado no webhook do WAHA.
 2. **Sem teste automatizado da execução real do workflow n8n:** o arquivo
    `docs/n8n/zela-classificacao-mensagem.json` tem um teste estrutural
    (`tests/test_n8n_workflow.py`, valida tipos de nó, parâmetros e

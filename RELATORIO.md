@@ -239,7 +239,7 @@ configuração (Docker Compose + QR code + webhook).
 decisão de design, cobertura por arquivo e o que fica fora da suíte
 automatizada — em `docs/testes/estrategia-e-resultados.md`.)*
 
-- **210 testes automatizados** passando (`pytest -v`), cobrindo modelos
+- **213 testes automatizados** passando (`pytest -v`), cobrindo modelos
   Pydantic, lógica de domínio pura (rotina, monitoramento, emergência,
   comunicação), repositórios de armazenamento (SQLite), API (webhook,
   ingestão de sensores, classificação, scheduler), embeddings
@@ -271,7 +271,7 @@ Resumo rápido — o `README.md` do repositório tem o passo a passo completo
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -v                              # roda a suíte de 210 testes
+pytest -v                              # roda a suíte de 213 testes
 uvicorn zela.api.main:app --reload     # backend (webhook, API, scheduler)
 streamlit run zela/streamlit_app/app.py  # painel da família
 ```

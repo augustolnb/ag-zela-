@@ -152,6 +152,19 @@ desta VPS, é uma conexão nova.
 Configure o webhook do WAHA para
 `https://api.augustoautomacoes.com/webhook/whatsapp`.
 
+**Importante:** desde que esse endpoint passou a exigir o header
+`X-Api-Key` (mesmo `ZELA_INGESTAO_TOKEN` do `.env` — ver "Limitações
+conhecidas do Plano 6" no README para o porquê), configure o WAHA para
+enviar esse header em toda chamada de webhook. A maioria das versões do
+WAHA permite customizar headers (ou HMAC) na configuração do webhook da
+sessão (via dashboard ou `PUT /api/sessions/<nome>`, campo
+`config.webhooks[].customHeaders`) — confira o Swagger da sua instância
+(`https://whatsapp.augustoautomacoes.com/` com as credenciais de
+`WAHA_DASHBOARD_USERNAME`/`WAHA_DASHBOARD_PASSWORD`) para o nome exato do
+campo na versão que você está usando, já que isso varia entre versões do
+WAHA. Teste com `curl -i` direto (sem o header deve dar 401) antes de
+confiar que está configurado.
+
 ## 6. Testar
 
 ```bash
@@ -166,6 +179,11 @@ curl -i https://api.augustoautomacoes.com/api/classificar-mensagem \
 curl -i https://api.augustoautomacoes.com/api/classificar-mensagem \
   -X POST -H "Content-Type: application/json" \
   -H "X-Api-Key: $ZELA_INGESTAO_TOKEN" -d '{"texto":"teste"}'
+
+# /webhook/whatsapp também exige o token agora (deve dar 401 sem o header):
+curl -i https://api.augustoautomacoes.com/webhook/whatsapp \
+  -X POST -H "Content-Type: application/json" \
+  -d '{"payload":{"from":"551199999999@c.us","body":"teste"}}'
 ```
 
 Abra `https://painel.augustoautomacoes.com/` e confirme que pede a senha
@@ -179,6 +197,8 @@ do Streamlit e carrega o painel.
 - [ ] Certificado HTTPS emitido (sem aviso de "não seguro" no navegador)
 - [ ] WhatsApp reconectado via QR no dashboard do WAHA
 - [ ] `ZELA_INGESTAO_TOKEN` configurado e testado (401 sem header, 200 com)
+- [ ] Webhook do WAHA configurado para enviar `X-Api-Key` (teste: POST sem
+      header em `/webhook/whatsapp` deve dar 401)
 - [ ] Painel Streamlit pedindo senha e exibindo dados
 - [ ] n8n local (notebook) apontando o webhook de teste para
       `https://api.augustoautomacoes.com/api/classificar-mensagem`
