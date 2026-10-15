@@ -1,12 +1,14 @@
 services:
   waha:
     image: devlikeapro/waha
-    # Porta só fica exposta ao host (dev local); em produção (VPS) o
-    # Caddy alcança o container pela rede interna do compose, então essa
-    # porta nunca precisa ficar pública — ver "profiles" não é necessário
-    # porque "expose" já é implícito via a rede do compose.
+    # Bind em 127.0.0.1 (não 0.0.0.0): só processos no próprio host
+    # alcançam esta porta — o proxy reverso (Caddy ou nginx do host, ver
+    # docs/deploy/vps.md) entra pela rede interna do compose por nome de
+    # serviço; a internet nunca precisa bater direto aqui. Porta
+    # configurável via WAHA_PORT para evitar colisão com outro serviço já
+    # usando a porta padrão numa VPS compartilhada.
     ports:
-      - "3000:3000"
+      - "127.0.0.1:${WAHA_PORT:-3000}:3000"
     environment:
       # Sem isso, o WAHA gera uma API key aleatória nova a cada start do
       # container e imprime nos logs — quebrando a integração sempre que o
@@ -23,8 +25,9 @@ services:
     build: .
     depends_on:
       - waha
+    # Mesmo racional de bind/porta configurável do serviço "waha" acima.
     ports:
-      - "8000:8000"
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
     environment:
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - ZELA_WAHA_API_KEY=${WAHA_API_KEY}
@@ -40,14 +43,20 @@ services:
     command: ["streamlit", "run", "zela/streamlit_app/app.py", "--server.address=0.0.0.0", "--server.port=8501"]
     depends_on:
       - backend
+    # Mesmo racional de bind/porta configurável do serviço "waha" acima.
     ports:
-      - "8501:8501"
+      - "127.0.0.1:${STREAMLIT_PORT:-8501}:8501"
     environment:
       - STREAMLIT_SENHA=${STREAMLIT_SENHA}
       - ZELA_DB_PATH=/app/data/zela.db
     volumes:
       - zela_data:/app/data
 
+  # Opcional: só suba este serviço se a VPS NÃO já tiver um nginx/outro
+  # proxy reverso ocupando as portas 80/443 (`docker compose up -d --build`
+  # sem listar "caddy" pula ele). Numa VPS compartilhada, use o nginx do
+  # host + certbot apontando para as portas 127.0.0.1 acima — ver a seção
+  # "VPS compartilhada com nginx já existente" em docs/deploy/vps.md.
   caddy:
     image: caddy:2-alpine
     ports:
