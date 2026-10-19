@@ -17,9 +17,9 @@ Este repositório está sendo construído em fases (planos sequenciais):
    sem hardware nem APIs externas.
 2. **Comunicação real** (WhatsApp via WAHA) ✓ — áudio (STT/TTS) ainda não
    implementado.
-3. **Ingestão de sensores reais** (Health Connect/Mi Band 9 ✓; ESP32
-   implementado mas sem hardware validado nesta entrega — ver seção
-   "ESP32" abaixo)
+3. **Ingestão de sensores reais** (Health Connect/Xiaomi Smart Band 10
+   Pro ✓, verificado de ponta a ponta em produção; ESP32 implementado
+   mas sem hardware validado nesta entrega — ver seção "ESP32" abaixo)
 4. **Embeddings** (classificação de urgência + RAG) ✓
 5. **Painel Streamlit para a família** ✓
 6. **Fluxo visual em n8n** (substitui Langflow, citado no enunciado
@@ -455,18 +455,60 @@ correção e status de cada um:
    conexão WiFi, a sincronização de hora via NTP, e os envios
    (`POST /ingest/esp32 -> 200`) ao mover a mão na frente do sensor.
 
-### Smartwatch (Mi Band 9 → Health Connect → Health Connect Webhook)
+### Smartwatch (Xiaomi Smart Band 10 Pro → Health Connect → HC Webhook)
 
-1. Instale o app **"Health Connect Webhook"** (Play Store,
-   `com.hcwebhook.app`) no celular Android onde o Mi Fitness já
-   sincroniza com o Health Connect.
-2. Configure a URL do webhook para
-   `http://<seu-servidor>:8000/ingest/health-connect` e selecione os
-   tipos de dados desejados (ex.: frequência cardíaca).
-3. **Nota:** o formato exato do payload enviado por esse app não foi
-   verificado neste projeto — confira o JSON recebido de fato após
-   configurar o app (ex.: logando o corpo da requisição temporariamente)
-   e ajuste `zela/api/ingestao.py` se necessário.
+Verificado de ponta a ponta em produção (frequência cardíaca, passos e
+sono) — não é mais um fluxo teórico.
+
+1. Instale o **Obtainium** (github.com/ImranR98/Obtainium) — baixe o APK
+   direto da seção *Assets* da release mais recente e instale (ative
+   "instalar de fontes desconhecidas" pro navegador quando o Android
+   pedir). O app oficial na Play Store (`com.hcwebhook.app`) é pago; o
+   mesmo projeto publica builds gratuitas no GitHub.
+2. No Obtainium, adicione um app novo com o repositório
+   `https://github.com/mcnaveen/health-connect-webhook` — ele baixa e
+   instala o **HC Webhook** direto do GitHub Releases.
+3. Abra o HC Webhook, autorize as permissões do Health Connect para os
+   tipos desejados (passos, sono, frequência cardíaca) e configure:
+   - URL do webhook: `http://<seu-servidor>:8000/ingest/health-connect`
+     (ou o domínio de produção, ex.: `https://api.<seu-domínio>/ingest/health-connect`)
+   - Formato de entrega: **JSON** (não Protobuf/gRPC)
+   - Um **header customizado** `x-api-key` com o mesmo valor de
+     `ZELA_INGESTAO_TOKEN`, já que o endpoint exige token como os
+     demais.
+4. Dispare uma sincronização manual ("Sincronizar agora") e confira o
+   resultado na tela de "Registros de webhook" do próprio app (mostra
+   status HTTP de cada envio) ou nos logs do backend.
+
+![Apps instalados via Obtainium (HC Webhook + Obtainium)](docs/relatorio/imagens/obtainium_apps_instalados.jpeg)
+![Permissões de saúde concedidas ao HC Webhook](docs/relatorio/imagens/health_connect_webhook_permissoes.jpeg)
+![Configuração da URL e do header do webhook](docs/relatorio/imagens/health_connect_webhook_config.jpeg)
+![Sincronização confirmada: passos, sono e frequência cardíaca](docs/relatorio/imagens/health_connect_webhook_sincronizacao.jpeg)
+
+**Formato real do payload** (confirmado em produção, não o que a
+documentação do app descreve — por isso vale conferir sempre na
+prática): um objeto JSON com uma chave por tipo de dado selecionado,
+cada uma uma lista de registros:
+
+```json
+{
+  "timestamp": "2026-10-19T13:37:37-03:00",
+  "steps": [{"count": 1359, "start_time": "...", "end_time": "..."}],
+  "sleep": [{"session_end_time": "...", "duration_seconds": 23820, "stages": [...]}],
+  "heart_rate": [{"time": "...", "bpm": 72, "avg": 72, "min": 72, "max": 72}]
+}
+```
+
+`zela/api/ingestao.py` salva uma `LeituraSensor` por item de cada
+lista (um único POST real já trouxe 58 leituras numa chamada só) e
+descarta individualmente qualquer item malformado, sem derrubar o
+lote inteiro. O painel Streamlit mostra um resumo dessas 3 métricas
+(valor mais recente + horário) no card "Atividade de hoje".
+
+Se você estiver depurando um payload diferente do documentado acima
+(apps mudam formato entre versões), o jeito mais confiável é logar o
+corpo bruto da requisição temporariamente — foi assim que esse formato
+real foi descoberto neste projeto.
 
 ## Embeddings e RAG (Plano 4)
 

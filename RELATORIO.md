@@ -30,8 +30,9 @@ conjunto de funcionalidades que já demonstra valor de ponta a ponta:
 - Lembretes de medicamentos/compromissos via WhatsApp, com confirmação
   pelo próprio idoso.
 - Monitoramento de risco combinando sinais vitais reais via smartwatch
-  (Mi Band, via Health Connect) e a interpretação de mensagens de texto
-  do idoso (classificadas por similaridade de embeddings).
+  (Xiaomi Smart Band, via Health Connect — frequência cardíaca, passos e
+  sono) e a interpretação de mensagens de texto do idoso (classificadas
+  por similaridade de embeddings).
 - Uma escada de escalonamento determinística (nunca decidida por um LLM)
   que avisa a família e, em último caso, simula contato com um serviço de
   emergência.
@@ -77,8 +78,8 @@ Pydantic próprio:
                          └─────────┬───────────┘ └────────────────────┘
                                    │
                                    ▼
-                         Mi Band 9 (Health Connect,
-                         via Health Connect Webhook)
+                         Xiaomi Smart Band (Health Connect,
+                         via HC Webhook)
 ```
 
 **Decisão de design mais importante do projeto:** a decisão de escalonar
@@ -249,7 +250,7 @@ configuração (Docker Compose + QR code + webhook).
 decisão de design, cobertura por arquivo e o que fica fora da suíte
 automatizada — em `docs/testes/estrategia-e-resultados.md`.)*
 
-- **217 testes automatizados** passando (`pytest -v`), cobrindo modelos
+- **235 testes automatizados** passando (`pytest -v`), cobrindo modelos
   Pydantic, lógica de domínio pura (rotina, monitoramento, emergência,
   comunicação), repositórios de armazenamento (SQLite), API (webhook,
   ingestão de sensores, classificação, scheduler), embeddings
@@ -281,7 +282,7 @@ Resumo rápido — o `README.md` do repositório tem o passo a passo completo
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -v                              # roda a suíte de 217 testes
+pytest -v                              # roda a suíte de 235 testes
 uvicorn zela.api.main:app --reload     # backend (webhook, API, scheduler)
 streamlit run zela/streamlit_app/app.py  # painel da família
 ```
@@ -330,26 +331,9 @@ N"); resumo das mais relevantes:
    flash, modo/frequência de flash, PSRAM, gravação corrompida —
    confirmada via verificação de hash byte a byte com `esptool`), o que
    aponta para um problema de hardware (alimentação, cabo ou placa) fora
-   do escopo de diagnóstico remoto.
-
-   **Hipótese de causa física:** a placa usada já tinha alguns anos de
-   uso/armazenamento antes deste projeto, e não apresentava esse
-   comportamento anteriormente — a hipótese mais provável é oxidação em
-   trilhas, pontos de solda ou nos pinos/contatos da placa (comum em
-   ESP32 guardados por longos períodos sem uso, especialmente em
-   ambientes úmidos), degradando conexões que antes funcionavam e
-   causando os resets intermitentes por watchdog observados. Essa
-   hipótese não foi testada de forma isolada (ex.: inspeção visual com
-   microscópio, teste de continuidade ponto a ponto) porque está fora do
-   escopo de diagnóstico remoto desta entrega — fica registrada como a
-   explicação mais plausível, não como causa confirmada.
-
-   | Detalhe — portas USB-C | Visão geral da placa | Detalhe — ângulo lateral |
-   |---|---|---|
-   | ![Oxidação nas portas USB-C](docs/relatorio/imagens/esp1.jpeg) | ![Visão geral da placa ESP32-S3](docs/relatorio/imagens/esp2.jpeg) | ![Oxidação — ângulo lateral](docs/relatorio/imagens/esp3.jpeg) |
-
-   O monitoramento de risco desta entrega usa exclusivamente o
-   smartwatch (Mi Band).
+   do escopo de diagnóstico remoto. O monitoramento de risco desta
+   entrega usa exclusivamente o smartwatch (Xiaomi Smart Band, via
+   Health Connect — ver item 8 para a verificação real desse fluxo).
 7. **Limite de requisições do Gemini (tier gratuito) descoberto no deploy
    real:** com uma `GOOGLE_API_KEY` do tier gratuito, o Gemini limita a 5
    requisições/minuto — mandar várias mensagens de WhatsApp em sequência
@@ -361,6 +345,50 @@ N"); resumo das mais relevantes:
    provedor de LLM de conversação trocado para DeepSeek (seção 3.3), que
    não tem esse limite. O Gemini continua em uso para embeddings
    (cota separada, não afetada) e fica disponível como reserva.
+8. **Formato real do payload do Health Connect Webhook, nunca verificado
+   antes do deploy real:** a documentação do app (e deste relatório,
+   antes desta verificação) assumia um formato plano
+   `{"value", "unit", "timestamp"}` — o formato real é um objeto com
+   `steps`/`sleep`/`heart_rate` como listas de registros, cada um com
+   sua própria metadata do Health Connect (ex.: estágios de sono
+   numerados). Um bug real foi encontrado no caminho: a validação de
+   timestamp comparava um `datetime` sem fuso horário com o timestamp
+   do Health Connect, que vem com offset (ex.: `-03:00`) — levantando
+   `TypeError`, capturado em silêncio como "leitura descartada".
+   Corrigido comparando com o mesmo fuso do timestamp recebido
+   (`datetime.now(timestamp.tzinfo)`). `zela/api/ingestao.py` foi
+   reescrito para reconhecer o formato real, salvando uma leitura por
+   item de cada lista — um único POST real trouxe 58 leituras numa
+   única chamada — e descartando só o item malformado, não o lote
+   inteiro. Confirmado em produção com o Xiaomi Smart Band 10 Pro:
+   58/58 leituras salvas, 0 descartadas. O app usado (HC Webhook) foi
+   instalado de graça via Obtainium, não pela versão paga da Play
+   Store — ver seção "Smartwatch" do README.md para o passo a passo.
+
+**Hipótese de causa física do item 6 (ESP32):** a placa usada já tinha
+alguns anos de uso/armazenamento antes deste projeto, e não apresentava
+esse comportamento anteriormente — a hipótese mais provável é oxidação
+em trilhas, pontos de solda ou nos pinos/contatos da placa (comum em
+ESP32 guardados por longos períodos sem uso, especialmente em ambientes
+úmidos), degradando conexões que antes funcionavam e causando os resets
+intermitentes por watchdog observados. Essa hipótese não foi testada de
+forma isolada (ex.: inspeção visual com microscópio, teste de
+continuidade ponto a ponto) porque está fora do escopo de diagnóstico
+remoto desta entrega — fica registrada como a explicação mais plausível,
+não como causa confirmada.
+
+| Detalhe — portas USB-C | Visão geral da placa | Detalhe — ângulo lateral |
+|---|---|---|
+| ![Oxidação nas portas USB-C](docs/relatorio/imagens/esp1.jpeg) | ![Visão geral da placa ESP32-S3](docs/relatorio/imagens/esp2.jpeg) | ![Oxidação — ângulo lateral](docs/relatorio/imagens/esp3.jpeg) |
+
+**Evidência do item 8 (Health Connect):** registros reais do webhook no
+app — as 3 primeiras tentativas falharam (400, antes das correções), as
+2 seguintes deram certo (200, já com o parsing e o header corretos) — e
+a confirmação de sincronização mostrando as 3 métricas chegando.
+
+| Registros do webhook (400 → 200) | Sincronização confirmada |
+|---|---|
+| ![Registros do webhook](docs/relatorio/imagens/health_connect_webhook_logs.jpeg) | ![Sincronização confirmada: passos, sono e frequência cardíaca](docs/relatorio/imagens/health_connect_webhook_sincronizacao.jpeg) |
 
 Essas limitações foram descobertas e documentadas durante o próprio
 desenvolvimento (revisões de código dedicadas ao final de cada fase), não

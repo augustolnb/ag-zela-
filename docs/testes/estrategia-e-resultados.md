@@ -11,7 +11,7 @@ referência para quem for dar manutenção no projeto depois.
 ## 1. Visão geral
 
 - **Framework:** `pytest`.
-- **Tamanho da suíte:** 217 testes, em 37 arquivos, cobrindo todo o
+- **Tamanho da suíte:** 235 testes, em 38 arquivos, cobrindo todo o
   código de produção do repositório (`zela/`).
 - **Execução:** `pytest -v` (ou `.venv/bin/pytest -v` sem ativar o
   ambiente), a partir da raiz do repositório. Tempo de execução: ~20
@@ -124,7 +124,7 @@ da correção.
 | **Embeddings** | `test_embeddings_classificador.py`, `test_embeddings_client.py`, `test_embeddings_exemplos_referencia.py`, `test_embeddings_vetorial.py` | Classificação por similaridade (sem chamar o Gemini — vetores sintéticos), cliente preguiçoso (lazy init), vector store Chroma |
 | **Agentes ADK** | `test_agents_orchestrator.py`, `test_agents_orchestrator_tools.py`, `test_agents_orchestrator_tools_comunicacao.py`, `test_agents_orchestrator_tools_monitoramento.py` | Estrutura dos 5 agentes (nomes, hierarquia, tools atribuídas) e as ferramentas Python que eles expõem ao LLM, chamadas diretamente |
 | **Integrações** | `test_integrations_waha_client.py` | Cliente WAHA (montagem de payloads), sem chamar o WAHA de verdade |
-| **Painel Streamlit** | `test_streamlit_app.py`, `test_streamlit_autenticacao.py`, `test_streamlit_formularios.py`, `test_streamlit_secoes.py` | Execução real da interface via `AppTest`: autenticação, as 4 seções de leitura, os 2 formulários de escrita |
+| **Painel Streamlit** | `test_streamlit_app.py`, `test_streamlit_autenticacao.py`, `test_streamlit_formularios.py`, `test_streamlit_secoes.py`, `test_streamlit_estilo.py` | Execução real da interface via `AppTest`: autenticação, as 4 seções de leitura (incluindo o resumo do smartwatch), os 2 formulários de escrita, tema/ícones/badges |
 | **Workflow n8n** | `test_n8n_workflow.py` | Estrutura do JSON exportado (nós, tipos, parâmetros, conexões, valores de roteamento) |
 | **Simulação de ponta a ponta** | `test_simulacao.py` | Um "dia" completo do sistema simulado, sem hardware nem rede, validando a lógica de domínio integrada |
 
@@ -134,11 +134,12 @@ da correção.
 
 | Arquivo | Testes |
 |---|---:|
-| `test_api_ingestao.py` | 15 |
+| `test_api_ingestao.py` | 19 |
 | `test_api_webhook.py` | 15 |
+| `test_streamlit_secoes.py` | 14 |
 | `test_api_scheduler.py` | 12 |
 | `test_storage_rotina.py` | 9 |
-| `test_streamlit_secoes.py` | 8 |
+| `test_streamlit_estilo.py` | 8 |
 | `test_models_rotina.py` | 8 |
 | `test_api_main.py` | 8 |
 | `test_agents_orchestrator_tools_monitoramento.py` | 8 |
@@ -171,7 +172,7 @@ da correção.
 | `test_streamlit_app.py` | 2 |
 | `test_simulacao.py` | 2 |
 | `test_api_reindexacao.py` | 2 |
-| **Total** | **217** |
+| **Total** | **235** |
 
 *(Não há uma ferramenta de medição de cobertura de linha, tipo
 `pytest-cov`, configurada no projeto — a tabela acima mede quantidade de
@@ -193,7 +194,7 @@ $ pytest -v
 - **Versões relevantes:** pytest 9.1.1, FastAPI 0.141.1, Pydantic 2.13.5,
   google-adk 2.9.0, google-genai 2.23.0, chromadb 1.5.9, APScheduler
   3.11.3, Streamlit 1.64.0.
-- **Falhas:** nenhuma. 0 de 217 testes falhando.
+- **Falhas:** nenhuma. 0 de 235 testes falhando.
 - **Erros de coleta:** nenhum, desde que a suíte seja executada com o
   `.venv` ativado (ver nota abaixo).
 
@@ -244,7 +245,7 @@ depois da entrega, mas reconhecidas durante o próprio desenvolvimento.
 
 **Nota sobre cobertura de linha:** o projeto não usa `pytest-cov` nem
 nenhuma outra ferramenta de medição de cobertura. A extensão da suíte
-(217 testes cobrindo toda camada do código, da validação de dados até a
+(235 testes cobrindo toda camada do código, da validação de dados até a
 interface) foi verificada por leitura e pela prática de TDD usada durante
 o desenvolvimento (teste escrito antes da implementação, a cada tarefa),
 não por uma métrica percentual. Adicionar `pytest-cov` é uma melhoria
