@@ -344,7 +344,9 @@ N"); resumo das mais relevantes:
    escopo de diagnóstico remoto desta entrega — fica registrada como a
    explicação mais plausível, não como causa confirmada.
 
-   ![Evidência de oxidação na placa ESP32](docs/relatorio/imagens/esp32_oxidacao.png)
+   | Detalhe — portas USB-C | Visão geral da placa | Detalhe — ângulo lateral |
+   |---|---|---|
+   | ![Oxidação nas portas USB-C](docs/relatorio/imagens/esp1.jpeg) | ![Visão geral da placa ESP32-S3](docs/relatorio/imagens/esp2.jpeg) | ![Oxidação — ângulo lateral](docs/relatorio/imagens/esp3.jpeg) |
 
    O monitoramento de risco desta entrega usa exclusivamente o
    smartwatch (Mi Band).
