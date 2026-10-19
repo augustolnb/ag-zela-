@@ -74,12 +74,12 @@ terminal rodando `pytest -v` com a suíte passando.
 ## Cena 5 — Resultados (2:20–2:50)
 
 **Fala sugerida:**
-> "O projeto tem 213 testes automatizados, foi construído em 6 fases
+> "O projeto tem 217 testes automatizados, foi construído em 6 fases
 > incrementais, cada uma testada e integrada separadamente, e está
 > documentado no GitHub com instruções completas de instalação e
 > execução. Obrigado!"
 
-**Tela:** terminal com `pytest -v` mostrando o resumo final (`213 passed`),
+**Tela:** terminal com `pytest -v` mostrando o resumo final (`217 passed`),
 ou a tela do GitHub do repositório.
 
 ---

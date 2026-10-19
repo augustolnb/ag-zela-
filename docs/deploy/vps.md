@@ -219,7 +219,9 @@ feitas em sequência rápida pelos avaliadores podem demorar ou falhar.
 
 - [ ] DNS dos 3 subdomínios resolvendo para o IP da VPS
 - [ ] `ufw status` mostrando só 22/80/443 abertas
-- [ ] `docker compose ps` com os 4 containers `Up`
+- [ ] `docker compose ps` com os containers `Up` (4 numa VPS dedicada
+      com `caddy`; 3 — `waha`/`backend`/`streamlit` — numa VPS com
+      nginx do host)
 - [ ] Certificado HTTPS emitido (sem aviso de "não seguro" no navegador)
 - [ ] WhatsApp reconectado via QR no dashboard do WAHA
 - [ ] `ZELA_INGESTAO_TOKEN` configurado e testado (401 sem header, 200 com)
