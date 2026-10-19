@@ -74,7 +74,7 @@ terminal rodando `pytest -v` com a suíte passando.
 ## Cena 5 — Resultados (2:20–2:50)
 
 **Fala sugerida:**
-> "O projeto tem 217 testes automatizados, foi construído em 6 fases
+> "O projeto tem 235 testes automatizados, foi construído em 6 fases
 > incrementais, cada uma testada e integrada separadamente, e está
 > documentado no GitHub com instruções completas de instalação e
 > execução. Obrigado!"
