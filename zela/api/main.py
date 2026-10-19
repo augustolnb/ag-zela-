@@ -20,6 +20,11 @@ from zela.storage.db import conectar
 from zela.storage.monitoramento import salvar_leitura as salvar_leitura_sensor
 from zela.storage.perfil import obter_perfil
 
+# uvicorn só configura handler/nível pros loggers dele mesmo (uvicorn.*) —
+# sem isso, logger.info/logger.warning de qualquer módulo nosso (ex.:
+# zela.api.ingestao) é descartado silenciosamente em produção, mesmo
+# aparecendo normalmente em testes (caplog força um handler próprio).
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 CAMINHO_DB = os.environ.get("ZELA_DB_PATH", "zela.db")
