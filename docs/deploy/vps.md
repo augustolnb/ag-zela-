@@ -207,8 +207,24 @@ do Streamlit e carrega o painel.
 
 ```bash
 git pull
-docker compose up -d --build
+docker compose up -d --build        # VPS dedicada (com o serviço caddy)
+docker compose up -d --build waha backend streamlit   # VPS com nginx do host
 ```
 
-Os volumes (`zela_data`, `chroma_data`, `waha_data`, `caddy_data`) não são
-afetados — dados e a sessão do WhatsApp persistem entre atualizações.
+**Não rode `docker compose up -d` sem listar os serviços numa VPS com
+nginx do host** — ele tenta subir o `caddy` também, que falha tentando
+bindar as portas 80/443 (já ocupadas pelo nginx). O erro é inofensivo
+(só o `caddy` falha, os outros 3 sobem normalmente), mas suja com um
+container/volumes órfãos — depois é só `docker rm -f zela-caddy-1 &&
+docker volume rm zela_caddy_data zela_caddy_config`.
+
+Os volumes (`zela_data`, `chroma_data`, `waha_data`) não são afetados —
+dados e a sessão do WhatsApp persistem entre atualizações.
+
+**Importante — sobrevivência a reboot:** todos os serviços têm
+`restart: unless-stopped`, então o Docker religa os containers
+automaticamente após o daemon subir. Isso não é suficiente por si só —
+já aconteceu na prática de a VPS reiniciar (manutenção do provedor) e,
+antes dessa configuração, os containers ficarem parados por mais de um
+dia até alguém notar manualmente. Depois de qualquer reboot da VPS,
+confirme com `docker compose ps` que os 3 estão `Up`.
