@@ -119,9 +119,21 @@ server {
         proxy_pass http://127.0.0.1:8000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        # Default do nginx (60s) é curto demais para /webhook/whatsapp:
+        # cada mensagem passa por 1+ chamadas ao Gemini, que sob rate
+        # limit (ver "Limite de requisições do Gemini" abaixo) pode
+        # demorar bem mais que isso — confirmado na prática: sem isso, o
+        # nginx devolve 504 pro WAHA antes do backend responder, e o WAHA
+        # tenta de novo (até 15x), arriscando processar a mesma mensagem
+        # mais de uma vez.
+        proxy_read_timeout 180s;
+        proxy_send_timeout 180s;
     }
 }
 ```
+
+Esse timeout maior só é necessário no bloco de `api.*` (onde fica o
+webhook) — mantenha o padrão nos outros dois.
 
 (Repita para `painel.augustoautomacoes.com` → `127.0.0.1:8501` e
 `whatsapp.augustoautomacoes.com` → `127.0.0.1:3000`, cada um em seu
@@ -189,6 +201,20 @@ curl -i https://api.augustoautomacoes.com/webhook/whatsapp \
 Abra `https://painel.augustoautomacoes.com/` e confirme que pede a senha
 do Streamlit e carrega o painel.
 
+## Limite de requisições do Gemini (tier gratuito)
+
+Confirmado na prática: com uma `GOOGLE_API_KEY` do **tier gratuito**, o
+Gemini limita a **5 requisições/minuto** (`generativelanguage.googleapis.com/generate_content_free_tier_requests`).
+Cada mensagem do WhatsApp dispara pelo menos uma chamada ao Gemini
+(classificação e/ou agente) — mandar várias mensagens em sequência
+rápida (ex.: durante uma demonstração ao vivo) estoura essa cota. O
+cliente já tem retry automático (`tenacity`), mas cada retry espera
+~30s, o que é a causa raiz da lentidão que levou ao ajuste de timeout
+do nginx acima. Antes da apresentação ao vivo para os avaliadores,
+considere habilitar faturamento no projeto do Google AI Studio/Cloud
+associado à chave para sair do tier gratuito — sem isso, perguntas
+feitas em sequência rápida pelos avaliadores podem demorar ou falhar.
+
 ## Checklist antes da apresentação
 
 - [ ] DNS dos 3 subdomínios resolvendo para o IP da VPS
@@ -202,6 +228,10 @@ do Streamlit e carrega o painel.
 - [ ] Painel Streamlit pedindo senha e exibindo dados
 - [ ] n8n local (notebook) apontando o webhook de teste para
       `https://api.augustoautomacoes.com/api/classificar-mensagem`
+- [ ] `GOOGLE_API_KEY` fora do tier gratuito do Gemini (ou teste
+      enviando várias mensagens em sequência rápida sem travar)
+- [ ] `proxy_read_timeout`/`proxy_send_timeout` de 180s no server block
+      de `api.*` (evita 504 + retry duplicado em respostas lentas)
 
 ## Atualizando depois de um `git pull`
 
