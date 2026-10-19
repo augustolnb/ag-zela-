@@ -185,6 +185,16 @@ lógica de negócio direto no agente.
 O comportamento pode ser verificado interativamente com `adk run
 zela/agents` (ver README, seção "Verificando o comportamento do agente").
 
+**LLM de conversação/orquestração:** configurável via `ZELA_LLM_PROVEDOR`
+— padrão Gemini (`gemini-3.8-flash`), com DeepSeek (`deepseek-chat`, via
+`LiteLlm`) como alternativa. Na VPS de produção, o provedor ativo é o
+**DeepSeek**: o Gemini no tier gratuito tem limite de 5 requisições por
+minuto, insuficiente para mensagens em sequência rápida (confirmado na
+prática — ver seção 6, item 7), e o Gemini fica como reserva, fácil de
+reativar trocando uma variável de ambiente. Os embeddings (classificação
+de urgência e RAG, seção 3.2) continuam usando o Gemini independente
+dessa variável.
+
 ### 3.4 Workflow n8n (card 3.4/3.8)
 
 **Nota sobre a ferramenta:** o card original menciona Langflow; o curso
@@ -297,13 +307,17 @@ N"); resumo das mais relevantes:
    ainda recebe a classificação do vizinho mais próximo.
 3. Sessão de conversa do ADK Runner é única por idoso, não por remetente
    (idoso e família compartilham o mesmo histórico de contexto do LLM).
-4. Autenticação por token nos endpoints `/ingest/*` e
-   `/api/classificar-mensagem` (header `X-Api-Key`, variável
-   `ZELA_INGESTAO_TOKEN`) foi implementada, mas é opcional — sem a
-   variável configurada, os endpoints continuam abertos (padrão de MVP em
-   rede local). `/webhook/whatsapp` continua protegido só pela allowlist
-   de telefones/LID, sem token. Nenhum dos três exige autenticação por
-   padrão até serem expostos fora da rede local (ex.: VPS).
+4. Autenticação por token nos endpoints `/ingest/*`, `/api/classificar-mensagem`
+   e `/webhook/whatsapp` (header `X-Api-Key`, variável `ZELA_INGESTAO_TOKEN`)
+   foi implementada, mas é opcional — sem a variável configurada, os
+   endpoints continuam abertos (padrão de MVP em rede local). Nenhum
+   exige autenticação por padrão até serem expostos fora da rede local.
+   **Atualização (deploy em VPS):** `/webhook/whatsapp` inicialmente só
+   tinha a allowlist de telefones/LID como defesa, que falha "aberta"
+   (sem filtro) antes do primeiro perfil ser cadastrado — confirmado na
+   prática durante o deploy real, um POST forjado sem autenticação
+   chegou a acionar o agente de IA de verdade. Corrigido para também
+   exigir o token, igual aos outros endpoints.
 5. Transcrição de áudio (STT/TTS) no WhatsApp ainda não implementada —
    hoje a comunicação é só por texto.
 6. Sensor de presença via ESP32: o backend, o firmware e a documentação
@@ -316,8 +330,35 @@ N"); resumo das mais relevantes:
    flash, modo/frequência de flash, PSRAM, gravação corrompida —
    confirmada via verificação de hash byte a byte com `esptool`), o que
    aponta para um problema de hardware (alimentação, cabo ou placa) fora
-   do escopo de diagnóstico remoto. O monitoramento de risco desta
-   entrega usa exclusivamente o smartwatch (Mi Band).
+   do escopo de diagnóstico remoto.
+
+   **Hipótese de causa física:** a placa usada já tinha alguns anos de
+   uso/armazenamento antes deste projeto, e não apresentava esse
+   comportamento anteriormente — a hipótese mais provável é oxidação em
+   trilhas, pontos de solda ou nos pinos/contatos da placa (comum em
+   ESP32 guardados por longos períodos sem uso, especialmente em
+   ambientes úmidos), degradando conexões que antes funcionavam e
+   causando os resets intermitentes por watchdog observados. Essa
+   hipótese não foi testada de forma isolada (ex.: inspeção visual com
+   microscópio, teste de continuidade ponto a ponto) porque está fora do
+   escopo de diagnóstico remoto desta entrega — fica registrada como a
+   explicação mais plausível, não como causa confirmada.
+
+   ![Evidência de oxidação na placa ESP32](docs/relatorio/imagens/esp32_oxidacao.png)
+
+   O monitoramento de risco desta entrega usa exclusivamente o
+   smartwatch (Mi Band).
+7. **Limite de requisições do Gemini (tier gratuito) descoberto no deploy
+   real:** com uma `GOOGLE_API_KEY` do tier gratuito, o Gemini limita a 5
+   requisições/minuto — mandar várias mensagens de WhatsApp em sequência
+   rápida (ex.: durante uma demonstração ao vivo) estoura essa cota, e o
+   retry automático do cliente (`tenacity`, ~30s de espera por tentativa)
+   deixa a resposta lenta a ponto de o proxy reverso (nginx) devolver 504
+   antes do backend terminar — confirmado na prática, não é só teórico.
+   Mitigado em duas frentes: timeout do nginx aumentado para 180s, e o
+   provedor de LLM de conversação trocado para DeepSeek (seção 3.3), que
+   não tem esse limite. O Gemini continua em uso para embeddings
+   (cota separada, não afetada) e fica disponível como reserva.
 
 Essas limitações foram descobertas e documentadas durante o próprio
 desenvolvimento (revisões de código dedicadas ao final de cada fase), não

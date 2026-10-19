@@ -128,10 +128,14 @@ LLM/rede.
 
 ### Alternativa: usando o DeepSeek em vez do Gemini
 
-Se a API do Gemini estiver instável/indisponível (ex.: `503 UNAVAILABLE —
-high demand`) e você precisar continuar testando os agentes, é possível
-trocar o LLM de orquestração/conversação para o DeepSeek, via
-[LiteLLM](https://docs.litellm.ai/):
+**Na VPS de produção, o provedor ativo é o DeepSeek** (`ZELA_LLM_PROVEDOR=deepseek`)
+— o Gemini no tier gratuito tem limite de 5 requisições/minuto,
+insuficiente para mensagens em sequência rápida (confirmado na prática,
+ver `docs/deploy/vps.md`), e o Gemini fica configurado como reserva. Em
+desenvolvimento local, se a API do Gemini estiver instável/indisponível
+(ex.: `503 UNAVAILABLE — high demand`) e você precisar continuar
+testando os agentes, é possível trocar o LLM de orquestração/conversação
+para o DeepSeek do mesmo jeito, via [LiteLLM](https://docs.litellm.ai/):
 
 ```bash
 pip install -e ".[deepseek]"   # instala o litellm (extra google-adk[extensions])
@@ -147,12 +151,12 @@ em `_montar_modelo_padrao()` (`zela/agents/orchestrator.py`), que monta
 `LiteLlm(model="deepseek/deepseek-chat")`, conforme essa variável.
 
 **Importante:** essa troca afeta só o LLM dos agentes ADK. O RAG
-(ferramenta `consultar_conhecimento`, usada pelo agente de comunicação)
-continua usando embeddings do Gemini (`ClienteEmbeddingGemini`, modelo
-`text-embedding-004`) independentemente dessa variável — ou seja, mesmo
-testando com `ZELA_LLM_PROVEDOR=deepseek`, ainda é necessária uma
-`GOOGLE_API_KEY`/`GEMINI_API_KEY` válida para essa ferramenta específica
-funcionar. Além disso, como as instruções dos agentes foram escritas e
+(ferramenta `consultar_conhecimento`, usada pelo agente de comunicação) e
+a classificação de urgência por similaridade continuam usando embeddings
+do Gemini (`ClienteEmbeddingGemini`, modelo `gemini-embedding-2`)
+independentemente dessa variável — ou seja, mesmo com
+`ZELA_LLM_PROVEDOR=deepseek`, ainda é necessária uma
+`GOOGLE_API_KEY`/`GEMINI_API_KEY` válida para essas duas funcionalidades. Além disso, como as instruções dos agentes foram escritas e
 validadas com o Gemini, o comportamento de delegação entre sub-agentes
 (quando chamar qual ferramenta, como interpretar o prefixo de contexto)
 pode variar um pouco com o DeepSeek — isso é diferença de modelo, não um
