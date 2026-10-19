@@ -11,7 +11,7 @@ referência para quem for dar manutenção no projeto depois.
 ## 1. Visão geral
 
 - **Framework:** `pytest`.
-- **Tamanho da suíte:** 213 testes, em 37 arquivos, cobrindo todo o
+- **Tamanho da suíte:** 217 testes, em 37 arquivos, cobrindo todo o
   código de produção do repositório (`zela/`).
 - **Execução:** `pytest -v` (ou `.venv/bin/pytest -v` sem ativar o
   ambiente), a partir da raiz do repositório. Tempo de execução: ~20
@@ -152,6 +152,7 @@ da correção.
 | `test_domain_emergencia.py` | 6 |
 | `test_api_classificacao.py` | 6 |
 | `test_agents_orchestrator_tools.py` | 6 |
+| `test_agents_orchestrator.py` | 6 |
 | `test_streamlit_autenticacao.py` | 5 |
 | `test_storage_perfil.py` | 5 |
 | `test_api_runner.py` | 5 |
@@ -170,8 +171,7 @@ da correção.
 | `test_streamlit_app.py` | 2 |
 | `test_simulacao.py` | 2 |
 | `test_api_reindexacao.py` | 2 |
-| `test_agents_orchestrator.py` | 2 |
-| **Total** | **213** |
+| **Total** | **217** |
 
 *(Não há uma ferramenta de medição de cobertura de linha, tipo
 `pytest-cov`, configurada no projeto — a tabela acima mede quantidade de
@@ -185,7 +185,7 @@ seção 7 para essa limitação.)*
 ```
 $ pytest -v
 ...
-213 passed, 2 warnings in ~40s
+217 passed, 2 warnings in ~40s
 ```
 
 - **Ambiente:** Python 3.12, dentro do `.venv` do projeto
@@ -193,7 +193,7 @@ $ pytest -v
 - **Versões relevantes:** pytest 9.1.1, FastAPI 0.141.1, Pydantic 2.13.5,
   google-adk 2.9.0, google-genai 2.23.0, chromadb 1.5.9, APScheduler
   3.11.3, Streamlit 1.64.0.
-- **Falhas:** nenhuma. 0 de 213 testes falhando.
+- **Falhas:** nenhuma. 0 de 217 testes falhando.
 - **Erros de coleta:** nenhum, desde que a suíte seja executada com o
   `.venv` ativado (ver nota abaixo).
 
@@ -244,7 +244,7 @@ depois da entrega, mas reconhecidas durante o próprio desenvolvimento.
 
 **Nota sobre cobertura de linha:** o projeto não usa `pytest-cov` nem
 nenhuma outra ferramenta de medição de cobertura. A extensão da suíte
-(213 testes cobrindo toda camada do código, da validação de dados até a
+(217 testes cobrindo toda camada do código, da validação de dados até a
 interface) foi verificada por leitura e pela prática de TDD usada durante
 o desenvolvimento (teste escrito antes da implementação, a cada tarefa),
 não por uma métrica percentual. Adicionar `pytest-cov` é uma melhoria
