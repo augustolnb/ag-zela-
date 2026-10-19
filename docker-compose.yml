@@ -1,6 +1,10 @@
 services:
   waha:
     image: devlikeapro/waha
+    # Sem isso, um reboot da VPS (manutenção do provedor, kernel update,
+    # etc.) deixa o serviço parado indefinidamente até alguém notar e
+    # religar manualmente — já aconteceu uma vez em produção.
+    restart: unless-stopped
     # Bind em 127.0.0.1 (não 0.0.0.0): só processos no próprio host
     # alcançam esta porta — o proxy reverso (Caddy ou nginx do host, ver
     # docs/deploy/vps.md) entra pela rede interna do compose por nome de
@@ -23,6 +27,7 @@ services:
 
   backend:
     build: .
+    restart: unless-stopped
     depends_on:
       - waha
     # Mesmo racional de bind/porta configurável do serviço "waha" acima.
@@ -40,6 +45,7 @@ services:
 
   streamlit:
     build: .
+    restart: unless-stopped
     command: ["streamlit", "run", "zela/streamlit_app/app.py", "--server.address=0.0.0.0", "--server.port=8501"]
     depends_on:
       - backend
@@ -59,6 +65,7 @@ services:
   # "VPS compartilhada com nginx já existente" em docs/deploy/vps.md.
   caddy:
     image: caddy:2-alpine
+    restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
