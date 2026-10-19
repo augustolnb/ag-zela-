@@ -243,3 +243,86 @@ renderizar_grafico(conn, "idosa-1")
 
     assert at.exception == []
     assert any("Nenhuma leitura" in m.value for m in at.markdown)
+
+
+def test_renderizar_grafico_mostra_frequencia_cardiaca_mesmo_sem_presenca(tmp_path):
+    caminho = str(tmp_path / "teste.db")
+    conn = conectar(caminho)
+    agora = datetime.now()
+    salvar_leitura(
+        conn,
+        LeituraSensor(
+            fonte=FonteSensor.SMARTWATCH, tipo=TipoLeitura.FREQUENCIA_CARDIACA,
+            valor=72, unidade="bpm", timestamp=agora,
+        ),
+        idoso_id="idosa-1",
+    )
+
+    codigo = f"""
+from zela.storage.db import conectar
+from zela.streamlit_app.secoes import renderizar_grafico
+
+conn = conectar({caminho!r})
+renderizar_grafico(conn, "idosa-1")
+"""
+    at = AppTest.from_string(codigo)
+    at.run()
+
+    assert at.exception == []
+    textos = [m.value for m in at.markdown]
+    assert any("72" in t and "bpm" in t for t in textos)
+    assert any("Nenhuma leitura de presença" in t for t in textos)
+
+
+def test_renderizar_grafico_mostra_passos_do_dia(tmp_path):
+    caminho = str(tmp_path / "teste.db")
+    conn = conectar(caminho)
+    agora = datetime.now()
+    salvar_leitura(
+        conn,
+        LeituraSensor(
+            fonte=FonteSensor.SMARTWATCH, tipo=TipoLeitura.PASSOS,
+            valor=1359, unidade="passos", timestamp=agora,
+        ),
+        idoso_id="idosa-1",
+    )
+
+    codigo = f"""
+from zela.storage.db import conectar
+from zela.streamlit_app.secoes import renderizar_grafico
+
+conn = conectar({caminho!r})
+renderizar_grafico(conn, "idosa-1")
+"""
+    at = AppTest.from_string(codigo)
+    at.run()
+
+    assert at.exception == []
+    assert any("1359" in m.value or "1.359" in m.value for m in at.markdown)
+
+
+def test_renderizar_grafico_mostra_sono_da_ultima_noite(tmp_path):
+    caminho = str(tmp_path / "teste.db")
+    conn = conectar(caminho)
+    agora = datetime.now()
+    salvar_leitura(
+        conn,
+        LeituraSensor(
+            fonte=FonteSensor.SMARTWATCH, tipo=TipoLeitura.SONO,
+            valor=23820 / 3600, unidade="horas", timestamp=agora,
+        ),
+        idoso_id="idosa-1",
+    )
+
+    codigo = f"""
+from zela.storage.db import conectar
+from zela.streamlit_app.secoes import renderizar_grafico
+
+conn = conectar({caminho!r})
+renderizar_grafico(conn, "idosa-1")
+"""
+    at = AppTest.from_string(codigo)
+    at.run()
+
+    assert at.exception == []
+    assert any("6h" in m.value and "37" in m.value for m in at.markdown)
