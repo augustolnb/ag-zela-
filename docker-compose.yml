@@ -35,6 +35,12 @@ services:
       - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
     environment:
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      # DEEPSEEK_API_KEY/ZELA_LLM_PROVEDOR: só necessários se
+      # ZELA_LLM_PROVEDOR=deepseek (ver zela/agents/orchestrator.py). O
+      # Gemini continua sendo usado para embeddings (RAG/classificação)
+      # mesmo com o DeepSeek como provedor de conversação.
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - ZELA_LLM_PROVEDOR=${ZELA_LLM_PROVEDOR:-gemini}
       - ZELA_WAHA_API_KEY=${WAHA_API_KEY}
       - ZELA_WAHA_BASE_URL=http://waha:3000
       - ZELA_INGESTAO_TOKEN=${ZELA_INGESTAO_TOKEN}
