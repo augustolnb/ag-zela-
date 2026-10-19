@@ -15,6 +15,10 @@ RUN mkdir zela && touch zela/__init__.py \
     && rm -rf zela
 
 COPY zela ./zela
+# Tema claro do painel (ver zela/streamlit_app/estilo.py) depende deste
+# arquivo existir em /app/.streamlit/config.toml dentro da imagem — sem
+# isso o Streamlit cai no tema padrão (segue dark/light do navegador).
+COPY .streamlit ./.streamlit
 RUN pip install --no-cache-dir --no-deps .
 
 # Backend e Streamlit compartilham a mesma imagem — o docker-compose.yml
