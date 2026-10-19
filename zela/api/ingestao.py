@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Request
@@ -6,6 +7,8 @@ from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
 
 from zela.models.monitoramento import FonteSensor, LeituraSensor, TipoLeitura
+
+logger = logging.getLogger(__name__)
 
 _ID_IDOSO_PADRAO = "idosa-1"
 
@@ -62,6 +65,16 @@ def montar_roteador_ingestao(
     async def receber_health_connect(request: Request):
         if not _token_valido(request, token):
             return JSONResponse(status_code=401, content={"status": "erro", "detalhe": "token inválido"})
+        # Log temporário do payload bruto: o formato real enviado pelo app
+        # "Health Connect Webhook" nunca foi confirmado na prática (ver
+        # README) — logado antes de qualquer validação para capturar o
+        # formato mesmo quando ele não bate com o que assumimos hoje.
+        corpo_bruto = await request.body()
+        logger.info(
+            "payload bruto em /ingest/health-connect — headers=%s corpo=%s",
+            dict(request.headers),
+            corpo_bruto.decode("utf-8", errors="replace"),
+        )
         try:
             corpo = await request.json()
             timestamp = datetime.fromisoformat(corpo["timestamp"])

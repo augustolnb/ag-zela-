@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -216,6 +218,36 @@ def test_ingest_health_connect_com_token_configurado_sem_header_retorna_401():
 
     assert resposta.status_code == 401
     assert armazenamento.salvas == []
+
+
+def test_ingest_health_connect_loga_payload_bruto(caplog):
+    armazenamento = _ArmazenamentoFalso()
+    app = FastAPI()
+    app.include_router(montar_roteador_ingestao(armazenamento.salvar))
+    cliente = TestClient(app)
+
+    with caplog.at_level(logging.INFO):
+        cliente.post(
+            "/ingest/health-connect",
+            json={"value": 72, "unit": "bpm", "timestamp": "2026-09-16T10:00:00"},
+        )
+
+    assert any("72" in registro.message and "bpm" in registro.message for registro in caplog.records)
+
+
+def test_ingest_health_connect_loga_payload_bruto_mesmo_quando_invalido(caplog):
+    armazenamento = _ArmazenamentoFalso()
+    app = FastAPI()
+    app.include_router(montar_roteador_ingestao(armazenamento.salvar))
+    cliente = TestClient(app)
+
+    with caplog.at_level(logging.INFO):
+        resposta = cliente.post(
+            "/ingest/health-connect", json={"formato": "desconhecido"}
+        )
+
+    assert resposta.status_code == 400
+    assert any("formato" in registro.message for registro in caplog.records)
 
 
 def test_ingest_health_connect_com_token_configurado_header_correto_retorna_200():
