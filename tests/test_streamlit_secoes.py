@@ -270,7 +270,7 @@ renderizar_grafico(conn, "idosa-1")
 
     assert at.exception == []
     textos = [m.value for m in at.markdown]
-    assert any("72" in t and "bpm" in t for t in textos)
+    assert any("72" in t and "bpm" in t and agora.strftime("%H:%M") in t for t in textos)
     assert any("Nenhuma leitura de presença" in t for t in textos)
 
 
@@ -298,7 +298,10 @@ renderizar_grafico(conn, "idosa-1")
     at.run()
 
     assert at.exception == []
-    assert any("1359" in m.value or "1.359" in m.value for m in at.markdown)
+    assert any(
+        ("1359" in m.value or "1.359" in m.value) and agora.strftime("%H:%M") in m.value
+        for m in at.markdown
+    )
 
 
 def test_renderizar_grafico_mostra_sono_da_ultima_noite(tmp_path):
@@ -325,4 +328,7 @@ renderizar_grafico(conn, "idosa-1")
     at.run()
 
     assert at.exception == []
-    assert any("6h" in m.value and "37" in m.value for m in at.markdown)
+    assert any(
+        "6h" in m.value and "37" in m.value and agora.strftime("%H:%M") in m.value
+        for m in at.markdown
+    )
