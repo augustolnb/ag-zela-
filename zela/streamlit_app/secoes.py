@@ -81,12 +81,19 @@ def _renderizar_resumo_smartwatch(leituras) -> None:
         ultima = max(leituras_frequencia, key=lambda l: l.timestamp)
         st.write(
             f"Frequência cardíaca: {ultima.valor:.0f} bpm "
-            f"(mín {min(valores):.0f} — máx {max(valores):.0f} hoje)"
+            f"(mín {min(valores):.0f} — máx {max(valores):.0f} hoje) — "
+            f"última leitura às {ultima.timestamp.strftime('%H:%M')}"
         )
     if leituras_passos:
         ultima = max(leituras_passos, key=lambda l: l.timestamp)
-        st.write(f"Passos hoje: {ultima.valor:.0f}")
+        st.write(
+            f"Passos hoje: {ultima.valor:.0f} — "
+            f"atualizado às {ultima.timestamp.strftime('%H:%M')}"
+        )
     if leituras_sono:
         ultima = max(leituras_sono, key=lambda l: l.timestamp)
         horas, minutos = divmod(round(ultima.valor * 60), 60)
-        st.write(f"Sono (última noite): {horas}h{minutos:02d}min")
+        st.write(
+            f"Sono (última noite): {horas}h{minutos:02d}min — "
+            f"registrado às {ultima.timestamp.strftime('%H:%M')}"
+        )
