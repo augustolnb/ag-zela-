@@ -25,7 +25,11 @@ LIMITE_PASSADO = timedelta(days=365)
 
 
 def _validar_timestamp_plausivel(timestamp: datetime) -> None:
-    agora = datetime.now()
+    # datetime.now(None) == datetime.now() (naive) — mas datetime.now(tz)
+    # com o mesmo tzinfo do timestamp evita o TypeError de comparar um
+    # datetime "aware" (ex.: Health Connect manda com offset, tipo
+    # "-03:00") com um "naive" (ESP32 manda sem timezone).
+    agora = datetime.now(timestamp.tzinfo)
     if timestamp > agora + TOLERANCIA_FUTURO:
         raise ValueError(f"timestamp no futuro: {timestamp.isoformat()!r}")
     if timestamp < agora - LIMITE_PASSADO:
@@ -34,6 +38,71 @@ def _validar_timestamp_plausivel(timestamp: datetime) -> None:
 
 def _token_valido(request: Request, token: str | None) -> bool:
     return token is None or request.headers.get("X-Api-Key") == token
+
+
+def _ler_passos(item: dict) -> LeituraSensor:
+    return LeituraSensor(
+        fonte=FonteSensor.SMARTWATCH,
+        tipo=TipoLeitura.PASSOS,
+        valor=float(item["count"]),
+        unidade="passos",
+        timestamp=datetime.fromisoformat(item["end_time"]),
+    )
+
+
+def _ler_sono(item: dict) -> LeituraSensor:
+    return LeituraSensor(
+        fonte=FonteSensor.SMARTWATCH,
+        tipo=TipoLeitura.SONO,
+        valor=item["duration_seconds"] / 3600,
+        unidade="horas",
+        timestamp=datetime.fromisoformat(item["session_end_time"]),
+    )
+
+
+def _ler_frequencia_cardiaca(item: dict) -> LeituraSensor:
+    return LeituraSensor(
+        fonte=FonteSensor.SMARTWATCH,
+        tipo=TipoLeitura.FREQUENCIA_CARDIACA,
+        # "bpm" existe nos dois modos de resolução do app (amostra bruta ou
+        # agregado por minuto, onde bpm é um alias de avg) — ver docs/webhook.md
+        # do projeto health-connect-webhook.
+        valor=float(item["bpm"]),
+        unidade="bpm",
+        timestamp=datetime.fromisoformat(item["time"]),
+    )
+
+
+# Payload real do app "Health Connect Webhook" (confirmado em produção,
+# issue #41): um objeto com uma chave por tipo de dado, cada uma uma lista
+# de registros — não o formato plano {"value", "unit", "timestamp"} que o
+# README assumia antes de testarmos com o app de verdade.
+_EXTRATORES_HEALTH_CONNECT = {
+    "steps": _ler_passos,
+    "sleep": _ler_sono,
+    "heart_rate": _ler_frequencia_cardiaca,
+}
+
+
+def _extrair_leituras_health_connect(corpo: dict) -> tuple[list[LeituraSensor], int]:
+    """Converte o payload do Health Connect Webhook em leituras.
+
+    Um único POST real traz dezenas de registros (histórico de frequência
+    cardíaca em janelas de minutos, por exemplo) — um item individual
+    malformado é descartado em vez de derrubar o lote inteiro.
+    """
+    leituras: list[LeituraSensor] = []
+    descartadas = 0
+    for chave, extrator in _EXTRATORES_HEALTH_CONNECT.items():
+        for item in corpo.get(chave) or []:
+            try:
+                leitura = extrator(item)
+                _validar_timestamp_plausivel(leitura.timestamp)
+            except (ValidationError, KeyError, ValueError, TypeError):
+                descartadas += 1
+                continue
+            leituras.append(leitura)
+    return leituras, descartadas
 
 
 def montar_roteador_ingestao(
@@ -65,30 +134,26 @@ def montar_roteador_ingestao(
     async def receber_health_connect(request: Request):
         if not _token_valido(request, token):
             return JSONResponse(status_code=401, content={"status": "erro", "detalhe": "token inválido"})
-        # Log temporário do payload bruto: o formato real enviado pelo app
-        # "Health Connect Webhook" nunca foi confirmado na prática (ver
-        # README) — logado antes de qualquer validação para capturar o
-        # formato mesmo quando ele não bate com o que assumimos hoje.
-        corpo_bruto = await request.body()
-        logger.info(
-            "payload bruto em /ingest/health-connect — headers=%s corpo=%s",
-            dict(request.headers),
-            corpo_bruto.decode("utf-8", errors="replace"),
-        )
         try:
             corpo = await request.json()
-            timestamp = datetime.fromisoformat(corpo["timestamp"])
-            _validar_timestamp_plausivel(timestamp)
-            leitura = LeituraSensor(
-                fonte=FonteSensor.SMARTWATCH,
-                tipo=TipoLeitura.FREQUENCIA_CARDIACA,
-                valor=float(corpo["value"]),
-                unidade=corpo.get("unit", "bpm"),
-                timestamp=timestamp,
-            )
-        except (ValidationError, KeyError, ValueError, TypeError) as erro:
+        except ValueError as erro:
             return JSONResponse(status_code=400, content={"status": "erro", "detalhe": str(erro)})
-        await run_in_threadpool(salvar_leitura, leitura, id_idoso)
-        return {"status": "recebido"}
+        if not isinstance(corpo, dict):
+            return JSONResponse(status_code=400, content={"status": "erro", "detalhe": "corpo deve ser um objeto JSON"})
+
+        leituras, descartadas = _extrair_leituras_health_connect(corpo)
+        if not leituras:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "erro", "detalhe": "nenhuma leitura reconhecida no payload"},
+            )
+
+        for leitura in leituras:
+            await run_in_threadpool(salvar_leitura, leitura, id_idoso)
+
+        logger.info(
+            "health-connect: %d leitura(s) salvas, %d descartada(s)", len(leituras), descartadas
+        )
+        return {"status": "recebido", "leituras_salvas": len(leituras), "leituras_descartadas": descartadas}
 
     return roteador
