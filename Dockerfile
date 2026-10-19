@@ -7,8 +7,11 @@ WORKDIR /app
 # novo os ~1.3GB de deps (google-adk, chromadb, streamlit, ...) a cada
 # alteração de código — importante para redeploys rápidos na VPS.
 COPY pyproject.toml ./
+# ".[deepseek]" (não só ".") para o litellm já vir na imagem — permite
+# trocar entre Gemini e DeepSeek só com ZELA_LLM_PROVEDOR no .env, sem
+# rebuild (ver zela/agents/orchestrator.py).
 RUN mkdir zela && touch zela/__init__.py \
-    && pip install --no-cache-dir --default-timeout=100 . \
+    && pip install --no-cache-dir --default-timeout=100 ".[deepseek]" \
     && rm -rf zela
 
 COPY zela ./zela
