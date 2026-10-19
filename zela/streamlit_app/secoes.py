@@ -7,6 +7,7 @@ from zela.models.monitoramento import TipoLeitura
 from zela.storage.alertas import listar_alertas
 from zela.storage.monitoramento import aplicar_classificacao, listar_leituras_recentes
 from zela.storage.rotina import listar_confirmacoes_do_dia, listar_medicamentos
+from zela.streamlit_app.estilo import badge_nivel
 
 
 def renderizar_status(conn, idoso_id: str) -> None:
@@ -42,7 +43,10 @@ def renderizar_alertas(conn, idoso_id: str) -> None:
         return
     for alerta in reversed(alertas[-MAXIMO_ALERTAS_EXIBIDOS:]):
         data_hora = alerta.timestamp.strftime("%d/%m %H:%M")
-        st.write(f"[{alerta.nivel.value.upper()}] {data_hora} — {alerta.mensagem}")
+        badge = badge_nivel(alerta.nivel.value)
+        st.markdown(
+            f"{badge} {data_hora} — {alerta.mensagem}", unsafe_allow_html=True
+        )
 
 
 def renderizar_grafico(conn, idoso_id: str) -> None:

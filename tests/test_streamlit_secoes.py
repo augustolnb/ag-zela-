@@ -1,5 +1,6 @@
 from datetime import datetime, time
 
+import pytest
 from streamlit.testing.v1 import AppTest
 
 from zela.models.alertas import Alerta, CanalAlerta, NivelAlerta
@@ -114,6 +115,40 @@ renderizar_alertas(conn, "idosa-1")
 
     assert at.exception == []
     assert any("Sem resposta, notificando família." in m.value for m in at.markdown)
+
+
+@pytest.mark.parametrize(
+    "nivel,classe_esperada",
+    [
+        (NivelAlerta.INFO, "zela-badge-info"),
+        (NivelAlerta.ATENCAO, "zela-badge-atencao"),
+        (NivelAlerta.CRITICO, "zela-badge-critico"),
+    ],
+)
+def test_renderizar_alertas_inclui_badge_colorido_por_nivel(tmp_path, nivel, classe_esperada):
+    caminho = str(tmp_path / "teste.db")
+    conn = conectar(caminho)
+    salvar_alerta(
+        conn,
+        Alerta(
+            nivel=nivel, destinatario="João", canal=CanalAlerta.WHATSAPP,
+            mensagem="Mensagem de teste.", timestamp=datetime(2026, 9, 18, 10, 0),
+        ),
+        idoso_id="idosa-1",
+    )
+
+    codigo = f"""
+from zela.storage.db import conectar
+from zela.streamlit_app.secoes import renderizar_alertas
+
+conn = conectar({caminho!r})
+renderizar_alertas(conn, "idosa-1")
+"""
+    at = AppTest.from_string(codigo)
+    at.run()
+
+    assert at.exception == []
+    assert any(classe_esperada in m.value for m in at.markdown)
 
 
 def test_renderizar_alertas_sem_alertas_mostra_mensagem(tmp_path):
