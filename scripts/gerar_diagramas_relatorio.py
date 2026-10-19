@@ -248,9 +248,67 @@ def gerar_fluxo_mensagem():
     img.save(DIR_SAIDA / "fluxo_mensagem.png")
 
 
+# ---------------------------------------------------------------------------
+# Diagrama 4: deploy em produção (VPS Hostinger)
+# ---------------------------------------------------------------------------
+
+def gerar_deploy_vps():
+    img = Image.new("RGB", (1300, 760), BRANCO)
+    d = ImageDraw.Draw(img)
+    d.text((30, 20), "Deploy em produção — VPS Hostinger", font=FONTE_TITULO, fill=PRETO)
+
+    caixa(d, (60, 80, 320, 150), ["Internet"], COR_CANAL, linhas_sub=["avaliadores / família"])
+    caixa(d, (390, 80, 760, 150), ["DNS — augustoautomacoes.com"], COR_EXTERNO,
+          linhas_sub=["3 registros A → IP da VPS"])
+    seta(d, (320, 115), (390, 115))
+
+    d.rounded_rectangle((40, 190, 1000, 700), radius=12, outline="#999999", width=2)
+    d.text((54, 198), "VPS Hostinger  ·  ufw: só 22/80/443 liberadas", font=FONTE_LEGENDA, fill="#666666")
+
+    caixa(d, (420, 230, 740, 300), ["nginx (host)"], COR_EXTERNO,
+          linhas_sub=["certbot / Let's Encrypt — HTTPS"])
+    seta(d, (575, 150), (580, 230))
+
+    caixa(d, (70, 380, 340, 460), ["backend (FastAPI)"], COR_AGENTE,
+          linhas_sub=["127.0.0.1:8000", "api.augustoautomacoes.com"])
+    caixa(d, (410, 380, 680, 460), ["streamlit"], COR_CANAL,
+          linhas_sub=["127.0.0.1:8501", "painel.augustoautomacoes.com"])
+    caixa(d, (750, 380, 980, 460), ["waha"], COR_EXTERNO,
+          linhas_sub=["127.0.0.1:3000", "whatsapp.augustoautomacoes.com"])
+    seta(d, (510, 300), (240, 380))
+    seta(d, (575, 300), (545, 380))
+    seta(d, (650, 300), (850, 380))
+
+    caixa(d, (70, 590, 340, 660), ["zela_data"], COR_DADOS,
+          linhas_sub=["zela.db — perfil, alertas,", "medicamentos, leituras"])
+    caixa(d, (410, 590, 680, 660), ["chroma_data"], COR_DADOS, linhas_sub=["índice vetorial (RAG)"])
+    caixa(d, (750, 590, 980, 660), ["waha_data"], COR_DADOS, linhas_sub=["sessão WhatsApp (QR code)"])
+    seta(d, (200, 460), (200, 590))
+    seta(d, (280, 460), (550, 590))
+    seta(d, (865, 460), (865, 590))
+
+    # Caminho em L (fora da fileira de serviços) para não cruzar as caixas
+    # streamlit/waha a caminho da API externa de LLM.
+    caixa(d, (1040, 380, 1270, 460), ["Gemini / DeepSeek"], COR_EXTERNO, linhas_sub=["LLM + embeddings"])
+    seta(d, (205, 380), (205, 345))
+    seta(d, (205, 345), (1155, 345), rotulo="ZELA_LLM_PROVEDOR", deslocamento_rotulo=(-70, -16))
+    seta(d, (1155, 345), (1155, 380))
+
+    d.text(
+        (30, 718),
+        "Volumes nomeados do Docker (zela_data, chroma_data, waha_data) persistem entre rebuilds/redeploys e\n"
+        "sobrevivem a reboot da VPS (restart: unless-stopped em todos os serviços — ver seção 4.8).",
+        font=FONTE_SUB,
+        fill="#444444",
+    )
+
+    img.save(DIR_SAIDA / "deploy_vps.png")
+
+
 if __name__ == "__main__":
     DIR_SAIDA.mkdir(parents=True, exist_ok=True)
     gerar_arquitetura_agentes()
     gerar_infraestrutura()
     gerar_fluxo_mensagem()
+    gerar_deploy_vps()
     print(f"Diagramas gerados em: {DIR_SAIDA}")
