@@ -170,3 +170,25 @@ def test_formulario_compromisso_edita_existente(tmp_path):
     assert len(compromissos) == 1
     assert compromissos[0].id == "comp-1"
     assert compromissos[0].local == "Laboratório Y"
+
+
+def test_formulario_compromisso_remove_existente(tmp_path):
+    caminho = str(tmp_path / "teste.db")
+    conn = conectar(caminho)
+    salvar_compromisso(
+        conn,
+        Compromisso(
+            id="comp-1", titulo="Exame", data_hora=datetime.now() + timedelta(days=1),
+            local="Laboratório X", tipo=TipoCompromisso.EXAME,
+        ),
+        idoso_id="idosa-1",
+    )
+
+    at = AppTest.from_string(_CODIGO_COMPROMISSO.format(caminho=caminho))
+    at.run()
+
+    at.selectbox[0].set_value("Exame").run()
+    at.button[1].click().run()  # button[0] é "Salvar" (dentro do form); button[1] é "Remover"
+
+    assert at.exception == []
+    assert listar_compromissos(conectar(caminho), "idosa-1") == []
