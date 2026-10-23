@@ -35,6 +35,21 @@ class _WahaFalso:
         self.enviados.append((telefone, texto))
 
 
+class _WahaComFalhaParaTelefone:
+    """Variante de _WahaFalso que levanta erro para um telefone específico —
+    simula um envio com número inválido/timeout do WAHA, sem afetar os
+    demais destinatários."""
+
+    def __init__(self, telefone_que_falha):
+        self.enviados = []
+        self._telefone_que_falha = telefone_que_falha
+
+    def enviar_texto(self, telefone, texto):
+        if telefone == self._telefone_que_falha:
+            raise RuntimeError("falha simulada de envio")
+        self.enviados.append((telefone, texto))
+
+
 def _perfil():
     return PerfilIdoso(
         nome="Maria da Silva",
@@ -386,6 +401,117 @@ def test_verificar_e_enviar_lembretes_compromisso_nao_repete_instantaneo(tmp_pat
     segunda_chamada = verificar_e_enviar_lembretes_compromisso(caminho_db, "idosa-1", waha_falso)
 
     assert segunda_chamada == []
+
+
+def test_verificar_e_enviar_lembretes_compromisso_continua_apos_falha_em_um_familiar(
+    tmp_path, monkeypatch
+):
+    # Finding C1: se o envio para UM familiar falhar (número inválido,
+    # timeout do WAHA), o idoso e os demais familiares ainda devem receber a
+    # mensagem, e o lembrete deve ser registrado como enviado mesmo assim —
+    # do contrário o mesmo lembrete (já entregue com sucesso a alguns) seria
+    # reenviado para sempre, a cada tick do scheduler.
+    caminho_db = str(tmp_path / "teste.db")
+    conn = conectar(caminho_db)
+    perfil = PerfilIdoso(
+        nome="Maria da Silva",
+        telefone="+5511911111111",
+        data_nascimento=date(1945, 3, 12),
+        contatos_familiares=[
+            ContatoFamiliar(nome="João", telefone="+5511900000001"),  # falha
+            ContatoFamiliar(nome="Ana", telefone="+5511900000002"),  # sucesso
+        ],
+    )
+    salvar_perfil(conn, perfil, idoso_id="idosa-1")
+    salvar_compromisso(
+        conn,
+        Compromisso(
+            id="comp-1", titulo="Exame", data_hora=datetime(2026, 11, 10, 14, 0),
+            local="Lab", tipo=TipoCompromisso.EXAME,
+        ),
+        idoso_id="idosa-1",
+    )
+
+    class _DatetimeFixo:
+        @staticmethod
+        def now():
+            return datetime(2026, 11, 1, 9, 0)
+
+    monkeypatch.setattr("zela.api.scheduler.datetime", _DatetimeFixo)
+
+    waha_falso = _WahaComFalhaParaTelefone("+5511900000001")
+    primeira = verificar_e_enviar_lembretes_compromisso(caminho_db, "idosa-1", waha_falso)
+
+    # O idoso e a familiar que não falhou receberam, cada um, exatamente uma
+    # mensagem — o familiar com número ruim não quebrou o envio dos outros.
+    assert len(primeira) == 1
+    telefones_notificados = [telefone for telefone, _ in waha_falso.enviados]
+    assert telefones_notificados == ["+5511911111111", "+5511900000002"]
+
+    # O lembrete foi registrado como enviado (apesar da falha parcial) —
+    # uma segunda chamada não deve reenviar nada, nem repetir a tentativa
+    # para o familiar que já falhou.
+    segunda = verificar_e_enviar_lembretes_compromisso(caminho_db, "idosa-1", waha_falso)
+    assert segunda == []
+    assert len(waha_falso.enviados) == 2
+
+
+def test_verificar_e_enviar_lembretes_compromisso_erro_em_um_compromisso_nao_aborta_os_outros(
+    tmp_path, monkeypatch
+):
+    # Finding C1: cada compromisso é processado dentro do seu próprio
+    # try/except — um erro inesperado ao processar um compromisso (ex.: erro
+    # de storage ao registrar o lembrete) não pode impedir que os demais
+    # compromissos (e o loop de cancelamento) sejam processados na mesma
+    # execução do scheduler.
+    caminho_db = str(tmp_path / "teste.db")
+    conn = conectar(caminho_db)
+    salvar_perfil(conn, _perfil(), idoso_id="idosa-1")
+    salvar_compromisso(
+        conn,
+        Compromisso(
+            id="comp-falha", titulo="Exame", data_hora=datetime(2026, 11, 10, 14, 0),
+            local="Lab", tipo=TipoCompromisso.EXAME,
+        ),
+        idoso_id="idosa-1",
+    )
+    salvar_compromisso(
+        conn,
+        Compromisso(
+            id="comp-ok", titulo="Consulta", data_hora=datetime(2026, 11, 12, 10, 0),
+            local="Clínica", tipo=TipoCompromisso.CONSULTA,
+        ),
+        idoso_id="idosa-1",
+    )
+
+    class _DatetimeFixo:
+        @staticmethod
+        def now():
+            return datetime(2026, 11, 1, 9, 0)
+
+    monkeypatch.setattr("zela.api.scheduler.datetime", _DatetimeFixo)
+
+    registrar_original = __import__(
+        "zela.api.scheduler", fromlist=["registrar_lembrete_compromisso_enviado"]
+    ).registrar_lembrete_compromisso_enviado
+
+    def _registrar_com_falha(conn, compromisso_id, tipo, agora):
+        if compromisso_id == "comp-falha":
+            raise RuntimeError("falha simulada de storage")
+        return registrar_original(conn, compromisso_id, tipo, agora)
+
+    monkeypatch.setattr(
+        "zela.api.scheduler.registrar_lembrete_compromisso_enviado", _registrar_com_falha
+    )
+
+    waha_falso = _WahaFalso()
+    enviadas = verificar_e_enviar_lembretes_compromisso(caminho_db, "idosa-1", waha_falso)
+
+    # O compromisso "comp-ok" ainda foi processado e enviado normalmente,
+    # apesar da falha no processamento de "comp-falha".
+    assert any("Consulta" in texto for texto in enviadas)
+    telefones_notificados = {telefone for telefone, texto in waha_falso.enviados if "Consulta" in texto}
+    assert telefones_notificados == {"+5511911111111", "+5511987654321"}
 
 
 def test_verificar_e_enviar_lembretes_compromisso_envia_cancelamento_apos_remocao(tmp_path, monkeypatch):

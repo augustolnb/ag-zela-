@@ -78,9 +78,24 @@ def verificar_e_enviar_lembretes(caminho_db: str, id_idoso: str, waha_client) ->
 
 
 def _enviar_para_idoso_e_familia(waha_client, perfil: PerfilIdoso, texto: str) -> None:
-    waha_client.enviar_texto(perfil.lid_whatsapp or perfil.telefone, texto)
+    # Cada envio é isolado: se o envio para um destinatário falhar (número
+    # inválido, timeout do WAHA etc.), os demais ainda devem receber a
+    # mensagem. Sem este try/except por destinatário, uma falha num familiar
+    # propagava e abortava o registro do lembrete (ver
+    # `registrar_lembrete_compromisso_enviado` no chamador) — o que fazia o
+    # mesmo lembrete (inclusive o já entregue com sucesso ao idoso) ser
+    # reenviado para todo mundo, a cada tick do scheduler, para sempre.
+    try:
+        waha_client.enviar_texto(perfil.lid_whatsapp or perfil.telefone, texto)
+    except Exception:
+        logger.exception("Falha ao enviar lembrete de compromisso para o idoso %s", perfil.nome)
     for contato in perfil.contatos_familiares:
-        waha_client.enviar_texto(contato.telefone, texto)
+        try:
+            waha_client.enviar_texto(contato.telefone, texto)
+        except Exception:
+            logger.exception(
+                "Falha ao enviar lembrete de compromisso para o familiar %s", contato.nome
+            )
 
 
 def verificar_e_enviar_lembretes_compromisso(
@@ -95,18 +110,33 @@ def verificar_e_enviar_lembretes_compromisso(
     enviadas: list[str] = []
 
     for compromisso in listar_compromissos(conn, id_idoso):
-        tipos_ja_enviados = listar_tipos_lembrete_enviados(conn, compromisso.id)
-        for tipo in lembretes_compromisso_pendentes(compromisso, agora, tipos_ja_enviados):
-            texto = formatar_lembrete_compromisso(compromisso, tipo)
-            _enviar_para_idoso_e_familia(waha_client, perfil, texto)
-            registrar_lembrete_compromisso_enviado(conn, compromisso.id, tipo, agora)
-            enviadas.append(texto)
+        try:
+            tipos_ja_enviados = listar_tipos_lembrete_enviados(conn, compromisso.id)
+            for tipo in lembretes_compromisso_pendentes(compromisso, agora, tipos_ja_enviados):
+                texto = formatar_lembrete_compromisso(compromisso, tipo)
+                _enviar_para_idoso_e_familia(waha_client, perfil, texto)
+                registrar_lembrete_compromisso_enviado(conn, compromisso.id, tipo, agora)
+                enviadas.append(texto)
+        except Exception:
+            # Um compromisso com problema (dado inesperado, erro de storage
+            # etc.) não pode abortar o processamento dos demais compromissos
+            # nem do loop de cancelamento abaixo — mesmo racional do
+            # try/except por item já usado em
+            # `sincronizar_compromissos_google_agenda`.
+            logger.exception(
+                "Falha ao processar lembretes do compromisso %s", compromisso.id
+            )
 
     for compromisso in listar_compromissos_removidos_pendentes_cancelamento(conn, id_idoso):
-        texto = formatar_lembrete_compromisso(compromisso, "cancelamento")
-        _enviar_para_idoso_e_familia(waha_client, perfil, texto)
-        registrar_lembrete_compromisso_enviado(conn, compromisso.id, "cancelamento", agora)
-        enviadas.append(texto)
+        try:
+            texto = formatar_lembrete_compromisso(compromisso, "cancelamento")
+            _enviar_para_idoso_e_familia(waha_client, perfil, texto)
+            registrar_lembrete_compromisso_enviado(conn, compromisso.id, "cancelamento", agora)
+            enviadas.append(texto)
+        except Exception:
+            logger.exception(
+                "Falha ao processar cancelamento do compromisso %s", compromisso.id
+            )
 
     return enviadas
 
