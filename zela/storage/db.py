@@ -40,6 +40,14 @@ CREATE TABLE IF NOT EXISTS compromisso (
     tipo TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS lembrete_compromisso_enviado (
+    id INTEGER PRIMARY KEY,
+    compromisso_id TEXT NOT NULL,
+    tipo_lembrete TEXT NOT NULL,
+    enviado_em TEXT NOT NULL,
+    UNIQUE(compromisso_id, tipo_lembrete)
+);
+
 CREATE TABLE IF NOT EXISTS leitura_sensor (
     id INTEGER PRIMARY KEY,
     idoso_id TEXT NOT NULL,
@@ -76,6 +84,7 @@ def conectar(caminho_db: str = "zela.db") -> sqlite3.Connection:
     conn.executescript(ESQUEMA)
     _migrar_coluna_bula(conn)
     _migrar_coluna_lid_whatsapp(conn)
+    _migrar_colunas_compromisso(conn)
     return conn
 
 
@@ -91,3 +100,16 @@ def _migrar_coluna_lid_whatsapp(conn: sqlite3.Connection) -> None:
     if "lid_whatsapp" not in colunas:
         conn.execute("ALTER TABLE perfil_idoso ADD COLUMN lid_whatsapp TEXT")
         conn.commit()
+
+
+def _migrar_colunas_compromisso(conn: sqlite3.Connection) -> None:
+    colunas = {linha["name"] for linha in conn.execute("PRAGMA table_info(compromisso)")}
+    if "google_event_id" not in colunas:
+        conn.execute("ALTER TABLE compromisso ADD COLUMN google_event_id TEXT")
+    if "google_sync_pendente" not in colunas:
+        conn.execute(
+            "ALTER TABLE compromisso ADD COLUMN google_sync_pendente INTEGER NOT NULL DEFAULT 1"
+        )
+    if "removido" not in colunas:
+        conn.execute("ALTER TABLE compromisso ADD COLUMN removido INTEGER NOT NULL DEFAULT 0")
+    conn.commit()

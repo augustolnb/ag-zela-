@@ -15,6 +15,7 @@ from zela.api.webhook import montar_roteador
 from zela.embeddings.client import ClienteEmbeddingGemini
 from zela.embeddings.exemplos_referencia import EXEMPLOS_REFERENCIA
 from zela.embeddings.vetorial import RepositorioVetorial
+from zela.integrations.google_calendar_client import GoogleCalendarClient
 from zela.integrations.waha_client import WahaClient
 from zela.storage.db import conectar
 from zela.storage.monitoramento import salvar_leitura as salvar_leitura_sensor
@@ -40,8 +41,31 @@ WAHA_API_KEY = os.environ.get("ZELA_WAHA_API_KEY")
 # do ambiente do container) — sem isso, "" vira um token que nenhum cliente
 # jamais envia, bloqueando os 3 endpoints com 401 por padrão.
 TOKEN_INGESTAO = os.environ.get("ZELA_INGESTAO_TOKEN") or None
+# Mesmo racional do "or None" de TOKEN_INGESTAO acima: docker-compose define
+# essas 4 variáveis como string vazia quando ausentes do .env, em vez de
+# omiti-las do ambiente do container.
+GOOGLE_CALENDAR_CLIENT_ID = os.environ.get("ZELA_GOOGLE_CALENDAR_CLIENT_ID") or None
+GOOGLE_CALENDAR_CLIENT_SECRET = os.environ.get("ZELA_GOOGLE_CALENDAR_CLIENT_SECRET") or None
+GOOGLE_CALENDAR_REFRESH_TOKEN = os.environ.get("ZELA_GOOGLE_CALENDAR_REFRESH_TOKEN") or None
+GOOGLE_CALENDAR_CALENDAR_ID = os.environ.get("ZELA_GOOGLE_CALENDAR_CALENDAR_ID") or None
 
 waha_client = WahaClient(base_url=WAHA_BASE_URL, api_key=WAHA_API_KEY)
+if all(
+    [
+        GOOGLE_CALENDAR_CLIENT_ID,
+        GOOGLE_CALENDAR_CLIENT_SECRET,
+        GOOGLE_CALENDAR_REFRESH_TOKEN,
+        GOOGLE_CALENDAR_CALENDAR_ID,
+    ]
+):
+    google_calendar_client = GoogleCalendarClient(
+        client_id=GOOGLE_CALENDAR_CLIENT_ID,
+        client_secret=GOOGLE_CALENDAR_CLIENT_SECRET,
+        refresh_token=GOOGLE_CALENDAR_REFRESH_TOKEN,
+        calendar_id=GOOGLE_CALENDAR_CALENDAR_ID,
+    )
+else:
+    google_calendar_client = None
 cliente_embedding = ClienteEmbeddingGemini()
 repositorio_vetorial = RepositorioVetorial()
 _runner = obter_runner_zela()
@@ -103,7 +127,9 @@ async def ciclo_de_vida(app: FastAPI):
         reindexar_documentos(conectar(CAMINHO_DB), ID_IDOSO, repositorio_vetorial, cliente_embedding)
     except Exception:
         logger.exception("Falha ao reindexar documentos no boot da API")
-    agendador = iniciar_scheduler(CAMINHO_DB, ID_IDOSO, waha_client)
+    agendador = iniciar_scheduler(
+        CAMINHO_DB, ID_IDOSO, waha_client, google_calendar_client=google_calendar_client
+    )
     try:
         yield
     finally:

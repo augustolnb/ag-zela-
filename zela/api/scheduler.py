@@ -1,8 +1,13 @@
+import logging
 from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from zela.domain.comunicacao import formatar_lembrete
+from zela.domain.compromisso_lembretes import (
+    calcular_overrides_minutos_google,
+    lembretes_compromisso_pendentes,
+)
+from zela.domain.comunicacao import formatar_lembrete, formatar_lembrete_compromisso
 from zela.domain.rotina import JANELA_LEMBRETE
 from zela.models.alertas import Alerta, CanalAlerta, NivelAlerta
 from zela.models.monitoramento import EventoMonitoramento, StatusMonitoramento
@@ -12,7 +17,17 @@ from zela.storage.db import conectar
 from zela.storage.escalonamento import aplicar_escalonamento
 from zela.storage.monitoramento import MOTIVO_SEM_DADOS_PREFIXO, aplicar_classificacao
 from zela.storage.perfil import obter_perfil
-from zela.storage.rotina import aplicar_lembretes_pendentes
+from zela.storage.rotina import (
+    aplicar_lembretes_pendentes,
+    listar_compromissos,
+    listar_compromissos_pendentes_sync_google,
+    listar_compromissos_removidos_pendentes_cancelamento,
+    listar_tipos_lembrete_enviados,
+    marcar_google_sync_feito,
+    registrar_lembrete_compromisso_enviado,
+)
+
+logger = logging.getLogger(__name__)
 
 INTERVALO_MINUTOS = 5
 INTERVALO_MONITORAMENTO_MINUTOS = 15
@@ -59,6 +74,70 @@ def verificar_e_enviar_lembretes(caminho_db: str, id_idoso: str, waha_client) ->
         waha_client.enviar_texto(perfil.lid_whatsapp or perfil.telefone, texto)
         _lembretes_ja_enviados.add(chave)
         enviadas.append(texto)
+    return enviadas
+
+
+def _enviar_para_idoso_e_familia(waha_client, perfil: PerfilIdoso, texto: str) -> None:
+    # Cada envio é isolado: se o envio para um destinatário falhar (número
+    # inválido, timeout do WAHA etc.), os demais ainda devem receber a
+    # mensagem. Sem este try/except por destinatário, uma falha num familiar
+    # propagava e abortava o registro do lembrete (ver
+    # `registrar_lembrete_compromisso_enviado` no chamador) — o que fazia o
+    # mesmo lembrete (inclusive o já entregue com sucesso ao idoso) ser
+    # reenviado para todo mundo, a cada tick do scheduler, para sempre.
+    try:
+        waha_client.enviar_texto(perfil.lid_whatsapp or perfil.telefone, texto)
+    except Exception:
+        logger.exception("Falha ao enviar lembrete de compromisso para o idoso %s", perfil.nome)
+    for contato in perfil.contatos_familiares:
+        try:
+            waha_client.enviar_texto(contato.telefone, texto)
+        except Exception:
+            logger.exception(
+                "Falha ao enviar lembrete de compromisso para o familiar %s", contato.nome
+            )
+
+
+def verificar_e_enviar_lembretes_compromisso(
+    caminho_db: str, id_idoso: str, waha_client
+) -> list[str]:
+    conn = conectar(caminho_db)
+    perfil = obter_perfil(conn, id_idoso)
+    if perfil is None:
+        return []
+
+    agora = datetime.now()
+    enviadas: list[str] = []
+
+    for compromisso in listar_compromissos(conn, id_idoso):
+        try:
+            tipos_ja_enviados = listar_tipos_lembrete_enviados(conn, compromisso.id)
+            for tipo in lembretes_compromisso_pendentes(compromisso, agora, tipos_ja_enviados):
+                texto = formatar_lembrete_compromisso(compromisso, tipo)
+                _enviar_para_idoso_e_familia(waha_client, perfil, texto)
+                registrar_lembrete_compromisso_enviado(conn, compromisso.id, tipo, agora)
+                enviadas.append(texto)
+        except Exception:
+            # Um compromisso com problema (dado inesperado, erro de storage
+            # etc.) não pode abortar o processamento dos demais compromissos
+            # nem do loop de cancelamento abaixo — mesmo racional do
+            # try/except por item já usado em
+            # `sincronizar_compromissos_google_agenda`.
+            logger.exception(
+                "Falha ao processar lembretes do compromisso %s", compromisso.id
+            )
+
+    for compromisso in listar_compromissos_removidos_pendentes_cancelamento(conn, id_idoso):
+        try:
+            texto = formatar_lembrete_compromisso(compromisso, "cancelamento")
+            _enviar_para_idoso_e_familia(waha_client, perfil, texto)
+            registrar_lembrete_compromisso_enviado(conn, compromisso.id, "cancelamento", agora)
+            enviadas.append(texto)
+        except Exception:
+            logger.exception(
+                "Falha ao processar cancelamento do compromisso %s", compromisso.id
+            )
+
     return enviadas
 
 
@@ -118,7 +197,48 @@ def verificar_e_escalonar_riscos(caminho_db: str, id_idoso: str, waha_client) ->
     return alertas
 
 
-def iniciar_scheduler(caminho_db: str, id_idoso: str, waha_client) -> BackgroundScheduler:
+def sincronizar_compromissos_google_agenda(
+    caminho_db: str, id_idoso: str, google_calendar_client
+) -> list[str]:
+    conn = conectar(caminho_db)
+    agora = datetime.now()
+    sincronizados = []
+    for pendente in listar_compromissos_pendentes_sync_google(conn, id_idoso):
+        try:
+            if pendente.removido:
+                if pendente.google_event_id:
+                    google_calendar_client.remover_evento(pendente.google_event_id)
+                marcar_google_sync_feito(conn, pendente.compromisso.id)
+            else:
+                minutos = calcular_overrides_minutos_google(pendente.compromisso, agora)
+                if pendente.google_event_id is None:
+                    event_id = google_calendar_client.criar_evento(
+                        pendente.compromisso.titulo,
+                        pendente.compromisso.local,
+                        pendente.compromisso.data_hora,
+                        minutos,
+                    )
+                    marcar_google_sync_feito(conn, pendente.compromisso.id, google_event_id=event_id)
+                else:
+                    google_calendar_client.atualizar_evento(
+                        pendente.google_event_id,
+                        pendente.compromisso.titulo,
+                        pendente.compromisso.local,
+                        pendente.compromisso.data_hora,
+                        minutos,
+                    )
+                    marcar_google_sync_feito(conn, pendente.compromisso.id)
+            sincronizados.append(pendente.compromisso.id)
+        except Exception:
+            logger.exception(
+                "Falha ao sincronizar compromisso %s com o Google Agenda", pendente.compromisso.id
+            )
+    return sincronizados
+
+
+def iniciar_scheduler(
+    caminho_db: str, id_idoso: str, waha_client, google_calendar_client=None
+) -> BackgroundScheduler:
     agendador = BackgroundScheduler()
     agendador.add_job(
         verificar_e_enviar_lembretes,
@@ -128,11 +248,26 @@ def iniciar_scheduler(caminho_db: str, id_idoso: str, waha_client) -> Background
         id="verificar_lembretes",
     )
     agendador.add_job(
+        verificar_e_enviar_lembretes_compromisso,
+        "interval",
+        minutes=INTERVALO_MINUTOS,
+        args=[caminho_db, id_idoso, waha_client],
+        id="verificar_lembretes_compromisso",
+    )
+    agendador.add_job(
         verificar_e_escalonar_riscos,
         "interval",
         minutes=INTERVALO_MONITORAMENTO_MINUTOS,
         args=[caminho_db, id_idoso, waha_client],
         id="verificar_riscos",
     )
+    if google_calendar_client is not None:
+        agendador.add_job(
+            sincronizar_compromissos_google_agenda,
+            "interval",
+            minutes=INTERVALO_MINUTOS,
+            args=[caminho_db, id_idoso, google_calendar_client],
+            id="sincronizar_compromissos_google_agenda",
+        )
     agendador.start()
     return agendador

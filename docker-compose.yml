@@ -34,6 +34,11 @@ services:
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
     environment:
+      # Sem isso, o relógio do container (base Debian) fica em UTC, mas
+      # `compromisso.data_hora` é horário local de São Paulo digitado no
+      # painel — todo lembrete do scheduler.py sairia ~3h adiantado. Valor
+      # fixo (não é segredo, não precisa vir do .env).
+      - TZ=America/Sao_Paulo
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       # DEEPSEEK_API_KEY/ZELA_LLM_PROVEDOR: só necessários se
       # ZELA_LLM_PROVEDOR=deepseek (ver zela/agents/orchestrator.py). O
@@ -45,6 +50,10 @@ services:
       - ZELA_WAHA_BASE_URL=http://waha:3000
       - ZELA_INGESTAO_TOKEN=${ZELA_INGESTAO_TOKEN}
       - ZELA_DB_PATH=/app/data/zela.db
+      - ZELA_GOOGLE_CALENDAR_CLIENT_ID=${ZELA_GOOGLE_CALENDAR_CLIENT_ID}
+      - ZELA_GOOGLE_CALENDAR_CLIENT_SECRET=${ZELA_GOOGLE_CALENDAR_CLIENT_SECRET}
+      - ZELA_GOOGLE_CALENDAR_REFRESH_TOKEN=${ZELA_GOOGLE_CALENDAR_REFRESH_TOKEN}
+      - ZELA_GOOGLE_CALENDAR_CALENDAR_ID=${ZELA_GOOGLE_CALENDAR_CALENDAR_ID}
     volumes:
       - zela_data:/app/data
       - chroma_data:/app/chroma_db
@@ -59,6 +68,9 @@ services:
     ports:
       - "127.0.0.1:${STREAMLIT_PORT:-8501}:8501"
     environment:
+      # Mesmo racional do TZ do serviço "backend" acima — o painel exibe e
+      # recebe horários locais de São Paulo.
+      - TZ=America/Sao_Paulo
       - STREAMLIT_SENHA=${STREAMLIT_SENHA}
       - ZELA_DB_PATH=/app/data/zela.db
     volumes:
