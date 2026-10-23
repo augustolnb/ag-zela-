@@ -1,7 +1,9 @@
 import json
 import sqlite3
+from dataclasses import dataclass
 from datetime import datetime, time
 
+from zela.domain.compromisso_lembretes import calcular_horarios_lembrete_compromisso
 from zela.domain.rotina import calcular_lembretes_pendentes
 from zela.domain.rotina import registrar_confirmacao as registrar_confirmacao_dominio
 from zela.models.rotina import (
@@ -130,13 +132,14 @@ def aplicar_confirmacao(
 def salvar_compromisso(conn: sqlite3.Connection, compromisso: Compromisso, idoso_id: str) -> None:
     conn.execute(
         """
-        INSERT INTO compromisso (id, idoso_id, titulo, data_hora, local, tipo)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO compromisso (id, idoso_id, titulo, data_hora, local, tipo, google_sync_pendente)
+        VALUES (?, ?, ?, ?, ?, ?, 1)
         ON CONFLICT(id) DO UPDATE SET
             titulo = excluded.titulo,
             data_hora = excluded.data_hora,
             local = excluded.local,
-            tipo = excluded.tipo
+            tipo = excluded.tipo,
+            google_sync_pendente = 1
         """,
         (
             compromisso.id,
@@ -147,6 +150,13 @@ def salvar_compromisso(conn: sqlite3.Connection, compromisso: Compromisso, idoso
             compromisso.tipo.value,
         ),
     )
+    agora = datetime.now()
+    for tipo, horario_alvo in calcular_horarios_lembrete_compromisso(compromisso).items():
+        if horario_alvo > agora:
+            conn.execute(
+                "DELETE FROM lembrete_compromisso_enviado WHERE compromisso_id = ? AND tipo_lembrete = ?",
+                (compromisso.id, tipo),
+            )
     conn.commit()
 
 
@@ -167,6 +177,89 @@ def _linha_para_compromisso(linha: sqlite3.Row) -> Compromisso:
 
 def listar_compromissos(conn: sqlite3.Connection, idoso_id: str) -> list[Compromisso]:
     linhas = conn.execute(
-        "SELECT * FROM compromisso WHERE idoso_id = ? ORDER BY data_hora", (idoso_id,)
+        "SELECT * FROM compromisso WHERE idoso_id = ? AND removido = 0 ORDER BY data_hora",
+        (idoso_id,),
     ).fetchall()
     return [_linha_para_compromisso(linha) for linha in linhas]
+
+
+def remover_compromisso(conn: sqlite3.Connection, compromisso_id: str, idoso_id: str) -> None:
+    conn.execute(
+        "UPDATE compromisso SET removido = 1, google_sync_pendente = 1 WHERE id = ? AND idoso_id = ?",
+        (compromisso_id, idoso_id),
+    )
+    conn.commit()
+
+
+def listar_tipos_lembrete_enviados(conn: sqlite3.Connection, compromisso_id: str) -> set[str]:
+    linhas = conn.execute(
+        "SELECT tipo_lembrete FROM lembrete_compromisso_enviado WHERE compromisso_id = ?",
+        (compromisso_id,),
+    ).fetchall()
+    return {linha["tipo_lembrete"] for linha in linhas}
+
+
+def registrar_lembrete_compromisso_enviado(
+    conn: sqlite3.Connection, compromisso_id: str, tipo_lembrete: str, enviado_em: datetime
+) -> None:
+    conn.execute(
+        "INSERT OR IGNORE INTO lembrete_compromisso_enviado (compromisso_id, tipo_lembrete, enviado_em) "
+        "VALUES (?, ?, ?)",
+        (compromisso_id, tipo_lembrete, enviado_em.isoformat()),
+    )
+    conn.commit()
+
+
+def listar_compromissos_removidos_pendentes_cancelamento(
+    conn: sqlite3.Connection, idoso_id: str
+) -> list[Compromisso]:
+    linhas = conn.execute(
+        """
+        SELECT c.* FROM compromisso c
+        WHERE c.idoso_id = ? AND c.removido = 1
+        AND NOT EXISTS (
+            SELECT 1 FROM lembrete_compromisso_enviado l
+            WHERE l.compromisso_id = c.id AND l.tipo_lembrete = 'cancelamento'
+        )
+        """,
+        (idoso_id,),
+    ).fetchall()
+    return [_linha_para_compromisso(linha) for linha in linhas]
+
+
+@dataclass
+class CompromissoPendenteSync:
+    compromisso: Compromisso
+    google_event_id: str | None
+    removido: bool
+
+
+def listar_compromissos_pendentes_sync_google(
+    conn: sqlite3.Connection, idoso_id: str
+) -> list[CompromissoPendenteSync]:
+    linhas = conn.execute(
+        "SELECT * FROM compromisso WHERE idoso_id = ? AND google_sync_pendente = 1", (idoso_id,)
+    ).fetchall()
+    return [
+        CompromissoPendenteSync(
+            compromisso=_linha_para_compromisso(linha),
+            google_event_id=linha["google_event_id"],
+            removido=bool(linha["removido"]),
+        )
+        for linha in linhas
+    ]
+
+
+def marcar_google_sync_feito(
+    conn: sqlite3.Connection, compromisso_id: str, google_event_id: str | None = None
+) -> None:
+    if google_event_id is not None:
+        conn.execute(
+            "UPDATE compromisso SET google_sync_pendente = 0, google_event_id = ? WHERE id = ?",
+            (google_event_id, compromisso_id),
+        )
+    else:
+        conn.execute(
+            "UPDATE compromisso SET google_sync_pendente = 0 WHERE id = ?", (compromisso_id,)
+        )
+    conn.commit()
