@@ -1,4 +1,5 @@
 import httpx
+import pytest
 
 from zela.integrations.google_calendar_client import GoogleCalendarClient
 
@@ -49,6 +50,7 @@ def test_criar_evento_busca_token_e_envia_payload_correto(monkeypatch):
     assert payload["summary"] == "Consulta"
     assert payload["location"] == "Clínica X"
     assert payload["start"] == {"dateTime": "2026-11-01T09:00:00", "timeZone": "America/Sao_Paulo"}
+    assert payload["end"] == {"dateTime": "2026-11-01T10:00:00", "timeZone": "America/Sao_Paulo"}
     assert payload["reminders"] == {
         "useDefault": False,
         "overrides": [{"method": "popup", "minutes": 1440}, {"method": "popup", "minutes": 60}],
@@ -70,18 +72,41 @@ def test_atualizar_evento_chama_put_no_id_correto(monkeypatch):
     cliente = GoogleCalendarClient(client_id="cid", client_secret="csecret", refresh_token="rtok", calendar_id="fam@gmail.com")
     cliente.atualizar_evento("evt-1", titulo="Consulta", local="Clínica X", data_hora=datetime(2026, 11, 1, 9, 0), overrides_minutos=[60])
 
-    url, _, headers = chamadas_put[0]
+    url, payload, headers = chamadas_put[0]
     assert url == "https://www.googleapis.com/calendar/v3/calendars/fam@gmail.com/events/evt-1"
     assert headers == {"Authorization": "Bearer tok-123"}
+    assert payload["summary"] == "Consulta"
+    assert payload["location"] == "Clínica X"
+    assert payload["reminders"]["overrides"] == [{"method": "popup", "minutes": 60}]
 
 
 def test_remover_evento_tolera_404(monkeypatch):
+    chamadas_delete = []
     monkeypatch.setattr(httpx, "post", lambda url, **kw: _RespostaFalsa({"access_token": "tok-123"}))
 
     def delete_falso(url, headers=None, timeout=None):
+        chamadas_delete.append((url, headers))
         return _RespostaFalsa({}, status_code=404)
 
     monkeypatch.setattr(httpx, "delete", delete_falso)
 
     cliente = GoogleCalendarClient(client_id="cid", client_secret="csecret", refresh_token="rtok", calendar_id="fam@gmail.com")
     cliente.remover_evento("evt-ja-sumiu")  # não deve levantar
+
+    url, headers = chamadas_delete[0]
+    assert url == "https://www.googleapis.com/calendar/v3/calendars/fam@gmail.com/events/evt-ja-sumiu"
+    assert headers == {"Authorization": "Bearer tok-123"}
+
+
+def test_remover_evento_levanta_em_outros_erros(monkeypatch):
+    monkeypatch.setattr(httpx, "post", lambda url, **kw: _RespostaFalsa({"access_token": "tok-123"}))
+
+    def delete_falso(url, headers=None, timeout=None):
+        return _RespostaFalsa({}, status_code=500)
+
+    monkeypatch.setattr(httpx, "delete", delete_falso)
+
+    cliente = GoogleCalendarClient(client_id="cid", client_secret="csecret", refresh_token="rtok", calendar_id="fam@gmail.com")
+
+    with pytest.raises(httpx.HTTPStatusError):
+        cliente.remover_evento("evt-1")
