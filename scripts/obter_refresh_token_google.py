@@ -37,12 +37,28 @@ def _receber_codigo(estado_esperado: str, resultado: dict) -> http.server.HTTPSe
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
             parametros = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-            if parametros.get("state", [""])[0] != estado_esperado:
-                resultado["erro"] = "state inválido (possível interceptação); tente de novo"
-            elif "error" in parametros:
-                resultado["erro"] = f"autorização negada: {parametros['error'][0]}"
-            else:
-                resultado["code"] = parametros.get("code", [""])[0]
+
+            # Ignora qualquer requisição que não seja o callback real do OAuth
+            # (ex.: o navegador pedindo /favicon.ico automaticamente depois do
+            # redirect). Só tratamos como callback uma requisição que
+            # realmente tenha "code" ou "error" na query string.
+            if "code" not in parametros and "error" not in parametros:
+                self.send_response(404)
+                self.end_headers()
+                return
+
+            # Só registra o primeiro callback genuíno. Requisições
+            # subsequentes (ex.: uma segunda chamada perdida chegando antes
+            # do servidor terminar de desligar) são ignoradas, para não
+            # sobrescrever um resultado de sucesso já armazenado com um erro
+            # espúrio.
+            if not resultado:
+                if parametros.get("state", [""])[0] != estado_esperado:
+                    resultado["erro"] = "state inválido (possível interceptação); tente de novo"
+                elif "error" in parametros:
+                    resultado["erro"] = f"autorização negada: {parametros['error'][0]}"
+                else:
+                    resultado["code"] = parametros.get("code", [""])[0]
 
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
