@@ -519,8 +519,19 @@ clientes). Esta configuração é manual e feita uma única vez na instalação.
 1. **Crie a conta Google dedicada** (ex.: `familia-sobrenome.zela@gmail.com`).
 2. **Crie o projeto no Google Cloud e a credencial OAuth:** crie um projeto,
    ative a *Google Calendar API* e crie uma credencial OAuth do tipo
-   **Desktop app**. Não é preciso verificação nem publicar o app — basta
-   adicionar a conta dedicada como *test user* na tela de consentimento.
+   **Desktop app**. Na tela de consentimento OAuth, publique o app
+   mudando o status de publicação para **"Em produção"** ("In production")
+   — não é preciso passar pela verificação do Google para isso, mas a tela
+   de consentimento vai exibir um aviso de "app não verificado"; para uma
+   única conta dedicada da família, está tudo bem clicar em "Avançado" →
+   "Acessar [app] (não seguro)" para seguir adiante. **Não deixe o app em
+   "Testes"**: nesse modo o Google invalida o `refresh_token` depois de
+   cerca de 7 dias, o que quebra a sincronização da agenda silenciosamente
+   uma semana depois da instalação, sem erro visível até os lembretes
+   pararem de aparecer. Se isso acontecer (ou se você preferir não publicar
+   o app), o sintoma é a sincronização parar sem mensagem de erro clara; a
+   recuperação é publicar o app em produção (recomendado) ou, no mínimo,
+   rodar o script do passo 3 de novo para gerar um `refresh_token` novo.
 3. **Obtenha o `refresh_token`:** na sua máquina local, rode uma vez
    ```bash
    python scripts/obter_refresh_token_google.py
