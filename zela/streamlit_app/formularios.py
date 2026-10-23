@@ -7,6 +7,7 @@ from zela.models.rotina import Compromisso, Dosagem, Medicamento, TipoCompromiss
 from zela.storage.rotina import (
     listar_compromissos,
     listar_medicamentos,
+    remover_compromisso,
     salvar_compromisso,
     salvar_medicamento,
 )
@@ -112,6 +113,13 @@ def formulario_compromisso(conn, idoso_id: str) -> None:
         indice_padrao = tipos.index(compromisso_existente.tipo) if compromisso_existente else 0
         tipo = st.selectbox("Tipo", tipos, format_func=lambda t: t.value, index=indice_padrao)
         enviado = st.form_submit_button("Salvar")
+
+    if compromisso_existente is not None and st.button("Remover"):
+        remover_compromisso(conn, compromisso_existente.id, idoso_id)
+        st.session_state["mensagem_sucesso_compromisso"] = (
+            f"Compromisso '{compromisso_existente.titulo}' removido."
+        )
+        st.rerun()
 
     if not enviado:
         return
