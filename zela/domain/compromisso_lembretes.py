@@ -22,7 +22,21 @@ def calcular_horarios_lembrete_compromisso(compromisso: Compromisso) -> dict[str
         TipoLembreteCompromisso.MANHA.value: datetime.combine(data_hora.date(), HORARIO_LEMBRETE_MANHA),
         TipoLembreteCompromisso.H1.value: data_hora - timedelta(hours=1),
     }
-    return {tipo: horario for tipo, horario in candidatos.items() if horario < data_hora}
+    horarios = {tipo: horario for tipo, horario in candidatos.items() if horario < data_hora}
+
+    # Quando o compromisso é logo depois das 8h (ex.: 09:00), o alvo fixo da
+    # "manha" (08:00) e o alvo do "1h antes" caem no mesmo instante (ou bem
+    # próximo, dentro da JANELA_LEMBRETE) — sem este descarte, os dois
+    # disparariam juntos no mesmo tick do scheduler, com mensagens
+    # diferentes, e o Google Agenda receberia um override de minutos
+    # duplicado. Mantemos "1h", que é mais preciso/mais próximo do horário
+    # real do compromisso.
+    manha = horarios.get(TipoLembreteCompromisso.MANHA.value)
+    h1 = horarios.get(TipoLembreteCompromisso.H1.value)
+    if manha is not None and h1 is not None and abs(manha - h1) <= JANELA_LEMBRETE:
+        del horarios[TipoLembreteCompromisso.MANHA.value]
+
+    return horarios
 
 
 def lembretes_compromisso_pendentes(
@@ -30,6 +44,14 @@ def lembretes_compromisso_pendentes(
     agora: datetime,
     tipos_ja_enviados: set[str],
 ) -> list[str]:
+    # Um compromisso cujo horário já passou nunca deve gerar nenhum lembrete
+    # — nem mesmo "instantaneo". Sem esta guarda, o primeiro tick do
+    # scheduler contra um banco de produção existente (onde a tabela
+    # `lembrete_compromisso_enviado` começa vazia) dispararia "instantaneo"
+    # para TODO compromisso já registrado, por mais antigo que seja.
+    if compromisso.data_hora <= agora:
+        return []
+
     pendentes: list[str] = []
     if TipoLembreteCompromisso.INSTANTANEO.value not in tipos_ja_enviados:
         pendentes.append(TipoLembreteCompromisso.INSTANTANEO.value)
