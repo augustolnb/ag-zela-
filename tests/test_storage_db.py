@@ -13,6 +13,7 @@ def test_conectar_cria_todas_as_tabelas():
         "leitura_sensor",
         "alerta",
         "estado_escalonamento",
+        "lembrete_compromisso_enviado",
     }
 
 
@@ -73,3 +74,29 @@ def test_conectar_migra_coluna_bula_em_banco_com_schema_antigo(tmp_path):
 
     colunas = {linha["name"] for linha in conn.execute("PRAGMA table_info(medicamento)")}
     assert "bula" in colunas
+
+
+def test_conectar_migra_colunas_de_sync_em_banco_com_schema_antigo(tmp_path):
+    import sqlite3
+
+    caminho = str(tmp_path / "banco_antigo_compromisso.db")
+    conn_antiga = sqlite3.connect(caminho)
+    conn_antiga.execute(
+        """
+        CREATE TABLE compromisso (
+            id TEXT PRIMARY KEY,
+            idoso_id TEXT NOT NULL,
+            titulo TEXT NOT NULL,
+            data_hora TEXT NOT NULL,
+            local TEXT NOT NULL,
+            tipo TEXT NOT NULL
+        )
+        """
+    )
+    conn_antiga.commit()
+    conn_antiga.close()
+
+    conn = conectar(caminho)
+
+    colunas = {linha["name"] for linha in conn.execute("PRAGMA table_info(compromisso)")}
+    assert {"google_event_id", "google_sync_pendente", "removido"} <= colunas
