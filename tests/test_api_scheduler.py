@@ -2,20 +2,22 @@ from datetime import date, datetime, time, timedelta
 
 from zela.api.scheduler import (
     despachar_alertas,
+    iniciar_scheduler,
     verificar_e_enviar_lembretes,
+    verificar_e_enviar_lembretes_compromisso,
     verificar_e_escalonar_riscos,
 )
 from zela.domain.emergencia import EstadoEscalonamento, EstagioEscalonamento
 from zela.models.alertas import Alerta, CanalAlerta, NivelAlerta
 from zela.models.monitoramento import FonteSensor, LeituraSensor, TipoLeitura
 from zela.models.perfil import ContatoFamiliar, PerfilIdoso
-from zela.models.rotina import Dosagem, Medicamento
+from zela.models.rotina import Compromisso, Dosagem, Medicamento, TipoCompromisso
 from zela.storage.alertas import listar_alertas
 from zela.storage.db import conectar
 from zela.storage.escalonamento import obter_estado, salvar_estado
 from zela.storage.monitoramento import salvar_leitura
 from zela.storage.perfil import salvar_perfil
-from zela.storage.rotina import salvar_medicamento
+from zela.storage.rotina import remover_compromisso, salvar_compromisso, salvar_medicamento
 
 
 class _WahaFalso:
@@ -328,3 +330,85 @@ def test_despachar_alertas_nao_envia_alerta_simulado():
 
     assert waha_falso.enviados == []
     assert len(listar_alertas(conn, "idosa-1")) == 1
+
+
+def test_verificar_e_enviar_lembretes_compromisso_envia_para_idoso_e_familiares(tmp_path, monkeypatch):
+    caminho_db = str(tmp_path / "teste.db")
+    conn = conectar(caminho_db)
+    salvar_perfil(conn, _perfil(), idoso_id="idosa-1")
+    salvar_compromisso(
+        conn,
+        Compromisso(id="comp-1", titulo="Exame", data_hora=datetime(2026, 11, 10, 14, 0), local="Lab", tipo=TipoCompromisso.EXAME),
+        idoso_id="idosa-1",
+    )
+
+    class _DatetimeFixo:
+        @staticmethod
+        def now():
+            return datetime(2026, 11, 1, 9, 0)
+
+    monkeypatch.setattr("zela.api.scheduler.datetime", _DatetimeFixo)
+
+    waha_falso = _WahaFalso()
+    enviadas = verificar_e_enviar_lembretes_compromisso(caminho_db, "idosa-1", waha_falso)
+
+    assert len(enviadas) == 1
+    telefones_notificados = {telefone for telefone, _ in waha_falso.enviados}
+    assert telefones_notificados == {"+5511911111111", "+5511987654321"}
+
+
+def test_verificar_e_enviar_lembretes_compromisso_nao_repete_instantaneo(tmp_path, monkeypatch):
+    caminho_db = str(tmp_path / "teste.db")
+    conn = conectar(caminho_db)
+    salvar_perfil(conn, _perfil(), idoso_id="idosa-1")
+    salvar_compromisso(
+        conn,
+        Compromisso(id="comp-1", titulo="Exame", data_hora=datetime(2026, 11, 10, 14, 0), local="Lab", tipo=TipoCompromisso.EXAME),
+        idoso_id="idosa-1",
+    )
+
+    class _DatetimeFixo:
+        @staticmethod
+        def now():
+            return datetime(2026, 11, 1, 9, 0)
+
+    monkeypatch.setattr("zela.api.scheduler.datetime", _DatetimeFixo)
+
+    waha_falso = _WahaFalso()
+    verificar_e_enviar_lembretes_compromisso(caminho_db, "idosa-1", waha_falso)
+    segunda_chamada = verificar_e_enviar_lembretes_compromisso(caminho_db, "idosa-1", waha_falso)
+
+    assert segunda_chamada == []
+
+
+def test_verificar_e_enviar_lembretes_compromisso_envia_cancelamento_apos_remocao(tmp_path, monkeypatch):
+    caminho_db = str(tmp_path / "teste.db")
+    conn = conectar(caminho_db)
+    salvar_perfil(conn, _perfil(), idoso_id="idosa-1")
+    salvar_compromisso(
+        conn,
+        Compromisso(id="comp-1", titulo="Exame", data_hora=datetime(2026, 11, 10, 14, 0), local="Lab", tipo=TipoCompromisso.EXAME),
+        idoso_id="idosa-1",
+    )
+    remover_compromisso(conn, "comp-1", idoso_id="idosa-1")
+
+    class _DatetimeFixo:
+        @staticmethod
+        def now():
+            return datetime(2026, 11, 1, 9, 0)
+
+    monkeypatch.setattr("zela.api.scheduler.datetime", _DatetimeFixo)
+
+    waha_falso = _WahaFalso()
+    enviadas = verificar_e_enviar_lembretes_compromisso(caminho_db, "idosa-1", waha_falso)
+
+    assert any("cancelado" in texto.lower() for texto in enviadas)
+
+
+def test_iniciar_scheduler_registra_job_de_lembretes_compromisso(tmp_path):
+    caminho_db = str(tmp_path / "teste.db")
+    conectar(caminho_db)
+    agendador = iniciar_scheduler(caminho_db, "idosa-1", _WahaFalso())
+    ids_dos_jobs = {job.id for job in agendador.get_jobs()}
+    assert "verificar_lembretes_compromisso" in ids_dos_jobs
+    agendador.shutdown()

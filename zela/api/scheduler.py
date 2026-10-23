@@ -2,7 +2,8 @@ from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from zela.domain.comunicacao import formatar_lembrete
+from zela.domain.compromisso_lembretes import lembretes_compromisso_pendentes
+from zela.domain.comunicacao import formatar_lembrete, formatar_lembrete_compromisso
 from zela.domain.rotina import JANELA_LEMBRETE
 from zela.models.alertas import Alerta, CanalAlerta, NivelAlerta
 from zela.models.monitoramento import EventoMonitoramento, StatusMonitoramento
@@ -12,7 +13,13 @@ from zela.storage.db import conectar
 from zela.storage.escalonamento import aplicar_escalonamento
 from zela.storage.monitoramento import MOTIVO_SEM_DADOS_PREFIXO, aplicar_classificacao
 from zela.storage.perfil import obter_perfil
-from zela.storage.rotina import aplicar_lembretes_pendentes
+from zela.storage.rotina import (
+    aplicar_lembretes_pendentes,
+    listar_compromissos,
+    listar_compromissos_removidos_pendentes_cancelamento,
+    listar_tipos_lembrete_enviados,
+    registrar_lembrete_compromisso_enviado,
+)
 
 INTERVALO_MINUTOS = 5
 INTERVALO_MONITORAMENTO_MINUTOS = 15
@@ -59,6 +66,40 @@ def verificar_e_enviar_lembretes(caminho_db: str, id_idoso: str, waha_client) ->
         waha_client.enviar_texto(perfil.lid_whatsapp or perfil.telefone, texto)
         _lembretes_ja_enviados.add(chave)
         enviadas.append(texto)
+    return enviadas
+
+
+def _enviar_para_idoso_e_familia(waha_client, perfil: PerfilIdoso, texto: str) -> None:
+    waha_client.enviar_texto(perfil.lid_whatsapp or perfil.telefone, texto)
+    for contato in perfil.contatos_familiares:
+        waha_client.enviar_texto(contato.telefone, texto)
+
+
+def verificar_e_enviar_lembretes_compromisso(
+    caminho_db: str, id_idoso: str, waha_client
+) -> list[str]:
+    conn = conectar(caminho_db)
+    perfil = obter_perfil(conn, id_idoso)
+    if perfil is None:
+        return []
+
+    agora = datetime.now()
+    enviadas: list[str] = []
+
+    for compromisso in listar_compromissos(conn, id_idoso):
+        tipos_ja_enviados = listar_tipos_lembrete_enviados(conn, compromisso.id)
+        for tipo in lembretes_compromisso_pendentes(compromisso, agora, tipos_ja_enviados):
+            texto = formatar_lembrete_compromisso(compromisso, tipo)
+            _enviar_para_idoso_e_familia(waha_client, perfil, texto)
+            registrar_lembrete_compromisso_enviado(conn, compromisso.id, tipo, agora)
+            enviadas.append(texto)
+
+    for compromisso in listar_compromissos_removidos_pendentes_cancelamento(conn, id_idoso):
+        texto = formatar_lembrete_compromisso(compromisso, "cancelamento")
+        _enviar_para_idoso_e_familia(waha_client, perfil, texto)
+        registrar_lembrete_compromisso_enviado(conn, compromisso.id, "cancelamento", agora)
+        enviadas.append(texto)
+
     return enviadas
 
 
@@ -126,6 +167,13 @@ def iniciar_scheduler(caminho_db: str, id_idoso: str, waha_client) -> Background
         minutes=INTERVALO_MINUTOS,
         args=[caminho_db, id_idoso, waha_client],
         id="verificar_lembretes",
+    )
+    agendador.add_job(
+        verificar_e_enviar_lembretes_compromisso,
+        "interval",
+        minutes=INTERVALO_MINUTOS,
+        args=[caminho_db, id_idoso, waha_client],
+        id="verificar_lembretes_compromisso",
     )
     agendador.add_job(
         verificar_e_escalonar_riscos,
