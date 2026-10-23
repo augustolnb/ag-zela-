@@ -1,8 +1,12 @@
+import logging
 from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from zela.domain.compromisso_lembretes import lembretes_compromisso_pendentes
+from zela.domain.compromisso_lembretes import (
+    calcular_overrides_minutos_google,
+    lembretes_compromisso_pendentes,
+)
 from zela.domain.comunicacao import formatar_lembrete, formatar_lembrete_compromisso
 from zela.domain.rotina import JANELA_LEMBRETE
 from zela.models.alertas import Alerta, CanalAlerta, NivelAlerta
@@ -16,10 +20,14 @@ from zela.storage.perfil import obter_perfil
 from zela.storage.rotina import (
     aplicar_lembretes_pendentes,
     listar_compromissos,
+    listar_compromissos_pendentes_sync_google,
     listar_compromissos_removidos_pendentes_cancelamento,
     listar_tipos_lembrete_enviados,
+    marcar_google_sync_feito,
     registrar_lembrete_compromisso_enviado,
 )
+
+logger = logging.getLogger(__name__)
 
 INTERVALO_MINUTOS = 5
 INTERVALO_MONITORAMENTO_MINUTOS = 15
@@ -159,7 +167,48 @@ def verificar_e_escalonar_riscos(caminho_db: str, id_idoso: str, waha_client) ->
     return alertas
 
 
-def iniciar_scheduler(caminho_db: str, id_idoso: str, waha_client) -> BackgroundScheduler:
+def sincronizar_compromissos_google_agenda(
+    caminho_db: str, id_idoso: str, google_calendar_client
+) -> list[str]:
+    conn = conectar(caminho_db)
+    agora = datetime.now()
+    sincronizados = []
+    for pendente in listar_compromissos_pendentes_sync_google(conn, id_idoso):
+        try:
+            if pendente.removido:
+                if pendente.google_event_id:
+                    google_calendar_client.remover_evento(pendente.google_event_id)
+                marcar_google_sync_feito(conn, pendente.compromisso.id)
+            else:
+                minutos = calcular_overrides_minutos_google(pendente.compromisso, agora)
+                if pendente.google_event_id is None:
+                    event_id = google_calendar_client.criar_evento(
+                        pendente.compromisso.titulo,
+                        pendente.compromisso.local,
+                        pendente.compromisso.data_hora,
+                        minutos,
+                    )
+                    marcar_google_sync_feito(conn, pendente.compromisso.id, google_event_id=event_id)
+                else:
+                    google_calendar_client.atualizar_evento(
+                        pendente.google_event_id,
+                        pendente.compromisso.titulo,
+                        pendente.compromisso.local,
+                        pendente.compromisso.data_hora,
+                        minutos,
+                    )
+                    marcar_google_sync_feito(conn, pendente.compromisso.id)
+            sincronizados.append(pendente.compromisso.id)
+        except Exception:
+            logger.exception(
+                "Falha ao sincronizar compromisso %s com o Google Agenda", pendente.compromisso.id
+            )
+    return sincronizados
+
+
+def iniciar_scheduler(
+    caminho_db: str, id_idoso: str, waha_client, google_calendar_client=None
+) -> BackgroundScheduler:
     agendador = BackgroundScheduler()
     agendador.add_job(
         verificar_e_enviar_lembretes,
@@ -182,5 +231,13 @@ def iniciar_scheduler(caminho_db: str, id_idoso: str, waha_client) -> Background
         args=[caminho_db, id_idoso, waha_client],
         id="verificar_riscos",
     )
+    if google_calendar_client is not None:
+        agendador.add_job(
+            sincronizar_compromissos_google_agenda,
+            "interval",
+            minutes=INTERVALO_MINUTOS,
+            args=[caminho_db, id_idoso, google_calendar_client],
+            id="sincronizar_compromissos_google_agenda",
+        )
     agendador.start()
     return agendador

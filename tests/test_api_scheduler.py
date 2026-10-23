@@ -3,6 +3,7 @@ from datetime import date, datetime, time, timedelta
 from zela.api.scheduler import (
     despachar_alertas,
     iniciar_scheduler,
+    sincronizar_compromissos_google_agenda,
     verificar_e_enviar_lembretes,
     verificar_e_enviar_lembretes_compromisso,
     verificar_e_escalonar_riscos,
@@ -17,7 +18,13 @@ from zela.storage.db import conectar
 from zela.storage.escalonamento import obter_estado, salvar_estado
 from zela.storage.monitoramento import salvar_leitura
 from zela.storage.perfil import salvar_perfil
-from zela.storage.rotina import remover_compromisso, salvar_compromisso, salvar_medicamento
+from zela.storage.rotina import (
+    listar_compromissos_pendentes_sync_google,
+    marcar_google_sync_feito,
+    remover_compromisso,
+    salvar_compromisso,
+    salvar_medicamento,
+)
 
 
 class _WahaFalso:
@@ -412,3 +419,137 @@ def test_iniciar_scheduler_registra_job_de_lembretes_compromisso(tmp_path):
     ids_dos_jobs = {job.id for job in agendador.get_jobs()}
     assert "verificar_lembretes_compromisso" in ids_dos_jobs
     agendador.shutdown()
+
+
+class _GoogleCalendarFalso:
+    def __init__(self, falhar=False):
+        self.criados = []
+        self.atualizados = []
+        self.removidos = []
+        self._falhar = falhar
+
+    def criar_evento(self, titulo, local, data_hora, overrides_minutos):
+        if self._falhar:
+            raise RuntimeError("falha simulada")
+        self.criados.append((titulo, local, data_hora, overrides_minutos))
+        return "evt-novo"
+
+    def atualizar_evento(self, event_id, titulo, local, data_hora, overrides_minutos):
+        self.atualizados.append((event_id, titulo, local, data_hora, overrides_minutos))
+
+    def remover_evento(self, event_id):
+        self.removidos.append(event_id)
+
+
+def test_sincronizar_compromissos_cria_evento_novo_e_salva_o_id(tmp_path, monkeypatch):
+    caminho_db = str(tmp_path / "teste.db")
+    conn = conectar(caminho_db)
+    salvar_compromisso(
+        conn,
+        Compromisso(id="comp-1", titulo="Exame", data_hora=datetime(2026, 11, 10, 14, 0), local="Lab", tipo=TipoCompromisso.EXAME),
+        idoso_id="idosa-1",
+    )
+
+    class _DatetimeFixo:
+        @staticmethod
+        def now():
+            return datetime(2026, 11, 1, 9, 0)
+
+    monkeypatch.setattr("zela.api.scheduler.datetime", _DatetimeFixo)
+
+    google_falso = _GoogleCalendarFalso()
+    sincronizados = sincronizar_compromissos_google_agenda(caminho_db, "idosa-1", google_falso)
+
+    assert sincronizados == ["comp-1"]
+    assert len(google_falso.criados) == 1
+    pendentes = listar_compromissos_pendentes_sync_google(conn, "idosa-1")
+    assert pendentes == []
+
+
+def test_sincronizar_compromissos_atualiza_evento_existente(tmp_path, monkeypatch):
+    caminho_db = str(tmp_path / "teste.db")
+    conn = conectar(caminho_db)
+    salvar_compromisso(
+        conn,
+        Compromisso(id="comp-1", titulo="Exame", data_hora=datetime(2026, 11, 10, 14, 0), local="Lab", tipo=TipoCompromisso.EXAME),
+        idoso_id="idosa-1",
+    )
+    marcar_google_sync_feito(conn, "comp-1", google_event_id="evt-existente")
+    salvar_compromisso(
+        conn,
+        Compromisso(id="comp-1", titulo="Exame", data_hora=datetime(2026, 11, 11, 14, 0), local="Lab", tipo=TipoCompromisso.EXAME),
+        idoso_id="idosa-1",
+    )  # edição marca google_sync_pendente = 1 de novo
+
+    class _DatetimeFixo:
+        @staticmethod
+        def now():
+            return datetime(2026, 11, 1, 9, 0)
+
+    monkeypatch.setattr("zela.api.scheduler.datetime", _DatetimeFixo)
+
+    google_falso = _GoogleCalendarFalso()
+    sincronizar_compromissos_google_agenda(caminho_db, "idosa-1", google_falso)
+
+    assert len(google_falso.atualizados) == 1
+    assert google_falso.atualizados[0][0] == "evt-existente"
+
+
+def test_sincronizar_compromissos_remove_evento_e_ignora_se_nunca_sincronizado(tmp_path, monkeypatch):
+    caminho_db = str(tmp_path / "teste.db")
+    conn = conectar(caminho_db)
+    salvar_compromisso(
+        conn,
+        Compromisso(id="comp-1", titulo="Exame", data_hora=datetime(2026, 11, 10, 14, 0), local="Lab", tipo=TipoCompromisso.EXAME),
+        idoso_id="idosa-1",
+    )
+    remover_compromisso(conn, "comp-1", idoso_id="idosa-1")  # nunca teve google_event_id
+
+    class _DatetimeFixo:
+        @staticmethod
+        def now():
+            return datetime(2026, 11, 1, 9, 0)
+
+    monkeypatch.setattr("zela.api.scheduler.datetime", _DatetimeFixo)
+
+    google_falso = _GoogleCalendarFalso()
+    sincronizados = sincronizar_compromissos_google_agenda(caminho_db, "idosa-1", google_falso)
+
+    assert sincronizados == ["comp-1"]
+    assert google_falso.removidos == []  # nunca tinha id -> não chama remover_evento
+
+
+def test_sincronizar_compromissos_falha_na_api_mantem_pendente(tmp_path, monkeypatch):
+    caminho_db = str(tmp_path / "teste.db")
+    conn = conectar(caminho_db)
+    salvar_compromisso(
+        conn,
+        Compromisso(id="comp-1", titulo="Exame", data_hora=datetime(2026, 11, 10, 14, 0), local="Lab", tipo=TipoCompromisso.EXAME),
+        idoso_id="idosa-1",
+    )
+
+    class _DatetimeFixo:
+        @staticmethod
+        def now():
+            return datetime(2026, 11, 1, 9, 0)
+
+    monkeypatch.setattr("zela.api.scheduler.datetime", _DatetimeFixo)
+
+    google_falso = _GoogleCalendarFalso(falhar=True)
+    sincronizados = sincronizar_compromissos_google_agenda(caminho_db, "idosa-1", google_falso)
+
+    assert sincronizados == []  # não quebrou, mas também não marcou como sincronizado
+    assert len(listar_compromissos_pendentes_sync_google(conn, "idosa-1")) == 1
+
+
+def test_iniciar_scheduler_so_registra_job_de_google_agenda_quando_cliente_e_passado(tmp_path):
+    caminho_db = str(tmp_path / "teste.db")
+    conectar(caminho_db)
+
+    sem_google = iniciar_scheduler(caminho_db, "idosa-1", _WahaFalso())
+    assert "sincronizar_compromissos_google_agenda" not in {j.id for j in sem_google.get_jobs()}
+    sem_google.shutdown()
+
+    com_google = iniciar_scheduler(caminho_db, "idosa-1", _WahaFalso(), google_calendar_client=_GoogleCalendarFalso())
+    assert "sincronizar_compromissos_google_agenda" in {j.id for j in com_google.get_jobs()}
+    com_google.shutdown()
