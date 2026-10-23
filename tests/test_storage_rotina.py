@@ -7,7 +7,13 @@ from zela.storage.rotina import (
     aplicar_confirmacao,
     aplicar_lembretes_pendentes,
     listar_compromissos,
+    listar_compromissos_pendentes_sync_google,
+    listar_compromissos_removidos_pendentes_cancelamento,
     listar_medicamentos,
+    listar_tipos_lembrete_enviados,
+    marcar_google_sync_feito,
+    registrar_lembrete_compromisso_enviado,
+    remover_compromisso,
     salvar_compromisso,
     salvar_medicamento,
 )
@@ -174,3 +180,100 @@ def test_listar_compromissos_ordena_por_data_hora():
     compromissos = listar_compromissos(conn, "idosa-1")
 
     assert [c.id for c in compromissos] == ["comp-cedo", "comp-tarde"]
+
+
+def test_remover_compromisso_oculta_da_listagem_mas_mantem_a_linha():
+    conn = conectar(":memory:")
+    salvar_compromisso(
+        conn,
+        Compromisso(
+            id="comp-1", titulo="Exame", data_hora=datetime.now() + timedelta(days=1),
+            local="Lab", tipo=TipoCompromisso.EXAME,
+        ),
+        idoso_id="idosa-1",
+    )
+
+    remover_compromisso(conn, "comp-1", idoso_id="idosa-1")
+
+    assert listar_compromissos(conn, "idosa-1") == []
+    linha = conn.execute("SELECT removido, google_sync_pendente FROM compromisso WHERE id = ?", ("comp-1",)).fetchone()
+    assert linha["removido"] == 1
+    assert linha["google_sync_pendente"] == 1
+
+
+def test_salvar_compromisso_marca_sync_pendente_por_padrao():
+    conn = conectar(":memory:")
+    salvar_compromisso(
+        conn,
+        Compromisso(
+            id="comp-1", titulo="Exame", data_hora=datetime.now() + timedelta(days=2),
+            local="Lab", tipo=TipoCompromisso.EXAME,
+        ),
+        idoso_id="idosa-1",
+    )
+    linha = conn.execute("SELECT google_sync_pendente FROM compromisso WHERE id = ?", ("comp-1",)).fetchone()
+    assert linha["google_sync_pendente"] == 1
+
+
+def test_editar_data_hora_limpa_lembretes_cujo_novo_horario_ainda_esta_no_futuro():
+    conn = conectar(":memory:")
+    data_hora_original = datetime.now() + timedelta(hours=2)
+    salvar_compromisso(
+        conn,
+        Compromisso(id="comp-1", titulo="Exame", data_hora=data_hora_original, local="Lab", tipo=TipoCompromisso.EXAME),
+        idoso_id="idosa-1",
+    )
+    # simula que o lembrete "instantaneo" e "1h" já foram enviados com o horário antigo
+    registrar_lembrete_compromisso_enviado(conn, "comp-1", "instantaneo", datetime.now())
+    registrar_lembrete_compromisso_enviado(conn, "comp-1", "1h", datetime.now())
+
+    nova_data_hora = datetime.now() + timedelta(days=3)  # bem mais no futuro
+    salvar_compromisso(
+        conn,
+        Compromisso(id="comp-1", titulo="Exame", data_hora=nova_data_hora, local="Lab", tipo=TipoCompromisso.EXAME),
+        idoso_id="idosa-1",
+    )
+
+    tipos_restantes = listar_tipos_lembrete_enviados(conn, "comp-1")
+    # "1h" tinha horário-alvo recalculado (nova_data_hora - 1h) ainda no futuro -> deve ter sido limpo
+    assert "1h" not in tipos_restantes
+    # "instantaneo" não tem horário-alvo (sempre considerado "no passado"/já disparado) -> não é limpo
+    assert "instantaneo" in tipos_restantes
+
+
+def test_listar_compromissos_removidos_pendentes_cancelamento_so_retorna_nao_notificados():
+    conn = conectar(":memory:")
+    salvar_compromisso(
+        conn,
+        Compromisso(id="comp-1", titulo="Exame", data_hora=datetime.now() + timedelta(days=1), local="Lab", tipo=TipoCompromisso.EXAME),
+        idoso_id="idosa-1",
+    )
+    remover_compromisso(conn, "comp-1", idoso_id="idosa-1")
+
+    pendentes = listar_compromissos_removidos_pendentes_cancelamento(conn, "idosa-1")
+    assert [c.id for c in pendentes] == ["comp-1"]
+
+    registrar_lembrete_compromisso_enviado(conn, "comp-1", "cancelamento", datetime.now())
+
+    assert listar_compromissos_removidos_pendentes_cancelamento(conn, "idosa-1") == []
+
+
+def test_listar_compromissos_pendentes_sync_google_e_marcar_feito():
+    conn = conectar(":memory:")
+    salvar_compromisso(
+        conn,
+        Compromisso(id="comp-1", titulo="Exame", data_hora=datetime.now() + timedelta(days=1), local="Lab", tipo=TipoCompromisso.EXAME),
+        idoso_id="idosa-1",
+    )
+
+    pendentes = listar_compromissos_pendentes_sync_google(conn, "idosa-1")
+    assert len(pendentes) == 1
+    assert pendentes[0].compromisso.id == "comp-1"
+    assert pendentes[0].google_event_id is None
+    assert pendentes[0].removido is False
+
+    marcar_google_sync_feito(conn, "comp-1", google_event_id="evt-abc")
+
+    assert listar_compromissos_pendentes_sync_google(conn, "idosa-1") == []
+    linha = conn.execute("SELECT google_event_id FROM compromisso WHERE id = ?", ("comp-1",)).fetchone()
+    assert linha["google_event_id"] == "evt-abc"
