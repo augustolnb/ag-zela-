@@ -70,8 +70,12 @@ def classificar_por_regra(
     esp32_silencioso = minutos_esp32 is None or minutos_esp32 >= limite_minutos_esp32
     pulseira_silenciosa = minutos_pulseira is None or minutos_pulseira >= limite_minutos_pulseira
 
+    # Sinais de vida chegam a 288 por dia e não dizem nada sobre o episódio;
+    # ficam fora das leituras relacionadas, que vão para a resposta do agente.
+    leituras_uteis = [leitura for leitura in leituras if leitura.tipo != TipoLeitura.SINAL_DE_VIDA]
+
     if esp32_silencioso and pulseira_silenciosa:
-        return _evento(StatusMonitoramento.RISCO, MOTIVO_SEM_NENHUMA_FONTE, leituras, agora)
+        return _evento(StatusMonitoramento.RISCO, MOTIVO_SEM_NENHUMA_FONTE, leituras_uteis, agora)
 
     if not esp32_silencioso:
         if leituras_presenca:
@@ -100,8 +104,8 @@ def classificar_por_regra(
         )
 
     if esp32_silencioso:
-        return _evento(StatusMonitoramento.AVISO, MOTIVO_ESP32_SEM_SINAL, leituras_esp32, agora)
+        return _evento(StatusMonitoramento.AVISO, MOTIVO_ESP32_SEM_SINAL, leituras_presenca, agora)
     if pulseira_silenciosa:
         return _evento(StatusMonitoramento.AVISO, MOTIVO_PULSEIRA_SEM_DADOS, leituras_fc, agora)
 
-    return _evento(StatusMonitoramento.NORMAL, "Nenhuma anomalia detectada", leituras, agora)
+    return _evento(StatusMonitoramento.NORMAL, "Nenhuma anomalia detectada", leituras_uteis, agora)

@@ -106,10 +106,18 @@ requisição sem o token correto.
 ```
 4x PIR (OR, mudança de estado) -> ESP32 -> POST /ingest/esp32 (X-Api-Key)
   -> LeituraSensor(fonte=ESP32, tipo=PRESENCA) salva no SQLite
-  -> job periódico (a cada 15 min, zela/api/scheduler.py)
-     -> classificar_por_regra(): >=6h sem presença? -> StatusMonitoramento.RISCO
-        -> aplicar_escalonamento() -> alerta enviado à família via WhatsApp
+ESP32, a cada 5 min -> POST /ingest/esp32 {"tipo": "sinal_de_vida", ...}
+  -> LeituraSensor(fonte=ESP32, tipo=SINAL_DE_VIDA), que não conta como movimento
+job periódico (a cada 15 min, zela/api/scheduler.py)
+  -> classificar_por_regra()
+     -> >=8h sem presença com ESP32 vivo, ou ESP32 e pulseira parados -> RISCO
+        -> aplicar_escalonamento() -> alerta à idosa e depois à família
+     -> só ESP32 (15 min) ou só pulseira (30 min) parados -> AVISO
+        -> mensagem única ao primeiro contato familiar, sem escalonamento
 ```
+
+**Cabeamento:** use cabo Cat5e até cada sensor. Par laranja: `OUT` + `GND`.
+Par azul: `VCC` + `GND`.
 
 ## 9. Checklist de montagem e teste
 

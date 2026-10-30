@@ -103,3 +103,13 @@ def test_sem_nenhuma_leitura_e_risco():
 def test_mistura_timestamp_com_fuso_sem_erro():
     evento = classificar_por_regra([fc(5, aware=True), esp(2), presenca(60)], AGORA)
     assert evento.status == StatusMonitoramento.NORMAL
+
+
+def test_sinais_de_vida_nao_vao_para_as_leituras_relacionadas():
+    # São 288 por dia: iriam parar inteiros na resposta da ferramenta do agente.
+    sinais = [esp(m) for m in range(2, 60, 5)]
+    normal = classificar_por_regra(sinais + [presenca(30), fc(5)], AGORA)
+    aviso = classificar_por_regra([esp(m) for m in range(20, 60, 5)] + [fc(5)], AGORA)
+    risco = classificar_por_regra([esp(m) for m in range(20, 60, 5)] + [fc(40)], AGORA)
+    for evento in (normal, aviso, risco):
+        assert all(l.tipo != TipoLeitura.SINAL_DE_VIDA for l in evento.leituras_relacionadas)

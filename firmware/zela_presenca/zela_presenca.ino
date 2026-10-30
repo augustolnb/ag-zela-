@@ -41,6 +41,8 @@ bool presencaAnterior = false;
 unsigned long inicioMs = 0;
 unsigned long ultimaTentativaReconexaoMs = 0;
 const unsigned long INTERVALO_RECONEXAO_MS = 15000UL;  // no minimo 15s entre tentativas
+unsigned long ultimoSinalDeVidaMs = 0;
+const unsigned long INTERVALO_SINAL_DE_VIDA_MS = 300000UL;  // 5 min, mesmo sem movimento
 
 bool lerPresenca() {
   for (int i = 0; i < QUANTIDADE_SENSORES; i++) {
@@ -60,7 +62,7 @@ String obterTimestampIso() {
   return String(buffer);
 }
 
-bool enviarLeitura(bool presenca) {
+bool postarJson(const String& corpo) {
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("WiFi desconectado, pulando envio.");
     return false;
@@ -72,13 +74,23 @@ bool enviarLeitura(bool presenca) {
     http.addHeader("X-Api-Key", TOKEN_INGESTAO);
   }
 
-  String corpo = String("{\"valor\": ") + (presenca ? "1" : "0") +
-                 ", \"timestamp\": \"" + obterTimestampIso() + "\"}";
-
   int codigoResposta = http.POST(corpo);
   Serial.printf("POST /ingest/esp32 -> %d\n", codigoResposta);
   http.end();
   return codigoResposta > 0 && codigoResposta < 300;
+}
+
+bool enviarLeitura(bool presenca) {
+  String corpo = String("{\"valor\": ") + (presenca ? "1" : "0") +
+                 ", \"timestamp\": \"" + obterTimestampIso() + "\"}";
+  return postarJson(corpo);
+}
+
+// Prova que o ESP32 esta ligado, sem contar como movimento no backend.
+bool enviarSinalDeVida() {
+  String corpo = String("{\"tipo\": \"sinal_de_vida\", \"valor\": 1, \"timestamp\": \"") +
+                 obterTimestampIso() + "\"}";
+  return postarJson(corpo);
 }
 
 void setup() {
@@ -130,6 +142,12 @@ void loop() {
     Serial.println("WiFi desconectado, tentando reconectar...");
     WiFi.reconnect();
     ultimaTentativaReconexaoMs = millis();
+  }
+
+  // Antes do aquecimento dos sensores: o sinal de vida nao depende dos PIR.
+  if (millis() - ultimoSinalDeVidaMs >= INTERVALO_SINAL_DE_VIDA_MS) {
+    enviarSinalDeVida();
+    ultimoSinalDeVidaMs = millis();
   }
 
   if (millis() - inicioMs < TEMPO_AQUECIMENTO_MS) {

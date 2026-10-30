@@ -455,6 +455,22 @@ correção e status de cada um:
    conexão WiFi, a sincronização de hora via NTP, e os envios
    (`POST /ingest/esp32 -> 200`) ao mover a mão na frente do sensor.
 
+### Regras de monitoramento
+
+Vale a condição mais grave, verificada a cada 15 min:
+
+| Status | Condição |
+|---|---|
+| RISCO | 8 h ou mais sem movimento, com o ESP32 enviando sinal de vida |
+| RISCO | ESP32 sem comunicação há 15 min **e** pulseira sem leitura há 30 min |
+| ATENÇÃO | Frequência cardíaca fora de 30–220 bpm |
+| AVISO | Só uma das fontes sem dados: mensagem única ao primeiro familiar, sem escalonamento |
+| NORMAL | Nenhuma das condições acima |
+
+Sem nenhuma leitura, as duas fontes contam como paradas e o status é RISCO. O
+firmware envia sinal de vida a cada 5 min. Às 09:00, uma noite de sono 30% menor
+ou maior que a média das 14 anteriores (mínimo de 7 noites) gera um AVISO.
+
 ### Smartwatch (Xiaomi Smart Band 10 Pro → Health Connect → HC Webhook)
 
 Verificado de ponta a ponta em produção (frequência cardíaca, passos e

@@ -3,14 +3,15 @@ from datetime import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from zela.domain.comunicacao import formatar_lembrete
+from zela.domain.emergencia import EstadoEscalonamento, EstagioEscalonamento
 from zela.domain.rotina import JANELA_LEMBRETE
 from zela.models.alertas import Alerta, CanalAlerta, NivelAlerta
 from zela.models.monitoramento import EventoMonitoramento, StatusMonitoramento
 from zela.models.perfil import PerfilIdoso
 from zela.storage.alertas import salvar_alerta
 from zela.storage.db import conectar
-from zela.storage.escalonamento import aplicar_escalonamento
-from zela.storage.monitoramento import MOTIVO_SEM_DADOS_PREFIXO, aplicar_classificacao
+from zela.storage.escalonamento import aplicar_escalonamento, obter_estado, salvar_estado
+from zela.storage.monitoramento import aplicar_classificacao, avaliar_sono_recente
 from zela.storage.perfil import obter_perfil
 from zela.storage.rotina import aplicar_lembretes_pendentes
 
@@ -23,6 +24,12 @@ INTERVALO_MONITORAMENTO_MINUTOS = 15
 # Perder este estado num restart do processo é aceitável (não é pior que o
 # comportamento anterior).
 _lembretes_ja_enviados: set[tuple[str, str]] = set()
+
+# Dedupe em memória de processo dos AVISOs, como `_lembretes_ja_enviados`: a
+# verificação roda a cada 15 min e a família só deve receber a mensagem uma vez
+# por episódio. Chave: (id_idoso, motivo) ou (id_idoso, "sono:YYYY-MM-DD").
+_avisos_ja_enviados: set[tuple[str, str]] = set()
+_PREFIXO_CHAVE_SONO = "sono:"
 
 
 def _horario_atual_pendente(medicamento, agora: datetime):
@@ -83,6 +90,25 @@ def despachar_alertas(
             waha_client.enviar_texto(telefone, alerta.mensagem)
 
 
+def _enviar_aviso(
+    conn, perfil: PerfilIdoso, idoso_id: str, motivo: str, chave: tuple[str, str], agora: datetime, waha_client
+) -> list[Alerta]:
+    if chave in _avisos_ja_enviados or not perfil.contatos_familiares:
+        return []
+    contato = perfil.contatos_familiares[0]
+    alerta = Alerta(
+        nivel=NivelAlerta.INFO,
+        destinatario=contato.nome,
+        canal=CanalAlerta.WHATSAPP,
+        mensagem=f"Aviso: {motivo}.",
+        timestamp=agora,
+    )
+    salvar_alerta(conn, alerta, idoso_id)
+    waha_client.enviar_texto(contato.telefone, alerta.mensagem)
+    _avisos_ja_enviados.add(chave)
+    return [alerta]
+
+
 def verificar_e_escalonar_riscos(caminho_db: str, id_idoso: str, waha_client) -> list[Alerta]:
     conn = conectar(caminho_db)
     perfil = obter_perfil(conn, id_idoso)
@@ -92,30 +118,39 @@ def verificar_e_escalonar_riscos(caminho_db: str, id_idoso: str, waha_client) ->
     agora = datetime.now()
     evento: EventoMonitoramento = aplicar_classificacao(conn, id_idoso, agora)
 
-    # Caso técnico "sem dados" (nenhuma leitura de presença na janela de
-    # lookback — instalação nova, sensor/WiFi fora do ar etc.): isso NÃO é
-    # uma classificação de risco real, então não pode entrar na escada de
-    # escalonamento (`aplicar_escalonamento`/`decidir_proxima_acao` tratam
-    # qualquer status != NORMAL como início/continuação da escalada). Em vez
-    # disso, avisamos a família uma vez, com nível INFO, e paramos aqui.
-    if evento.status == StatusMonitoramento.ATENCAO and evento.motivo.startswith(
-        MOTIVO_SEM_DADOS_PREFIXO
-    ):
-        contato = perfil.contatos_familiares[0]
-        alerta = Alerta(
-            nivel=NivelAlerta.INFO,
-            destinatario=contato.nome,
-            canal=CanalAlerta.WHATSAPP,
-            mensagem=f"Aviso: {evento.motivo}.",
-            timestamp=agora,
-        )
-        salvar_alerta(conn, alerta, id_idoso)
-        waha_client.enviar_texto(contato.telefone, alerta.mensagem)
-        return [alerta]
+    # AVISO é falha de uma só fonte, não uma classificação de risco: não pode
+    # entrar na escada de escalonamento (`decidir_proxima_acao` trata qualquer
+    # status != NORMAL como início/continuação da escalada). Uma das fontes
+    # está viva, então uma escada aberta é encerrada; um novo RISCO recomeça
+    # perguntando à própria idosa.
+    if evento.status == StatusMonitoramento.AVISO:
+        estado = obter_estado(conn, id_idoso)
+        if estado.estagio not in (EstagioEscalonamento.OCIOSO, EstagioEscalonamento.RESOLVIDO):
+            salvar_estado(conn, id_idoso, EstadoEscalonamento(estagio=EstagioEscalonamento.RESOLVIDO))
+        return _enviar_aviso(conn, perfil, id_idoso, evento.motivo, (id_idoso, evento.motivo), agora, waha_client)
+
+    if evento.status == StatusMonitoramento.NORMAL:
+        for chave in list(_avisos_ja_enviados):
+            if chave[0] == id_idoso and not chave[1].startswith(_PREFIXO_CHAVE_SONO):
+                _avisos_ja_enviados.discard(chave)
 
     alertas = aplicar_escalonamento(conn, id_idoso, evento, perfil, agora)
     despachar_alertas(conn, alertas, perfil, id_idoso, waha_client)
     return alertas
+
+
+def verificar_sono_e_avisar(caminho_db: str, id_idoso: str, waha_client) -> list[Alerta]:
+    conn = conectar(caminho_db)
+    perfil = obter_perfil(conn, id_idoso)
+    if perfil is None:
+        return []
+
+    agora = datetime.now()
+    evento = avaliar_sono_recente(conn, id_idoso, agora)
+    if evento is None:
+        return []
+    chave = (id_idoso, f"{_PREFIXO_CHAVE_SONO}{agora.date()}")
+    return _enviar_aviso(conn, perfil, id_idoso, evento.motivo, chave, agora, waha_client)
 
 
 def iniciar_scheduler(caminho_db: str, id_idoso: str, waha_client) -> BackgroundScheduler:
@@ -133,6 +168,15 @@ def iniciar_scheduler(caminho_db: str, id_idoso: str, waha_client) -> Background
         minutes=INTERVALO_MONITORAMENTO_MINUTOS,
         args=[caminho_db, id_idoso, waha_client],
         id="verificar_riscos",
+    )
+    agendador.add_job(
+        verificar_sono_e_avisar,
+        "cron",
+        hour=9,
+        minute=0,
+        args=[caminho_db, id_idoso, waha_client],
+        id="verificar_sono",
+        misfire_grace_time=3600,
     )
     agendador.start()
     return agendador
