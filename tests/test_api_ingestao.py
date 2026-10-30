@@ -339,3 +339,44 @@ def test_ingest_health_connect_com_token_configurado_header_correto_retorna_200(
 
     assert resposta.status_code == 200
     assert len(armazenamento.salvas) == 1
+
+
+def _cliente_esp32():
+    armazenamento = _ArmazenamentoFalso()
+    app = FastAPI()
+    app.include_router(montar_roteador_ingestao(armazenamento.salvar))
+    return TestClient(app), armazenamento
+
+
+def test_esp32_sinal_de_vida_grava_tipo_proprio():
+    cliente, armazenamento = _cliente_esp32()
+
+    resposta = cliente.post(
+        "/ingest/esp32",
+        json={"tipo": "sinal_de_vida", "valor": 1, "timestamp": "2026-09-16T10:00:00"},
+    )
+
+    assert resposta.status_code == 200
+    leitura, _ = armazenamento.salvas[0]
+    assert leitura.tipo == TipoLeitura.SINAL_DE_VIDA
+    assert leitura.unidade == "sinal"
+
+
+def test_esp32_sem_tipo_continua_presenca():
+    cliente, armazenamento = _cliente_esp32()
+
+    cliente.post("/ingest/esp32", json={"valor": 1, "timestamp": "2026-09-16T10:00:00"})
+
+    assert armazenamento.salvas[0][0].tipo == TipoLeitura.PRESENCA
+
+
+def test_esp32_tipo_desconhecido_retorna_400():
+    cliente, armazenamento = _cliente_esp32()
+
+    resposta = cliente.post(
+        "/ingest/esp32",
+        json={"tipo": "temperatura", "valor": 1, "timestamp": "2026-09-16T10:00:00"},
+    )
+
+    assert resposta.status_code == 400
+    assert armazenamento.salvas == []
