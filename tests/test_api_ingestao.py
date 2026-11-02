@@ -3,6 +3,8 @@ from fastapi.testclient import TestClient
 
 from zela.api.ingestao import montar_roteador_ingestao
 from zela.models.monitoramento import FonteSensor, TipoLeitura
+from zela.storage.db import conectar
+from zela.storage.monitoramento import salvar_leitura as salvar_leitura_real
 
 
 class _ArmazenamentoFalso:
@@ -380,3 +382,20 @@ def test_esp32_tipo_desconhecido_retorna_400():
 
     assert resposta.status_code == 400
     assert armazenamento.salvas == []
+
+
+def test_health_connect_conta_so_leituras_novas_como_salvas(tmp_path):
+    conn = conectar(str(tmp_path / "t.db"))
+    conn.close()
+    caminho = str(tmp_path / "t.db")
+
+    def salvar(leitura, idoso_id):
+        return salvar_leitura_real(conectar(caminho), leitura, idoso_id)
+
+    app = FastAPI()
+    app.include_router(montar_roteador_ingestao(salvar))
+    cliente = TestClient(app)
+    corpo = {"heart_rate": [{"bpm": 80, "time": "2026-10-31T16:50:00-03:00"}]}
+
+    assert cliente.post("/ingest/health-connect", json=corpo).json()["leituras_salvas"] == 1
+    assert cliente.post("/ingest/health-connect", json=corpo).json()["leituras_salvas"] == 0

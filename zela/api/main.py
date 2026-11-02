@@ -96,7 +96,7 @@ def _processar_risco(telefone: str, texto: str, agora: datetime) -> None:
         return
     processar_risco_mensagem(
         conexao, ID_IDOSO, perfil, texto, agora,
-        cliente_embedding, exemplos, repositorio_vetorial, waha_client,
+        cliente_embedding, exemplos, repositorio_vetorial,
     )
 
 
@@ -128,9 +128,9 @@ async def ciclo_de_vida(app: FastAPI):
         agendador.shutdown()
 
 
-def _salvar_leitura(leitura, idoso_id: str) -> None:
+def _salvar_leitura(leitura, idoso_id: str) -> bool:
     conexao = conectar(CAMINHO_DB)
-    salvar_leitura_sensor(conexao, leitura, idoso_id)
+    return salvar_leitura_sensor(conexao, leitura, idoso_id)
 
 
 app = FastAPI(lifespan=ciclo_de_vida)

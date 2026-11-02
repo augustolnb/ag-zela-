@@ -101,6 +101,7 @@ def conectar(caminho_db: str = "zela.db") -> sqlite3.Connection:
     conn.executescript(ESQUEMA)
     _migrar_coluna_bula(conn)
     _migrar_coluna_lid_whatsapp(conn)
+    _migrar_leituras_unicas(conn)
     return conn
 
 
@@ -116,3 +117,17 @@ def _migrar_coluna_lid_whatsapp(conn: sqlite3.Connection) -> None:
     if "lid_whatsapp" not in colunas:
         conn.execute("ALTER TABLE perfil_idoso ADD COLUMN lid_whatsapp TEXT")
         conn.commit()
+
+
+def _migrar_leituras_unicas(conn: sqlite3.Connection) -> None:
+    """O app do Health Connect reenvia o histórico a cada sincronização. Remove só
+    cópias exatas: passos do dia repetem o horário com o total crescendo."""
+    colunas = "idoso_id, fonte, tipo, timestamp, valor"
+    existe = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'ux_leitura_sensor_unica'"
+    ).fetchone()
+    if existe:
+        return
+    with conn:
+        conn.execute(f"DELETE FROM leitura_sensor WHERE id NOT IN (SELECT MIN(id) FROM leitura_sensor GROUP BY {colunas})")
+        conn.execute(f"CREATE UNIQUE INDEX IF NOT EXISTS ux_leitura_sensor_unica ON leitura_sensor ({colunas})")
