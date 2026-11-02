@@ -14,10 +14,12 @@ class TipoLeitura(str, Enum):
     PASSOS = "passos"
     SONO = "sono"
     PRESENCA = "presenca"
+    SINAL_DE_VIDA = "sinal_de_vida"
 
 
 class StatusMonitoramento(str, Enum):
     NORMAL = "normal"
+    AVISO = "aviso"
     ATENCAO = "atencao"
     RISCO = "risco"
 
@@ -32,6 +34,7 @@ FAIXAS_PLAUSIVEIS: dict[TipoLeitura, tuple[float, float]] = {
     TipoLeitura.PASSOS: (0, 60000),
     TipoLeitura.SONO: (0, 24),
     TipoLeitura.PRESENCA: (0, 1),
+    TipoLeitura.SINAL_DE_VIDA: (1, 1),
 }
 
 

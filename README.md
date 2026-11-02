@@ -437,11 +437,11 @@ correção e status de cada um:
 
 ### ESP32 (sensor de presença)
 
-1. Monte o circuito: 4 sensores PIR (2 por cômodo, em 2 cômodos) — um
-   SR602 (`OUT` no GPIO 13/26) e um HC-SR505 (`OUT` no GPIO 14/27) por
-   cômodo. Nenhum divisor de tensão é necessário — os dois modelos têm
-   saída `OUT` fixa em 3,3V, independente da alimentação. Diagrama
-   completo em `docs/hardware/automacao_esp32.pdf`.
+1. Monte o circuito: 2 sensores PIR SR602, um na sala (`OUT` no GPIO 13)
+   e um no quarto (`OUT` no GPIO 14), alimentados em 3,3V. Nenhum divisor
+   de tensão é necessário — o SR602 tem saída `OUT` fixa em 3,3V,
+   independente da alimentação. Diagrama completo em
+   `docs/hardware/automacao_esp32.md`.
 2. Copie `firmware/zela_presenca/config.h.example` para
    `firmware/zela_presenca/config.h` (esse arquivo não é versionado —
    evita vazar sua senha de Wi-Fi no repositório público) e preencha
@@ -454,6 +454,22 @@ correção e status de cada um:
 4. Grave no ESP32 e abra o Serial Monitor (115200 bps) para confirmar a
    conexão WiFi, a sincronização de hora via NTP, e os envios
    (`POST /ingest/esp32 -> 200`) ao mover a mão na frente do sensor.
+
+### Regras de monitoramento
+
+Vale a condição mais grave, verificada a cada 15 min:
+
+| Status | Condição |
+|---|---|
+| RISCO | 8 h ou mais sem movimento, com o ESP32 enviando sinal de vida |
+| RISCO | ESP32 sem comunicação há 15 min **e** pulseira sem leitura há 30 min |
+| ATENÇÃO | Frequência cardíaca fora de 30–220 bpm |
+| AVISO | Só uma das fontes sem dados: mensagem única ao primeiro familiar, sem escalonamento |
+| NORMAL | Nenhuma das condições acima |
+
+Sem nenhuma leitura, as duas fontes contam como paradas e o status é RISCO. O
+firmware envia sinal de vida a cada 5 min. Às 09:00, uma noite de sono 30% menor
+ou maior que a média das 14 anteriores (mínimo de 7 noites) gera um AVISO.
 
 ### Smartwatch (Xiaomi Smart Band 10 Pro → Health Connect → HC Webhook)
 

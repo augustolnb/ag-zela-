@@ -23,6 +23,14 @@ def test_renderizar_status_mostra_classificacao_normal(tmp_path):
         ),
         idoso_id="idosa-1",
     )
+    salvar_leitura(
+        conn,
+        LeituraSensor(
+            fonte=FonteSensor.SMARTWATCH, tipo=TipoLeitura.FREQUENCIA_CARDIACA,
+            valor=70, unidade="bpm", timestamp=datetime.now(),
+        ),
+        idoso_id="idosa-1",
+    )
 
     codigo = f"""
 from zela.storage.db import conectar
@@ -36,6 +44,31 @@ renderizar_status(conn, "idosa-1")
 
     assert at.exception == []
     assert [m.value for m in at.metric] == ["NORMAL"]
+
+
+def test_renderizar_status_mostra_aviso_quando_so_uma_fonte_para(tmp_path):
+    caminho = str(tmp_path / "teste.db")
+    conn = conectar(caminho)
+    salvar_leitura(
+        conn,
+        LeituraSensor(
+            fonte=FonteSensor.SMARTWATCH, tipo=TipoLeitura.FREQUENCIA_CARDIACA,
+            valor=70, unidade="bpm", timestamp=datetime.now(),
+        ),
+        idoso_id="idosa-1",
+    )
+
+    codigo = f"""
+from zela.storage.db import conectar
+from zela.streamlit_app.secoes import renderizar_status
+
+conn = conectar({caminho!r})
+renderizar_status(conn, "idosa-1")
+"""
+    at = AppTest.from_string(codigo)
+    at.run()
+
+    assert [m.value for m in at.metric] == ["AVISO"]
 
 
 def test_renderizar_medicacao_mostra_confirmacoes_do_dia(tmp_path):

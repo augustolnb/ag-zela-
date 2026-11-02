@@ -101,7 +101,7 @@ def confirmar_medicamento(
 
 
 def consultar_status_atual(idoso_id: str, agora_iso: str) -> dict:
-    """Retorna o status de monitoramento mais recente do idoso (normal, atenção ou risco) e o motivo.
+    """Retorna o status de monitoramento mais recente do idoso (normal, aviso, atenção ou risco) e o motivo.
 
     O argumento `agora_iso` é validado (para preservar o comportamento de erro
     esperado pelo agente), mas o valor efetivamente usado na classificação é
@@ -157,7 +157,7 @@ def montar_agente_monitoramento(model: Union[str, BaseLlm] = MODELO_PADRAO) -> A
         instruction=(
             "Quando a família perguntar sobre o estado de saúde/segurança do "
             "idoso, use a ferramenta consultar_status_atual para obter a "
-            "classificação mais recente (normal, atenção ou risco) e o "
+            "classificação mais recente (normal, aviso, atenção ou risco) e o "
             "motivo. Nunca decida o status você mesmo — sempre consulte a "
             "ferramenta, que reflete um cálculo já feito automaticamente.\n\n"
             "Toda mensagem recebida começa com uma linha de contexto do "

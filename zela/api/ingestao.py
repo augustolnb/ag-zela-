@@ -36,6 +36,14 @@ def _validar_timestamp_plausivel(timestamp: datetime) -> None:
         raise ValueError(f"timestamp implausivelmente antigo: {timestamp.isoformat()!r}")
 
 
+# O sinal de vida prova que o ESP32 está ligado, não que houve movimento: por
+# isso é um tipo próprio, que não zera o contador de ausência de presença.
+_TIPOS_ESP32 = {
+    "presenca": (TipoLeitura.PRESENCA, "deteccao"),
+    "sinal_de_vida": (TipoLeitura.SINAL_DE_VIDA, "sinal"),
+}
+
+
 def _token_valido(request: Request, token: str | None) -> bool:
     return token is None or request.headers.get("X-Api-Key") == token
 
@@ -118,11 +126,15 @@ def montar_roteador_ingestao(
             corpo = await request.json()
             timestamp = datetime.fromisoformat(corpo["timestamp"])
             _validar_timestamp_plausivel(timestamp)
+            tipo_leitura = corpo.get("tipo", "presenca")
+            if tipo_leitura not in _TIPOS_ESP32:
+                raise ValueError(f"tipo de leitura desconhecido: {tipo_leitura!r}")
+            tipo, unidade = _TIPOS_ESP32[tipo_leitura]
             leitura = LeituraSensor(
                 fonte=FonteSensor.ESP32,
-                tipo=TipoLeitura.PRESENCA,
+                tipo=tipo,
                 valor=corpo["valor"],
-                unidade="deteccao",
+                unidade=unidade,
                 timestamp=timestamp,
             )
         except (ValidationError, KeyError, ValueError, TypeError) as erro:

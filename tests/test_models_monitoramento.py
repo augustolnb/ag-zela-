@@ -59,3 +59,18 @@ def test_evento_monitoramento_valido():
         metodo_classificacao=MetodoClassificacao.REGRA,
     )
     assert evento.status == StatusMonitoramento.NORMAL
+
+
+def test_status_aviso_existe():
+    assert StatusMonitoramento("aviso") is StatusMonitoramento.AVISO
+
+
+def test_leitura_sinal_de_vida_plausivel():
+    leitura = LeituraSensor(
+        fonte=FonteSensor.ESP32,
+        tipo=TipoLeitura.SINAL_DE_VIDA,
+        valor=1,
+        unidade="sinal",
+        timestamp=datetime(2026, 10, 29, 10, 0),
+    )
+    assert leitura.plausivel

@@ -1,7 +1,11 @@
 from datetime import date, datetime, time, timedelta
 
+import pytest
+
 from zela.api.scheduler import (
     despachar_alertas,
+    iniciar_scheduler,
+    verificar_sono_e_avisar,
     verificar_e_enviar_lembretes,
     verificar_e_escalonar_riscos,
 )
@@ -16,6 +20,11 @@ from zela.storage.escalonamento import obter_estado, salvar_estado
 from zela.storage.monitoramento import salvar_leitura
 from zela.storage.perfil import salvar_perfil
 from zela.storage.rotina import salvar_medicamento
+
+
+@pytest.fixture(autouse=True)
+def _limpa_avisos(monkeypatch):
+    monkeypatch.setattr("zela.api.scheduler._avisos_ja_enviados", set())
 
 
 class _WahaFalso:
@@ -176,6 +185,8 @@ def test_verificar_e_escalonar_riscos_normal_nao_envia_nada(tmp_path, monkeypatc
         unidade="deteccao", timestamp=datetime(2026, 9, 16, 13, 45),
     )
     salvar_leitura(conn, leitura, idoso_id="idosa-1")
+    salvar_leitura(conn, _fc(datetime(2026, 9, 16, 13, 55)), idoso_id="idosa-1")
+    salvar_leitura(conn, _sinal(datetime(2026, 9, 16, 13, 55)), idoso_id="idosa-1")
 
     waha_falso = _WahaFalso()
     alertas = verificar_e_escalonar_riscos(caminho_db, "idosa-1", waha_falso)
@@ -184,33 +195,160 @@ def test_verificar_e_escalonar_riscos_normal_nao_envia_nada(tmp_path, monkeypatc
     assert waha_falso.enviados == []
 
 
-def test_verificar_e_escalonar_riscos_sem_dados_envia_info_e_nao_escalona(tmp_path, monkeypatch):
-    # Instalação nova / sensor ou WiFi fora do ar: nenhuma leitura de
-    # presença foi salva. Isso NÃO pode disparar a escada de escalonamento
-    # (contato idoso -> notificar família -> simular emergência) — é um
-    # evento técnico "sem dados", e deve gerar só um aviso INFO à família.
+def _fc(timestamp):
+    return LeituraSensor(
+        fonte=FonteSensor.SMARTWATCH, tipo=TipoLeitura.FREQUENCIA_CARDIACA, valor=70,
+        unidade="bpm", timestamp=timestamp,
+    )
+
+
+def _sinal(timestamp):
+    return LeituraSensor(
+        fonte=FonteSensor.ESP32, tipo=TipoLeitura.SINAL_DE_VIDA, valor=1,
+        unidade="sinal", timestamp=timestamp,
+    )
+
+
+class _Relogio:
+    atual = datetime(2026, 9, 16, 14, 0)
+
+    @classmethod
+    def now(cls):
+        return cls.atual
+
+
+def _cenario_com_pulseira_viva(tmp_path, monkeypatch):
+    """Só a pulseira envia dados: o ESP32 está silencioso, o que gera AVISO."""
     caminho_db = str(tmp_path / "teste.db")
     conn = conectar(caminho_db)
     salvar_perfil(conn, _perfil(), idoso_id="idosa-1")
+    salvar_leitura(conn, _fc(datetime(2026, 9, 16, 13, 55)), idoso_id="idosa-1")
+    _Relogio.atual = datetime(2026, 9, 16, 14, 0)
+    monkeypatch.setattr("zela.api.scheduler.datetime", _Relogio)
+    return caminho_db, conn
 
-    class _DatetimeFixo:
-        @staticmethod
-        def now():
-            return datetime(2026, 9, 16, 14, 0)
 
-    monkeypatch.setattr("zela.api.scheduler.datetime", _DatetimeFixo)
+def test_aviso_envia_info_ao_primeiro_familiar_sem_escalonar(tmp_path, monkeypatch):
+    caminho_db, conn = _cenario_com_pulseira_viva(tmp_path, monkeypatch)
+
+    def _nao_deve_escalonar(*args, **kwargs):
+        raise AssertionError("AVISO não pode entrar na escada de escalonamento")
+
+    monkeypatch.setattr("zela.api.scheduler.aplicar_escalonamento", _nao_deve_escalonar)
 
     waha_falso = _WahaFalso()
     alertas = verificar_e_escalonar_riscos(caminho_db, "idosa-1", waha_falso)
 
     assert len(alertas) == 1
-    assert alertas[0].nivel.value == "info"
-    assert len(waha_falso.enviados) == 1
-    assert waha_falso.enviados[0][0] == "+5511987654321"
+    assert alertas[0].nivel == NivelAlerta.INFO
+    assert waha_falso.enviados == [("+5511987654321", alertas[0].mensagem)]
+    assert len(listar_alertas(conn, "idosa-1")) == 1
+    assert obter_estado(conn, "idosa-1").estagio == EstagioEscalonamento.OCIOSO
 
-    estado = obter_estado(conn, "idosa-1")
-    assert estado.estagio == EstagioEscalonamento.OCIOSO
-    assert estado.iniciado_em is None
+
+def test_aviso_nao_repete_no_mesmo_episodio(tmp_path, monkeypatch):
+    caminho_db, _ = _cenario_com_pulseira_viva(tmp_path, monkeypatch)
+    waha_falso = _WahaFalso()
+
+    verificar_e_escalonar_riscos(caminho_db, "idosa-1", waha_falso)
+    segunda = verificar_e_escalonar_riscos(caminho_db, "idosa-1", waha_falso)
+
+    assert segunda == []
+    assert len(waha_falso.enviados) == 1
+
+
+def test_aviso_volta_a_avisar_apos_normalizar(tmp_path, monkeypatch):
+    caminho_db, conn = _cenario_com_pulseira_viva(tmp_path, monkeypatch)
+    waha_falso = _WahaFalso()
+
+    verificar_e_escalonar_riscos(caminho_db, "idosa-1", waha_falso)
+
+    # O ESP32 volta a enviar sinal: status NORMAL
+    salvar_leitura(conn, _sinal(datetime(2026, 9, 16, 13, 59)), idoso_id="idosa-1")
+    assert verificar_e_escalonar_riscos(caminho_db, "idosa-1", waha_falso) == []
+
+    # 20 min depois o ESP32 para de novo, com a pulseira ainda viva
+    salvar_leitura(conn, _fc(datetime(2026, 9, 16, 14, 19)), idoso_id="idosa-1")
+    _Relogio.atual = datetime(2026, 9, 16, 14, 20)
+    verificar_e_escalonar_riscos(caminho_db, "idosa-1", waha_falso)
+
+    assert len(waha_falso.enviados) == 2
+
+
+def test_aviso_encerra_escada_aberta_e_novo_risco_recomeca_do_idoso(tmp_path, monkeypatch):
+    caminho_db, conn = _cenario_com_pulseira_viva(tmp_path, monkeypatch)
+    salvar_estado(
+        conn, "idosa-1",
+        EstadoEscalonamento(
+            estagio=EstagioEscalonamento.NOTIFICAR_FAMILIA,
+            iniciado_em=datetime(2026, 9, 16, 13, 0),
+        ),
+    )
+
+    verificar_e_escalonar_riscos(caminho_db, "idosa-1", _WahaFalso())
+
+    assert obter_estado(conn, "idosa-1").estagio == EstagioEscalonamento.RESOLVIDO
+
+
+def _salvar_sono(conn, dias_atras, horas, agora):
+    fim = (agora - timedelta(days=dias_atras)).replace(hour=7)
+    salvar_leitura(
+        conn,
+        LeituraSensor(
+            fonte=FonteSensor.SMARTWATCH, tipo=TipoLeitura.SONO, valor=horas,
+            unidade="horas", timestamp=fim,
+        ),
+        idoso_id="idosa-1",
+    )
+
+
+def test_verificar_sono_envia_aviso_uma_vez_por_dia(tmp_path, monkeypatch):
+    caminho_db = str(tmp_path / "teste.db")
+    conn = conectar(caminho_db)
+    salvar_perfil(conn, _perfil(), idoso_id="idosa-1")
+    agora = datetime(2026, 9, 16, 9, 0)
+    for dias in range(1, 15):
+        _salvar_sono(conn, dias, 7, agora)
+    _salvar_sono(conn, 0, 4, agora)
+    _Relogio.atual = agora
+    monkeypatch.setattr("zela.api.scheduler.datetime", _Relogio)
+
+    waha_falso = _WahaFalso()
+    primeira = verificar_sono_e_avisar(caminho_db, "idosa-1", waha_falso)
+    segunda = verificar_sono_e_avisar(caminho_db, "idosa-1", waha_falso)
+
+    assert len(primeira) == 1 and primeira[0].nivel == NivelAlerta.INFO
+    assert segunda == []
+    assert waha_falso.enviados == [("+5511987654321", primeira[0].mensagem)]
+
+
+def test_normalizar_nao_faz_sono_ser_reenviado_no_mesmo_dia(tmp_path, monkeypatch):
+    caminho_db = str(tmp_path / "teste.db")
+    conn = conectar(caminho_db)
+    salvar_perfil(conn, _perfil(), idoso_id="idosa-1")
+    agora = datetime(2026, 9, 16, 9, 0)
+    for dias in range(1, 15):
+        _salvar_sono(conn, dias, 7, agora)
+    _salvar_sono(conn, 0, 4, agora)
+    salvar_leitura(conn, _fc(agora), idoso_id="idosa-1")
+    salvar_leitura(conn, _sinal(agora), idoso_id="idosa-1")
+    _Relogio.atual = agora
+    monkeypatch.setattr("zela.api.scheduler.datetime", _Relogio)
+
+    waha_falso = _WahaFalso()
+    verificar_sono_e_avisar(caminho_db, "idosa-1", waha_falso)
+    verificar_e_escalonar_riscos(caminho_db, "idosa-1", waha_falso)
+    verificar_sono_e_avisar(caminho_db, "idosa-1", waha_falso)
+
+    assert len(waha_falso.enviados) == 1
+
+
+def test_iniciar_scheduler_registra_job_de_sono(tmp_path):
+    agendador = iniciar_scheduler(str(tmp_path / "teste.db"), "idosa-1", _WahaFalso())
+    try:
+        assert agendador.get_job("verificar_sono") is not None
+    finally:
+        agendador.shutdown(wait=False)
 
 
 def test_verificar_e_escalonar_riscos_sem_perfil_retorna_lista_vazia(tmp_path):

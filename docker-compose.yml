@@ -34,6 +34,9 @@ services:
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
     environment:
+      # Timestamps do ESP32 e datetime.now() são horário local sem fuso; sem
+      # isso o container compara UTC com UTC-3 e o ESP32 parece 3 h atrasado.
+      - TZ=America/Sao_Paulo
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       # DEEPSEEK_API_KEY/ZELA_LLM_PROVEDOR: só necessários se
       # ZELA_LLM_PROVEDOR=deepseek (ver zela/agents/orchestrator.py). O
@@ -59,6 +62,7 @@ services:
     ports:
       - "127.0.0.1:${STREAMLIT_PORT:-8501}:8501"
     environment:
+      - TZ=America/Sao_Paulo
       - STREAMLIT_SENHA=${STREAMLIT_SENHA}
       - ZELA_DB_PATH=/app/data/zela.db
     volumes:

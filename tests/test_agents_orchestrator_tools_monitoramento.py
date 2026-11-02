@@ -174,3 +174,7 @@ def test_ferramentas_de_consulta_nao_alteram_estado_de_escalonamento(monkeypatch
 
     estado_depois = obter_estado(conn, "idosa-1")
     assert estado_depois == estado_semeado
+
+
+def test_descricao_do_status_cita_o_aviso():
+    assert "aviso" in consultar_status_atual.__doc__

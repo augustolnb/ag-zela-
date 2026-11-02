@@ -7,7 +7,7 @@ from zela.domain.monitoramento import classificar_por_regra
 from zela.domain.rotina import calcular_lembretes_pendentes, registrar_confirmacao
 from zela.models.alertas import Alerta
 from zela.models.comunicacao import MensagemEntrada
-from zela.models.monitoramento import LeituraSensor
+from zela.models.monitoramento import LeituraSensor, StatusMonitoramento
 from zela.models.perfil import PerfilIdoso
 from zela.models.rotina import ConfirmacaoMedicacao, Medicamento
 
@@ -36,8 +36,10 @@ def simular_dia(
             relatorio.confirmacoes.append(confirmacao)
 
     evento = classificar_por_regra(leituras, agora)
-    estado = EstadoEscalonamento()
-    _, alertas = decidir_proxima_acao(evento, perfil, estado, agora)
-    relatorio.alertas.extend(alertas)
+    # AVISO não entra na escada de escalonamento (ver zela.api.scheduler).
+    if evento.status != StatusMonitoramento.AVISO:
+        estado = EstadoEscalonamento()
+        _, alertas = decidir_proxima_acao(evento, perfil, estado, agora)
+        relatorio.alertas.extend(alertas)
 
     return relatorio

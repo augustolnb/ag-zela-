@@ -6,9 +6,11 @@ from zela.models.monitoramento import (
     TipoLeitura,
 )
 from zela.models.monitoramento import LeituraSensor
+from zela.domain.monitoramento import MOTIVO_SEM_NENHUMA_FONTE
 from zela.storage.db import conectar
 from zela.storage.monitoramento import (
     aplicar_classificacao,
+    avaliar_sono_recente,
     listar_leituras_recentes,
     salvar_leitura,
 )
@@ -63,24 +65,48 @@ def test_aplicar_classificacao_normal_com_presenca_recente():
     agora = datetime(2026, 9, 16, 14, 0)
     leitura = LeituraSensor(
         fonte=FonteSensor.ESP32, tipo=TipoLeitura.PRESENCA, valor=1,
-        unidade="deteccao", timestamp=agora - timedelta(minutes=30),
+        unidade="deteccao", timestamp=agora - timedelta(minutes=5),
     )
     salvar_leitura(conn, leitura, idoso_id="idosa-1")
+    fc = LeituraSensor(
+        fonte=FonteSensor.SMARTWATCH, tipo=TipoLeitura.FREQUENCIA_CARDIACA, valor=70,
+        unidade="bpm", timestamp=agora - timedelta(minutes=5),
+    )
+    salvar_leitura(conn, fc, idoso_id="idosa-1")
 
     evento = aplicar_classificacao(conn, "idosa-1", agora)
 
     assert evento.status == StatusMonitoramento.NORMAL
 
 
-def test_aplicar_classificacao_sem_leituras_de_presenca_na_janela_e_atencao():
+def test_aplicar_classificacao_sem_nenhuma_leitura_e_risco():
     conn = conectar(":memory:")
     agora = datetime(2026, 9, 16, 14, 0)
-    # nenhuma leitura salva — simula ESP32 que nunca reportou ou parou há muito tempo
 
     evento = aplicar_classificacao(conn, "idosa-1", agora)
 
-    assert evento.status == StatusMonitoramento.ATENCAO
-    assert "sem" in evento.motivo.lower() or "nenhuma" in evento.motivo.lower()
+    assert evento.status == StatusMonitoramento.RISCO
+    assert evento.motivo == MOTIVO_SEM_NENHUMA_FONTE
+
+
+def test_avaliar_sono_recente_considera_15_dias():
+    conn = conectar(":memory:")
+    agora = datetime(2026, 9, 16, 9, 0)
+    for dias in range(1, 15):
+        leitura = LeituraSensor(
+            fonte=FonteSensor.SMARTWATCH, tipo=TipoLeitura.SONO, valor=7,
+            unidade="horas", timestamp=(agora - timedelta(days=dias)).replace(hour=7),
+        )
+        salvar_leitura(conn, leitura, idoso_id="idosa-1")
+    noite = LeituraSensor(
+        fonte=FonteSensor.SMARTWATCH, tipo=TipoLeitura.SONO, valor=4,
+        unidade="horas", timestamp=agora.replace(hour=7),
+    )
+    salvar_leitura(conn, noite, idoso_id="idosa-1")
+
+    evento = avaliar_sono_recente(conn, "idosa-1", agora)
+
+    assert evento.status == StatusMonitoramento.AVISO
 
 
 def test_listar_leituras_recentes_isola_por_idoso():
@@ -108,5 +134,5 @@ def test_aplicar_classificacao_ignora_leituras_de_outro_idoso():
 
     evento = aplicar_classificacao(conn, "idosa-1", agora)
 
-    # idosa-1 não tem nenhuma leitura própria -> deve cair no caso "sem dados", não "normal"
-    assert evento.status == StatusMonitoramento.ATENCAO
+    # idosa-1 não tem nenhuma leitura própria -> as duas fontes contam como silenciosas
+    assert evento.status == StatusMonitoramento.RISCO
