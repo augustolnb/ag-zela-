@@ -589,6 +589,16 @@ apontar para arquivos diferentes sem nenhum aviso.
 usuário) — suficiente para o MVP, mas não deve ser considerado um controle
 de acesso robusto se o painel for exposto além da rede local/doméstica.
 
+## Aviso à família após relato de sintomas
+
+Um relato de sintoma grave pelo WhatsApp abre um episódio com prazo de 60 s, sem
+passar pelo Gemini. Sem resposta, todos os familiares são notificados (o job roda
+a cada 10 s, então o aviso sai entre 60 e cerca de 70 s). "Estou bem" ou "não
+avise" cancelam dentro do prazo, e a segunda recusa em 7 dias envia uma advertência
+à família. Pedido explícito de ajuda notifica na hora. Falhas são reenviadas a cada
+30 s, até 5 tentativas; se ninguém receber, o paciente é orientado a ligar 192.
+Detalhes em `docs/superpowers/specs/2026-11-02-aviso-familia-60s-design.md`.
+
 ## Workflow n8n (Plano 6)
 
 Este workflow representa, de forma simplificada, a fatia "mensagem

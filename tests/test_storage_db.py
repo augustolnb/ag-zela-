@@ -13,6 +13,8 @@ def test_conectar_cria_todas_as_tabelas():
         "leitura_sensor",
         "alerta",
         "estado_escalonamento",
+        "episodio_sintoma",
+        "notificacao_familia",
     }
 
 

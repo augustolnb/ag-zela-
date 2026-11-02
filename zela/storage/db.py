@@ -67,6 +67,31 @@ CREATE TABLE IF NOT EXISTS estado_escalonamento (
     estagio TEXT NOT NULL,
     iniciado_em TEXT
 );
+
+CREATE TABLE IF NOT EXISTS episodio_sintoma (
+    id INTEGER PRIMARY KEY,
+    idoso_id TEXT NOT NULL,
+    tipo TEXT NOT NULL,
+    texto TEXT NOT NULL,
+    sintomas TEXT NOT NULL,
+    iniciado_em TEXT NOT NULL,
+    prazo_em TEXT NOT NULL,
+    estado TEXT NOT NULL,
+    encerrado_em TEXT,
+    paciente_orientado INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS notificacao_familia (
+    id INTEGER PRIMARY KEY,
+    episodio_id INTEGER NOT NULL,
+    tipo TEXT NOT NULL,
+    destinatario TEXT NOT NULL,
+    telefone TEXT NOT NULL,
+    mensagem TEXT NOT NULL,
+    status TEXT NOT NULL,
+    tentativas INTEGER NOT NULL DEFAULT 0,
+    proxima_tentativa_em TEXT NOT NULL
+);
 """
 
 
