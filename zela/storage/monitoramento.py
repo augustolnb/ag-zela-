@@ -13,10 +13,11 @@ from zela.models.monitoramento import LeituraSensor
 JANELA_LOOKBACK_HORAS = 48.0
 
 
-def salvar_leitura(conn: sqlite3.Connection, leitura: LeituraSensor, idoso_id: str) -> None:
-    conn.execute(
+def salvar_leitura(conn: sqlite3.Connection, leitura: LeituraSensor, idoso_id: str) -> bool:
+    """Retorna False se a leitura já existia (reenvio do histórico pelo app)."""
+    cursor = conn.execute(
         """
-        INSERT INTO leitura_sensor (idoso_id, fonte, tipo, valor, unidade, timestamp)
+        INSERT OR IGNORE INTO leitura_sensor (idoso_id, fonte, tipo, valor, unidade, timestamp)
         VALUES (?, ?, ?, ?, ?, ?)
         """,
         (
@@ -29,6 +30,7 @@ def salvar_leitura(conn: sqlite3.Connection, leitura: LeituraSensor, idoso_id: s
         ),
     )
     conn.commit()
+    return cursor.rowcount == 1
 
 
 def listar_leituras_recentes(

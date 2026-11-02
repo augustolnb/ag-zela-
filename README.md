@@ -704,6 +704,9 @@ passa a ser **obrigatório** nesse cenário), ajustar os 3 domínios no
    da idosa agora são classificadas por similaridade de embedding e
    alimentam essa mesma máquina de escalonamento; uma resposta
    classificada como `NORMAL` reseta o escalonamento para `RESOLVIDO`.
+   Desde a issue do aviso em 60 s, mensagens classificadas como `ATENCAO` ou
+   `RISCO` só geram um registro no painel: sintomas reais seguem o fluxo de
+   "Aviso à família após relato de sintomas", e a similaridade não escala sozinha.
    Ver "Limitações conhecidas do Plano 4" abaixo para as ressalvas.
 
 ## Limitações conhecidas do Plano 4

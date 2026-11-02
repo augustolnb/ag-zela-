@@ -1,6 +1,8 @@
 import pytest
 
 from zela.domain.sintomas import CategoriaMensagem, classificar_mensagem
+from zela.embeddings.exemplos_referencia import EXEMPLOS_REFERENCIA
+from zela.models.monitoramento import StatusMonitoramento
 
 
 @pytest.mark.parametrize(
@@ -115,3 +117,15 @@ def test_pergunta_sobre_remedio_nao_abre_episodio(texto):
 )
 def test_relato_em_primeira_pessoa_com_remedio_continua_sintoma(texto):
     assert classificar_mensagem(texto).categoria == CategoriaMensagem.SINTOMA_GRAVE
+
+
+@pytest.mark.parametrize(
+    "exemplo",
+    [e.texto for e in EXEMPLOS_REFERENCIA if e.status == StatusMonitoramento.RISCO],
+)
+def test_toda_frase_de_risco_de_referencia_aciona_o_fluxo_de_60s(exemplo):
+    # A similaridade não escala mais sozinha: estas frases precisam cair aqui.
+    assert classificar_mensagem(exemplo).categoria in (
+        CategoriaMensagem.SINTOMA_GRAVE,
+        CategoriaMensagem.PEDIDO_AJUDA,
+    )

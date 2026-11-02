@@ -160,12 +160,15 @@ def montar_roteador_ingestao(
                 content={"status": "erro", "detalhe": "nenhuma leitura reconhecida no payload"},
             )
 
+        salvas = 0
         for leitura in leituras:
-            await run_in_threadpool(salvar_leitura, leitura, id_idoso)
+            if await run_in_threadpool(salvar_leitura, leitura, id_idoso) is not False:
+                salvas += 1
 
         logger.info(
-            "health-connect: %d leitura(s) salvas, %d descartada(s)", len(leituras), descartadas
+            "health-connect: %d leitura(s) salvas, %d repetida(s), %d descartada(s)",
+            salvas, len(leituras) - salvas, descartadas,
         )
-        return {"status": "recebido", "leituras_salvas": len(leituras), "leituras_descartadas": descartadas}
+        return {"status": "recebido", "leituras_salvas": salvas, "leituras_descartadas": descartadas}
 
     return roteador
