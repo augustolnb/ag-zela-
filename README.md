@@ -599,6 +599,18 @@ avise" cancelam dentro do prazo, e a segunda recusa em 7 dias envia uma advertê
 30 s, até 5 tentativas; se ninguém receber, o paciente é orientado a ligar 192.
 Detalhes em `docs/superpowers/specs/2026-11-02-aviso-familia-60s-design.md`.
 
+## Bulas no RAG
+
+O catálogo em `zela/conhecimento/bulas/` (dipirona, losartana, metformina,
+sinvastatina e dapagliflozina) é independente dos medicamentos cadastrados, então
+não gera lembretes. Cada arquivo traz laboratório, registro, data de aprovação e
+fonte. Para adicionar uma bula, converta o PDF com `pdftotext -layout` e
+`scripts/importar_bula.py`. O backend sincroniza o índice a cada 60 s e só gera
+embeddings do que mudou, inclusive das bulas salvas no painel.
+
+As cópias não vieram do Bulário Eletrônico da Anvisa, que bloqueou o acesso
+automatizado: confira cada versão no bulário antes do uso real.
+
 ## Workflow n8n (Plano 6)
 
 Este workflow representa, de forma simplificada, a fatia "mensagem

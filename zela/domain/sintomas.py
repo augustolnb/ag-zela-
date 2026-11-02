@@ -52,6 +52,14 @@ _PEDIDO = re.compile(
     r"(familia|familiar(es)?|filh[oa]s?|net[oa]s?|espos[oa]|marido|mulher|irm(a|ao)s?|parentes?|alguem|medico|ambulancia|samu|socorro)\b"
     r"|\bsocorro\b|\bpreciso\s+de\s+ajuda\b|\bme\s+ajud[ae]\b|\bprecisando\s+de\s+ajuda\b"
 )
+# Pergunta genérica sobre remédio não é relato: "a losartana pode causar tontura?"
+# não pode avisar a família. Qualquer marca de primeira pessoa mantém o relato.
+_PERGUNTA_SOBRE_REMEDIO = re.compile(
+    r"\b(pode\s+causar|pode\s+dar|causa|da|efeitos?\s+colaterais?|reac(ao|oes)|bula|contraindic\w*|para\s+que\s+serve)\b"
+)
+_PRIMEIRA_PESSOA = re.compile(
+    r"\b(estou|to|tou|tenho|tive|senti|sinto|sentindo|tomei|me|meu|minha|comigo|eu|cai|acabei|passando)\b"
+)
 # Mensagem inteira: "estou bem mal" e "não estou bem" não podem cancelar.
 _ESTOU_BEM = re.compile(
     r"(sim\s+)?(eu\s+)?((estou|to|tou|ta|esta)\s+)?(tudo\s+)?(bem|certo|ok|otimo|otima|melhor)"
@@ -74,9 +82,19 @@ def _encontrar_sintomas(texto: str) -> tuple[str, ...]:
     return tuple(encontrados)
 
 
+def _eh_pergunta_sobre_remedio(texto: str, normalizado: str) -> bool:
+    return (
+        "?" in texto
+        and _PERGUNTA_SOBRE_REMEDIO.search(normalizado) is not None
+        and _PRIMEIRA_PESSOA.search(normalizado) is None
+    )
+
+
 def classificar_mensagem(texto: str) -> ClassificacaoMensagem:
     normalizado = _normalizar(texto)
     sintomas = _encontrar_sintomas(normalizado)
+    if sintomas and _eh_pergunta_sobre_remedio(texto, normalizado):
+        sintomas = ()
 
     # A recusa vem antes do pedido: "não chame minha filha" contém "chame minha filha".
     if _RECUSA.search(normalizado):

@@ -13,6 +13,7 @@ from zela.api.reindexacao import reindexar_documentos
 from zela.api.runner import obter_runner_zela, processar_mensagem
 from zela.api.scheduler import iniciar_scheduler
 from zela.api.webhook import montar_roteador
+from zela.embeddings.bulas import carregar_bulas
 from zela.embeddings.client import ClienteEmbeddingGemini
 from zela.embeddings.exemplos_referencia import EXEMPLOS_REFERENCIA
 from zela.embeddings.vetorial import RepositorioVetorial
@@ -47,6 +48,7 @@ cliente_embedding = ClienteEmbeddingGemini()
 repositorio_vetorial = RepositorioVetorial()
 _runner = obter_runner_zela()
 _exemplos_com_embedding_cache = None
+_BULAS = carregar_bulas()
 
 
 def _obter_telefones_permitidos() -> list[str] | None:
@@ -106,13 +108,20 @@ def _processar_emergencia(telefone: str, texto: str, agora: datetime) -> str | N
     return triar_mensagem(conexao, ID_IDOSO, perfil, texto, agora, waha_client)
 
 
+def _reindexar() -> None:
+    try:
+        quantidade = reindexar_documentos(
+            conectar(CAMINHO_DB), ID_IDOSO, repositorio_vetorial, cliente_embedding, bulas=_BULAS
+        )
+        if quantidade:
+            logger.info("RAG: %s documento(s) de bula indexado(s)", quantidade)
+    except Exception:
+        logger.exception("Falha ao reindexar documentos")
+
+
 @asynccontextmanager
 async def ciclo_de_vida(app: FastAPI):
-    try:
-        reindexar_documentos(conectar(CAMINHO_DB), ID_IDOSO, repositorio_vetorial, cliente_embedding)
-    except Exception:
-        logger.exception("Falha ao reindexar documentos no boot da API")
-    agendador = iniciar_scheduler(CAMINHO_DB, ID_IDOSO, waha_client)
+    agendador = iniciar_scheduler(CAMINHO_DB, ID_IDOSO, waha_client, reindexar=_reindexar)
     try:
         yield
     finally:

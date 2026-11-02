@@ -89,3 +89,29 @@ def test_frase_real_do_teste_em_producao_notifica_na_hora():
     resultado = classificar_mensagem("Estou com o coração acelerado e com tontura, pode contatar um familiar?")
     assert resultado.categoria == CategoriaMensagem.PEDIDO_AJUDA
     assert set(resultado.sintomas) == {"coração acelerado", "tontura"}
+
+
+@pytest.mark.parametrize(
+    "texto",
+    [
+        "a losartana pode causar tontura?",
+        "quais os efeitos colaterais da metformina? dá tontura?",
+        "sinvastatina causa formigamento?",
+        "o que a bula diz sobre falta de ar?",
+    ],
+)
+def test_pergunta_sobre_remedio_nao_abre_episodio(texto):
+    assert classificar_mensagem(texto).categoria == CategoriaMensagem.NENHUM
+
+
+@pytest.mark.parametrize(
+    "texto",
+    [
+        "estou com tontura, a losartana pode causar isso?",
+        "tomei metformina e senti tontura",
+        "minha losartana me deixou tonta, é efeito colateral?",
+        "tontura forte depois do remédio",
+    ],
+)
+def test_relato_em_primeira_pessoa_com_remedio_continua_sintoma(texto):
+    assert classificar_mensagem(texto).categoria == CategoriaMensagem.SINTOMA_GRAVE

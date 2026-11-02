@@ -68,3 +68,9 @@ def test_consultar_conhecimento_retorna_lista_vazia_quando_busca_vetorial_falha(
     resultado = consultar_conhecimento("idosa-1", "para que serve a losartana?")
 
     assert resultado == []
+
+
+def test_agente_comunicacao_so_responde_bula_com_base_nos_trechos():
+    instrucao = montar_agente_comunicacao().instruction
+    assert "apenas" in instrucao and "cite" in instrucao.lower()
+    assert "dose" in instrucao and "médico" in instrucao
