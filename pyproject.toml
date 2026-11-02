@@ -5,7 +5,7 @@ description = "Zela+ — agente de IA de apoio ao idoso que mora sozinho"
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.6,<3",
-    "google-adk>=1.0.0",
+    "google-adk==2.13.0",
     "fastapi>=0.115",
     "httpx>=0.27",
     "apscheduler>=3.10,<4",
@@ -19,7 +19,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
 relatorio = ["markdown>=3.6,<4", "xhtml2pdf>=0.2.15,<0.3"]
-deepseek = ["google-adk[extensions]>=1.0.0"]
+# Versões fixas: um rebuild sem pin trouxe um litellm que exige `mcp` e derrubou o bot.
+deepseek = ["google-adk[extensions]==2.13.0", "litellm==1.106.2", "mcp==2.3.0"]
 
 [build-system]
 requires = ["setuptools>=68"]

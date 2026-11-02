@@ -420,3 +420,34 @@ def test_falha_na_triagem_nao_impede_resposta_do_llm():
 
     cliente = _cliente_emergencia(lambda i, t, a: "oi", waha, triar)
     assert cliente.post("/webhook/whatsapp", json=_corpo("bom dia")).json() == {"status": "processado"}
+
+
+def test_falha_do_llm_responde_mensagem_amigavel_sem_erro_500():
+    waha = _WahaFalso()
+
+    def llm_quebrado(id_idoso, texto, agora):
+        raise RuntimeError("No module named 'mcp'")
+
+    app = FastAPI()
+    app.include_router(montar_roteador(llm_quebrado, waha))
+    resposta = TestClient(app).post("/webhook/whatsapp", json=_corpo("bom dia"))
+
+    assert resposta.status_code == 200
+    assert resposta.json() == {"status": "processado"}
+    assert len(waha.enviados) == 1
+    assert "192" in waha.enviados[0][1]
+
+
+def test_falha_do_llm_nao_impede_avaliacao_de_risco():
+    riscos = []
+
+    def llm_quebrado(id_idoso, texto, agora):
+        raise RuntimeError("fora do ar")
+
+    app = FastAPI()
+    app.include_router(
+        montar_roteador(llm_quebrado, _WahaFalso(), processar_risco=lambda t, x, a: riscos.append(x))
+    )
+    TestClient(app).post("/webhook/whatsapp", json=_corpo("bom dia"))
+
+    assert riscos == ["bom dia"]

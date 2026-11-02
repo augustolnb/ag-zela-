@@ -1,3 +1,9 @@
+import importlib
+import tomllib
+from pathlib import Path
+
+import pytest
+
 from google.adk.models.lite_llm import LiteLlm
 
 from zela.agents.orchestrator import (
@@ -54,3 +60,19 @@ def test_modelo_padrao_aceita_deepseek_com_caixa_variada(monkeypatch):
     modelo = _montar_modelo_padrao()
     assert isinstance(modelo, LiteLlm)
     assert modelo.model == MODELO_DEEPSEEK
+
+
+def test_provedor_deepseek_carrega_com_as_dependencias_do_extra():
+    # Regressão: um litellm novo passou a importar `mcp`, ausente da imagem, e
+    # toda resposta do bot falhou. Os demais testes simulam o LLM e não pegam isso.
+    pytest.importorskip("litellm")
+    importlib.import_module("litellm.proxy._experimental.mcp_server.catalog")
+    importlib.import_module("google.adk.models.lite_llm")
+
+
+def test_dependencias_do_llm_estao_fixadas():
+    dependencias = tomllib.loads(Path("pyproject.toml").read_text())["project"]
+    extra = dependencias["optional-dependencies"]["deepseek"]
+    assert any(d.startswith("google-adk==") for d in dependencias["dependencies"])
+    assert any(d.startswith("litellm==") for d in extra)
+    assert any(d.startswith("mcp==") for d in extra)

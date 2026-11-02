@@ -235,6 +235,17 @@ feitas em sequência rápida pelos avaliadores podem demorar ou falhar.
 - [ ] `proxy_read_timeout`/`proxy_send_timeout` de 180s no server block
       de `api.*` (evita 504 + retry duplicado em respostas lentas)
 
+## Verificação obrigatória depois de todo deploy
+
+`openapi.json` respondendo não prova que o bot funciona. Sempre envie uma
+**mensagem comum** pelo WhatsApp do número cadastrado, como "bom dia", e confirme
+uma resposta da IA. Mensagens de sintoma não servem para isso: elas não passam
+pelo LLM. Confira também os erros:
+
+```bash
+docker compose logs --since 5m backend | grep -E "Falha do LLM|ModuleNotFoundError"
+```
+
 ## Atualizando depois de um `git pull`
 
 ```bash

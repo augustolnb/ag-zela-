@@ -8,6 +8,10 @@ from starlette.concurrency import run_in_threadpool
 logger = logging.getLogger(__name__)
 
 _ID_IDOSO_PADRAO = "idosa-1"
+_RESPOSTA_FALHA_LLM = (
+    "Desculpe, não consegui responder agora. Tente de novo em alguns minutos. "
+    "Se estiver passando mal, me diga o que está sentindo ou ligue 192."
+)
 
 
 def _extrair_telefone_e_texto(payload: dict) -> tuple[str, str] | None:
@@ -81,7 +85,12 @@ def montar_roteador(
                     logger.exception("Falha ao enviar a resposta de emergência ao paciente")
                 return {"status": "emergencia"}
 
-        resposta_texto = await run_in_threadpool(processar_mensagem, id_idoso, texto, agora)
+        # Sem isso, uma falha do LLM vira erro 500 e o WAHA repete a mesma mensagem até 15 vezes.
+        try:
+            resposta_texto = await run_in_threadpool(processar_mensagem, id_idoso, texto, agora)
+        except Exception:
+            logger.exception("Falha do LLM ao processar a mensagem")
+            resposta_texto = _RESPOSTA_FALHA_LLM
         await run_in_threadpool(waha_client.enviar_texto, telefone, resposta_texto)
 
         if processar_risco is not None:
