@@ -1,11 +1,13 @@
+import logging
 from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
+from zela.api.aviso_familia import processar_episodios
 from zela.domain.comunicacao import formatar_lembrete
 from zela.domain.emergencia import EstadoEscalonamento, EstagioEscalonamento
 from zela.domain.rotina import JANELA_LEMBRETE
-from zela.models.alertas import Alerta, CanalAlerta, NivelAlerta
+from zela.models.alertas import Alerta, CanalAlerta, NivelAlerta, StatusAlerta
 from zela.models.monitoramento import EventoMonitoramento, StatusMonitoramento
 from zela.models.perfil import PerfilIdoso
 from zela.storage.alertas import salvar_alerta
@@ -15,8 +17,11 @@ from zela.storage.monitoramento import aplicar_classificacao, avaliar_sono_recen
 from zela.storage.perfil import obter_perfil
 from zela.storage.rotina import aplicar_lembretes_pendentes
 
+logger = logging.getLogger(__name__)
+
 INTERVALO_MINUTOS = 5
 INTERVALO_MONITORAMENTO_MINUTOS = 15
+INTERVALO_EPISODIOS_SEGUNDOS = 10
 
 # Dedupe em memória de processo: evita reenviar o mesmo lembrete a cada
 # execução do scheduler enquanto a dose continuar dentro da janela de
@@ -78,16 +83,23 @@ def _telefone_por_nome(perfil: PerfilIdoso, nome: str) -> str | None:
     return None
 
 
+def _tentar_enviar(waha_client, telefone: str, alerta: Alerta) -> bool:
+    try:
+        waha_client.enviar_texto(telefone, alerta.mensagem)
+    except Exception:
+        logger.exception("Falha ao enviar alerta para %s", alerta.destinatario)
+        return False
+    return True
+
+
 def despachar_alertas(
     conn, alertas: list[Alerta], perfil: PerfilIdoso, idoso_id: str, waha_client
 ) -> None:
     for alerta in alertas:
+        telefone = None if alerta.simulado else _telefone_por_nome(perfil, alerta.destinatario)
+        if telefone is not None and not _tentar_enviar(waha_client, telefone, alerta):
+            alerta = alerta.model_copy(update={"status": StatusAlerta.FALHOU})
         salvar_alerta(conn, alerta, idoso_id)
-        if alerta.simulado:
-            continue
-        telefone = _telefone_por_nome(perfil, alerta.destinatario)
-        if telefone is not None:
-            waha_client.enviar_texto(telefone, alerta.mensagem)
 
 
 def _enviar_aviso(
@@ -103,8 +115,12 @@ def _enviar_aviso(
         mensagem=f"Aviso: {motivo}.",
         timestamp=agora,
     )
+    if not _tentar_enviar(waha_client, contato.telefone, alerta):
+        # Sem marcar em `_avisos_ja_enviados`: a próxima verificação tenta de novo.
+        alerta = alerta.model_copy(update={"status": StatusAlerta.FALHOU})
+        salvar_alerta(conn, alerta, idoso_id)
+        return [alerta]
     salvar_alerta(conn, alerta, idoso_id)
-    waha_client.enviar_texto(contato.telefone, alerta.mensagem)
     _avisos_ja_enviados.add(chave)
     return [alerta]
 
@@ -177,6 +193,13 @@ def iniciar_scheduler(caminho_db: str, id_idoso: str, waha_client) -> Background
         args=[caminho_db, id_idoso, waha_client],
         id="verificar_sono",
         misfire_grace_time=3600,
+    )
+    agendador.add_job(
+        processar_episodios,
+        "interval",
+        seconds=INTERVALO_EPISODIOS_SEGUNDOS,
+        args=[caminho_db, id_idoso, waha_client],
+        id="processar_episodios",
     )
     agendador.start()
     return agendador

@@ -5,6 +5,7 @@ from datetime import datetime
 
 from fastapi import FastAPI
 
+from zela.api.aviso_familia import triar_mensagem
 from zela.api.classificacao import montar_roteador_classificacao
 from zela.api.ingestao import montar_roteador_ingestao
 from zela.api.monitoramento_mensagem import processar_risco_mensagem
@@ -97,6 +98,14 @@ def _processar_risco(telefone: str, texto: str, agora: datetime) -> None:
     )
 
 
+def _processar_emergencia(telefone: str, texto: str, agora: datetime) -> str | None:
+    conexao = conectar(CAMINHO_DB)
+    perfil = obter_perfil(conexao, ID_IDOSO)
+    if perfil is None or telefone not in (perfil.telefone, perfil.lid_whatsapp):
+        return None
+    return triar_mensagem(conexao, ID_IDOSO, perfil, texto, agora, waha_client)
+
+
 @asynccontextmanager
 async def ciclo_de_vida(app: FastAPI):
     try:
@@ -120,7 +129,7 @@ app.include_router(
     montar_roteador(
         _processar, waha_client, id_idoso=ID_IDOSO,
         telefones_permitidos=_TELEFONES_PERMITIDOS, lids_permitidos=_LIDS_PERMITIDOS,
-        processar_risco=_processar_risco, token=TOKEN_INGESTAO,
+        processar_risco=_processar_risco, token=TOKEN_INGESTAO, processar_emergencia=_processar_emergencia,
     )
 )
 app.include_router(montar_roteador_ingestao(_salvar_leitura, id_idoso=ID_IDOSO, token=TOKEN_INGESTAO))

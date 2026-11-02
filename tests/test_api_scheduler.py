@@ -466,3 +466,44 @@ def test_despachar_alertas_nao_envia_alerta_simulado():
 
     assert waha_falso.enviados == []
     assert len(listar_alertas(conn, "idosa-1")) == 1
+
+
+class _WahaQuebrado(_WahaFalso):
+    def __init__(self, telefones_quebrados):
+        super().__init__()
+        self.telefones_quebrados = telefones_quebrados
+
+    def enviar_texto(self, telefone, texto):
+        if telefone in self.telefones_quebrados:
+            raise RuntimeError("No LID for user")
+        super().enviar_texto(telefone, texto)
+
+
+def _perfil_dois_contatos():
+    return PerfilIdoso(
+        nome="Maria",
+        telefone="+5511900000000",
+        data_nascimento=date(1945, 1, 1),
+        contatos_familiares=[
+            ContatoFamiliar(nome="Ana", telefone="+5511911111111"),
+            ContatoFamiliar(nome="Beto", telefone="+5511922222222"),
+        ],
+    )
+
+
+def _alerta_para(nome):
+    return Alerta(
+        nivel=NivelAlerta.CRITICO, destinatario=nome, canal=CanalAlerta.WHATSAPP,
+        mensagem="x", timestamp=datetime(2026, 11, 2, 10, 0),
+    )
+
+
+def test_despachar_alertas_registra_status_real_e_nao_interrompe_outros(tmp_path):
+    conn = conectar(str(tmp_path / "t.db"))
+    waha = _WahaQuebrado({"+5511911111111"})
+
+    despachar_alertas(conn, [_alerta_para("Ana"), _alerta_para("Beto")], _perfil_dois_contatos(), "idosa-1", waha)
+
+    por_nome = {a.destinatario: a.status.value for a in listar_alertas(conn, "idosa-1")}
+    assert por_nome == {"Ana": "falhou", "Beto": "enviado"}
+    assert waha.enviados == [("+5511922222222", "x")]

@@ -359,3 +359,64 @@ def test_webhook_nao_falha_quando_processar_risco_levanta_excecao():
 
     assert resposta.status_code == 200
     assert resposta.json() == {"status": "processado"}
+
+
+def _corpo(texto):
+    return {"payload": {"from": "5511987654321@c.us", "body": texto, "fromMe": False}}
+
+
+def _cliente_emergencia(processar, waha, processar_emergencia, processar_risco=None):
+    app = FastAPI()
+    app.include_router(
+        montar_roteador(processar, waha, processar_emergencia=processar_emergencia, processar_risco=processar_risco)
+    )
+    return TestClient(app)
+
+
+def test_emergencia_responde_sem_chamar_llm_nem_risco():
+    waha = _WahaFalso()
+
+    def llm(*args):
+        raise AssertionError("LLM não pode ser chamado")
+
+    def risco(*args):
+        raise AssertionError("risco não pode ser chamado")
+
+    cliente = _cliente_emergencia(llm, waha, lambda t, x, a: "Você está bem?", risco)
+    resposta = cliente.post("/webhook/whatsapp", json=_corpo("tontura"))
+
+    assert resposta.json() == {"status": "emergencia"}
+    assert waha.enviados == [("+5511987654321", "Você está bem?")]
+
+
+def test_mensagem_comum_segue_para_llm():
+    waha = _WahaFalso()
+    cliente = _cliente_emergencia(lambda i, t, a: "oi", waha, lambda t, x, a: None)
+    assert cliente.post("/webhook/whatsapp", json=_corpo("bom dia")).json() == {"status": "processado"}
+    assert waha.enviados == [("+5511987654321", "oi")]
+
+
+def test_falha_ao_confirmar_ao_paciente_nao_derruba_webhook():
+    class _WahaQuebrado:
+        def enviar_texto(self, telefone, texto):
+            raise RuntimeError("falha")
+
+    triagens = []
+
+    def triar(telefone, texto, agora):
+        triagens.append(texto)
+        return "Você está bem?"
+
+    cliente = _cliente_emergencia(lambda *a: "x", _WahaQuebrado(), triar)
+    assert cliente.post("/webhook/whatsapp", json=_corpo("tontura")).json() == {"status": "emergencia"}
+    assert triagens == ["tontura"]
+
+
+def test_falha_na_triagem_nao_impede_resposta_do_llm():
+    waha = _WahaFalso()
+
+    def triar(telefone, texto, agora):
+        raise RuntimeError("banco indisponível")
+
+    cliente = _cliente_emergencia(lambda i, t, a: "oi", waha, triar)
+    assert cliente.post("/webhook/whatsapp", json=_corpo("bom dia")).json() == {"status": "processado"}

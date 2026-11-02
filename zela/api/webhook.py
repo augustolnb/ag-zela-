@@ -41,6 +41,7 @@ def montar_roteador(
     lids_permitidos: list[str] | None = None,
     processar_risco=None,
     token: str | None = None,
+    processar_emergencia=None,
 ) -> APIRouter:
     roteador = APIRouter()
 
@@ -64,6 +65,22 @@ def montar_roteador(
             return {"status": "ignorado"}
 
         agora = datetime.now()
+
+        # Antes do LLM: o aviso à família não pode atrasar nem falhar por causa do Gemini.
+        if processar_emergencia is not None:
+            resposta_emergencia = None
+            try:
+                resposta_emergencia = await run_in_threadpool(processar_emergencia, telefone, texto, agora)
+            except Exception:
+                logger.exception("Falha na triagem de emergência da mensagem")
+            if resposta_emergencia is not None:
+                try:
+                    await run_in_threadpool(waha_client.enviar_texto, telefone, resposta_emergencia)
+                except Exception:
+                    # O episódio já está salvo: a família é avisada no prazo mesmo assim.
+                    logger.exception("Falha ao enviar a resposta de emergência ao paciente")
+                return {"status": "emergencia"}
+
         resposta_texto = await run_in_threadpool(processar_mensagem, id_idoso, texto, agora)
         await run_in_threadpool(waha_client.enviar_texto, telefone, resposta_texto)
 

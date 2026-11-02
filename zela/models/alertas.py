@@ -18,6 +18,7 @@ class CanalAlerta(str, Enum):
 class StatusAlerta(str, Enum):
     ENVIADO = "enviado"
     CONFIRMADO = "confirmado"
+    FALHOU = "falhou"
 
 
 class Alerta(BaseModel):
