@@ -21,7 +21,30 @@ class RepositorioVetorial:
             metadatas=[{"idoso_id": idoso_id, "tipo": tipo}],
         )
 
-    def buscar_similares(self, idoso_id: str, embedding_consulta: list[float], k: int = 3) -> list[str]:
+    def listar_documentos_de_bula(self, idoso_id: str) -> dict[str, str]:
+        """Documento de bula → versão indexada."""
+        resultado = self._colecao.get(
+            where={"$and": [{"idoso_id": idoso_id}, {"tipo": "bula"}]}, include=["metadatas"]
+        )
+        return {m["documento"]: m.get("versao", "") for m in resultado["metadatas"] if m.get("documento")}
+
+    def remover_documento(self, idoso_id: str, documento: str) -> None:
+        self._colecao.delete(where={"$and": [{"idoso_id": idoso_id}, {"documento": documento}]})
+
+    def substituir_documento(
+        self, idoso_id: str, documento: str, trechos: list[str], embeddings: list[list[float]], versao: str
+    ) -> None:
+        self.remover_documento(idoso_id, documento)
+        self._colecao.upsert(
+            ids=[f"{documento}:{i}" for i in range(len(trechos))],
+            embeddings=embeddings,
+            documents=trechos,
+            metadatas=[
+                {"idoso_id": idoso_id, "tipo": "bula", "documento": documento, "versao": versao} for _ in trechos
+            ],
+        )
+
+    def buscar_similares(self, idoso_id: str, embedding_consulta: list[float], k: int = 5) -> list[str]:
         resultado = self._colecao.query(
             query_embeddings=[embedding_consulta],
             n_results=k,

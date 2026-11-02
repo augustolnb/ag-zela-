@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 INTERVALO_MINUTOS = 5
 INTERVALO_MONITORAMENTO_MINUTOS = 15
 INTERVALO_EPISODIOS_SEGUNDOS = 10
+INTERVALO_REINDEXACAO_SEGUNDOS = 60
 
 # Dedupe em memória de processo: evita reenviar o mesmo lembrete a cada
 # execução do scheduler enquanto a dose continuar dentro da janela de
@@ -169,7 +170,7 @@ def verificar_sono_e_avisar(caminho_db: str, id_idoso: str, waha_client) -> list
     return _enviar_aviso(conn, perfil, id_idoso, evento.motivo, chave, agora, waha_client)
 
 
-def iniciar_scheduler(caminho_db: str, id_idoso: str, waha_client) -> BackgroundScheduler:
+def iniciar_scheduler(caminho_db: str, id_idoso: str, waha_client, reindexar=None) -> BackgroundScheduler:
     agendador = BackgroundScheduler()
     agendador.add_job(
         verificar_e_enviar_lembretes,
@@ -201,5 +202,11 @@ def iniciar_scheduler(caminho_db: str, id_idoso: str, waha_client) -> Background
         args=[caminho_db, id_idoso, waha_client],
         id="processar_episodios",
     )
+    if reindexar is not None:
+        # Em segundo plano desde o início: embeddings não podem atrasar o boot da API.
+        agendador.add_job(
+            reindexar, "interval", seconds=INTERVALO_REINDEXACAO_SEGUNDOS,
+            id="reindexar_documentos", next_run_time=datetime.now(),
+        )
     agendador.start()
     return agendador
