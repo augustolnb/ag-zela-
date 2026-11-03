@@ -67,7 +67,7 @@ def test_instalacao_nova_com_esp32_vivo_ha_pouco_tempo_e_normal():
 
 
 def test_risco_quando_as_duas_fontes_param():
-    evento = classificar_por_regra([esp(20), fc(40)], AGORA)
+    evento = classificar_por_regra([esp(20), fc(400)], AGORA)
     assert evento.status == StatusMonitoramento.RISCO
     assert evento.motivo == MOTIVO_SEM_NENHUMA_FONTE
 
@@ -79,7 +79,7 @@ def test_aviso_so_esp32_parado():
 
 
 def test_aviso_so_pulseira_parada():
-    evento = classificar_por_regra([presenca(60), esp(2), fc(40)], AGORA)
+    evento = classificar_por_regra([presenca(60), esp(2), fc(400)], AGORA)
     assert evento.status == StatusMonitoramento.AVISO
     assert evento.motivo == MOTIVO_PULSEIRA_SEM_DADOS
 
@@ -113,3 +113,49 @@ def test_sinais_de_vida_nao_vao_para_as_leituras_relacionadas():
     risco = classificar_por_regra([esp(m) for m in range(20, 60, 5)] + [fc(40)], AGORA)
     for evento in (normal, aviso, risco):
         assert all(l.tipo != TipoLeitura.SINAL_DE_VIDA for l in evento.leituras_relacionadas)
+
+
+def _passos(min_atras):
+    return LeituraSensor(
+        fonte=FonteSensor.SMARTWATCH, tipo=TipoLeitura.PASSOS, valor=100, unidade="passos",
+        timestamp=AGORA - timedelta(minutes=min_atras),
+    )
+
+
+def _sono(min_atras):
+    return LeituraSensor(
+        fonte=FonteSensor.SMARTWATCH, tipo=TipoLeitura.SONO, valor=7, unidade="horas",
+        timestamp=AGORA - timedelta(minutes=min_atras),
+    )
+
+
+def test_passos_recentes_mantem_pulseira_ativa_sem_batimentos():
+    evento = classificar_por_regra([esp(1), presenca(10), _passos(60)], AGORA)
+    assert evento.status == StatusMonitoramento.NORMAL
+
+
+def test_sono_recente_mantem_pulseira_ativa_sem_batimentos():
+    evento = classificar_por_regra([esp(1), presenca(10), _sono(60)], AGORA)
+    assert evento.status == StatusMonitoramento.NORMAL
+
+
+def test_esp32_parado_com_passos_recentes_e_so_aviso():
+    evento = classificar_por_regra([esp(20), presenca(30), _passos(60)], AGORA)
+    assert evento.status == StatusMonitoramento.AVISO
+    assert evento.motivo == MOTIVO_ESP32_SEM_SINAL
+
+
+def test_intervalo_real_de_sincronizacao_de_5h45_nao_gera_aviso():
+    evento = classificar_por_regra([esp(1), presenca(10), _passos(345)], AGORA)
+    assert evento.status == StatusMonitoramento.NORMAL
+
+
+def test_6h_sem_nenhum_dado_da_pulseira_gera_aviso():
+    evento = classificar_por_regra([esp(1), presenca(10), _passos(360)], AGORA)
+    assert evento.status == StatusMonitoramento.AVISO
+    assert evento.motivo == MOTIVO_PULSEIRA_SEM_DADOS
+
+
+def test_duas_fontes_paradas_ainda_sao_risco():
+    evento = classificar_por_regra([esp(20), presenca(30), _passos(360)], AGORA)
+    assert evento.status == StatusMonitoramento.RISCO

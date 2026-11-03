@@ -132,6 +132,10 @@ server {
 }
 ```
 
+No primeiro `server` de `api.*`, adicione também `client_max_body_size 10m;`.
+Com o limite padrão de 1 MB, o nginx recusa com 413 os envios do HC Webhook em
+resolução completa: um envio real chegou a 1,9 MB.
+
 Esse timeout maior só é necessário no bloco de `api.*` (onde fica o
 webhook) — mantenha o padrão nos outros dois.
 

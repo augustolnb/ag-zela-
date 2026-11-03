@@ -12,12 +12,14 @@ from zela.models.monitoramento import (
 
 LIMITE_HORAS_SEM_PRESENCA = 8.0
 LIMITE_MINUTOS_ESP32 = 15
-LIMITE_MINUTOS_PULSEIRA = 30
+# Medido em produção: o celular sincronizou com intervalos de até 5h45 (Android
+# adia o envio em segundo plano), e o Mi Fitness só repassa batimentos em blocos.
+LIMITE_MINUTOS_PULSEIRA = 360
 
 # Textos fixos, sem números: o motivo do AVISO é a chave de desduplicação do
 # scheduler, então não pode mudar entre uma verificação e outra.
 MOTIVO_ESP32_SEM_SINAL = "O ESP32 da casa parou de enviar sinal"
-MOTIVO_PULSEIRA_SEM_DADOS = "A pulseira parou de enviar leituras (pode ter sido retirada)"
+MOTIVO_PULSEIRA_SEM_DADOS = "A pulseira parou de sincronizar (verifique o celular e o app HC Webhook)"
 MOTIVO_SEM_NENHUMA_FONTE = "ESP32 e pulseira pararam de enviar dados ao mesmo tempo"
 
 _FUSO_LOCAL = ZoneInfo("America/Sao_Paulo")
@@ -66,7 +68,10 @@ def classificar_por_regra(
     leituras_fc = [leitura for leitura in leituras if leitura.tipo == TipoLeitura.FREQUENCIA_CARDIACA]
 
     minutos_esp32 = _minutos_desde(leituras_esp32, agora)
-    minutos_pulseira = _minutos_desde(leituras_fc, agora)
+    # Qualquer dado serve: batimentos faltam mesmo com a pulseira no braço. Isso
+    # prova que a sincronização está ativa, não que a pulseira está sendo usada.
+    leituras_pulseira = [leitura for leitura in leituras if leitura.fonte == FonteSensor.SMARTWATCH]
+    minutos_pulseira = _minutos_desde(leituras_pulseira, agora)
     esp32_silencioso = minutos_esp32 is None or minutos_esp32 >= limite_minutos_esp32
     pulseira_silenciosa = minutos_pulseira is None or minutos_pulseira >= limite_minutos_pulseira
 
@@ -106,6 +111,6 @@ def classificar_por_regra(
     if esp32_silencioso:
         return _evento(StatusMonitoramento.AVISO, MOTIVO_ESP32_SEM_SINAL, leituras_presenca, agora)
     if pulseira_silenciosa:
-        return _evento(StatusMonitoramento.AVISO, MOTIVO_PULSEIRA_SEM_DADOS, leituras_fc, agora)
+        return _evento(StatusMonitoramento.AVISO, MOTIVO_PULSEIRA_SEM_DADOS, leituras_pulseira, agora)
 
     return _evento(StatusMonitoramento.NORMAL, "Nenhuma anomalia detectada", leituras_uteis, agora)

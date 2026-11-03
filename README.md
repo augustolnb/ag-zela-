@@ -462,7 +462,7 @@ Vale a condição mais grave, verificada a cada 15 min:
 | Status | Condição |
 |---|---|
 | RISCO | 8 h ou mais sem movimento, com o ESP32 enviando sinal de vida |
-| RISCO | ESP32 sem comunicação há 15 min **e** pulseira sem leitura há 30 min |
+| RISCO | ESP32 sem comunicação há 15 min **e** nenhum dado da pulseira (batimentos, passos ou sono) há 6 h |
 | ATENÇÃO | Frequência cardíaca fora de 30–220 bpm |
 | AVISO | Só uma das fontes sem dados: mensagem única ao primeiro familiar, sem escalonamento |
 | NORMAL | Nenhuma das condições acima |
