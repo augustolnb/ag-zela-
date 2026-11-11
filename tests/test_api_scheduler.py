@@ -898,6 +898,7 @@ def test_lembrete_vai_ao_whatsapp_e_ao_gmail(tmp_path, monkeypatch):
     waha, gmail = _WahaFalso(), _GmailFalso()
 
     verificar_e_enviar_lembretes(caminho_db, "idosa-1", waha, gmail_client=gmail)
+    _esperar_pulseira()
 
     assert len(waha.enviados) == 1
     assert len(gmail.chamadas) == 1
@@ -911,6 +912,7 @@ def test_lembrete_repetido_no_mesmo_horario_nao_gera_segundo_email(tmp_path, mon
 
     verificar_e_enviar_lembretes(caminho_db, "idosa-1", _WahaFalso(), gmail_client=gmail)
     verificar_e_enviar_lembretes(caminho_db, "idosa-1", _WahaFalso(), gmail_client=gmail)
+    _esperar_pulseira()
 
     assert len(gmail.chamadas) == 1
 
@@ -942,6 +944,7 @@ def test_checagem_ao_idoso_vai_ao_gmail_mas_aviso_a_familia_nao(tmp_path):
         conn, [_alerta_pulseira("Maria da Silva"), _alerta_pulseira("João")], _perfil(), "idosa-1", _WahaFalso(),
         gmail_client=gmail,
     )
+    _esperar_pulseira()
 
     assert len(gmail.chamadas) == 1
     assert gmail.chamadas[0][0] == "Zela+: está tudo bem?"
@@ -955,6 +958,7 @@ def test_alerta_simulado_nao_vai_ao_gmail(tmp_path):
         conn, [_alerta_pulseira("Maria da Silva", simulado=True)], _perfil(), "idosa-1", _WahaFalso(),
         gmail_client=gmail,
     )
+    _esperar_pulseira()
 
     assert gmail.chamadas == []
 
@@ -968,3 +972,39 @@ def test_gmail_com_falha_nao_impede_salvar_o_alerta(tmp_path):
     )
 
     assert len(listar_alertas(conn, "idosa-1")) == 1
+
+
+def _esperar_pulseira():
+    # O executor da pulseira tem 1 thread e é FIFO: uma tarefa vazia termina depois das anteriores.
+    from zela.api import pulseira
+
+    pulseira._executor.submit(lambda: None).result(timeout=5)
+
+
+def test_gmail_travado_nao_atrasa_o_whatsapp_dos_outros_remedios(tmp_path, monkeypatch):
+    import threading
+    import time as _time
+
+    caminho_db = _preparar_lembrete(tmp_path, monkeypatch)
+    salvar_medicamento(
+        conectar(caminho_db),
+        Medicamento(id="med-g2", nome="Metformina", dosagem=Dosagem(quantidade=500, unidade="mg"), horarios=[time(8, 0)]),
+        idoso_id="idosa-1",
+    )
+    liberar = threading.Event()
+
+    class _GmailTravado(_GmailFalso):
+        def notificar(self, assunto, corpo):
+            liberar.wait(timeout=5)
+            return super().notificar(assunto, corpo)
+
+    waha, gmail = _WahaFalso(), _GmailTravado()
+    inicio = _time.monotonic()
+    verificar_e_enviar_lembretes(caminho_db, "idosa-1", waha, gmail_client=gmail)
+    duracao = _time.monotonic() - inicio
+    liberar.set()
+    _esperar_pulseira()
+
+    assert duracao < 1
+    assert len(waha.enviados) == 2
+    assert len(gmail.chamadas) == 2

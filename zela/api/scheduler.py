@@ -4,7 +4,7 @@ from datetime import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from zela.api.aviso_familia import processar_episodios
-from zela.api.pulseira import notificar_pulseira
+from zela.api.pulseira import notificar_pulseira_em_segundo_plano
 from zela.domain.compromisso_lembretes import (
     calcular_overrides_minutos_google,
     lembretes_compromisso_pendentes,
@@ -84,7 +84,7 @@ def verificar_e_enviar_lembretes(caminho_db: str, id_idoso: str, waha_client, gm
             continue
         texto = formatar_lembrete(medicamento)
         waha_client.enviar_texto(perfil.lid_whatsapp or perfil.telefone, texto)
-        notificar_pulseira(gmail_client, notificacao_lembrete_remedio(medicamento))
+        notificar_pulseira_em_segundo_plano(gmail_client, notificacao_lembrete_remedio(medicamento))
         _lembretes_ja_enviados.add(chave)
         enviadas.append(texto)
     return enviadas
@@ -181,7 +181,7 @@ def despachar_alertas(
             alerta = alerta.model_copy(update={"status": StatusAlerta.FALHOU})
         # Checagem ao próprio idoso também vai à pulseira, mesmo se o WhatsApp falhou.
         if not alerta.simulado and alerta.destinatario == perfil.nome:
-            notificar_pulseira(gmail_client, notificacao_checagem(alerta.mensagem))
+            notificar_pulseira_em_segundo_plano(gmail_client, notificacao_checagem(alerta.mensagem))
         salvar_alerta(conn, alerta, idoso_id)
 
 

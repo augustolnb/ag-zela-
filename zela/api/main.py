@@ -1,7 +1,6 @@
 import logging
 import os
 from collections.abc import Mapping
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from datetime import datetime
 
@@ -11,7 +10,7 @@ from zela.api.aviso_familia import triar_mensagem
 from zela.api.classificacao import montar_roteador_classificacao
 from zela.api.ingestao import montar_roteador_ingestao
 from zela.api.monitoramento_mensagem import processar_risco_mensagem
-from zela.api.pulseira import notificar_pulseira
+from zela.api.pulseira import notificar_pulseira_em_segundo_plano
 from zela.api.reindexacao import reindexar_documentos
 from zela.api.runner import obter_runner_zela, processar_mensagem
 from zela.api.scheduler import iniciar_scheduler
@@ -102,8 +101,6 @@ def _montar_gmail_client(env: Mapping[str, str]) -> GmailClient | None:
 
 
 gmail_client = _montar_gmail_client(os.environ)
-# A notificação do sintoma não pode atrasar a resposta do webhook ao idoso.
-_executor_pulseira = ThreadPoolExecutor(max_workers=1, thread_name_prefix="pulseira")
 cliente_embedding = ClienteEmbeddingGemini()
 repositorio_vetorial = RepositorioVetorial()
 _runner = obter_runner_zela()
@@ -161,8 +158,8 @@ def _processar_risco(telefone: str, texto: str, agora: datetime) -> None:
 
 
 def _notificar_sintoma(sintomas: list[str]) -> None:
-    if gmail_client is not None:
-        _executor_pulseira.submit(notificar_pulseira, gmail_client, notificacao_confirmacao_sintoma(sintomas))
+    # Em segundo plano: a resposta do webhook ao idoso não espera a API do Google.
+    notificar_pulseira_em_segundo_plano(gmail_client, notificacao_confirmacao_sintoma(sintomas))
 
 
 def _processar_emergencia(telefone: str, texto: str, agora: datetime) -> str | None:

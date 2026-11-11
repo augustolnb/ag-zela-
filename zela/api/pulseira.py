@@ -1,4 +1,5 @@
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 from zela.domain.pulseira import NotificacaoPulseira
 
@@ -15,3 +16,18 @@ def notificar_pulseira(gmail_client, notificacao: NotificacaoPulseira) -> bool:
         logger.exception("Falha ao notificar a pulseira pelo Gmail (%s)", notificacao.assunto)
         return False
     return True
+
+
+# Uma thread, FIFO: as notificações saem na ordem e nunca seguram o chamador
+# (webhook ou jobs do scheduler) esperando a API do Google.
+_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="pulseira")
+
+
+def notificar_pulseira_em_segundo_plano(gmail_client, notificacao: NotificacaoPulseira) -> None:
+    if gmail_client is None:
+        return
+    try:
+        _executor.submit(notificar_pulseira, gmail_client, notificacao)
+    except RuntimeError:
+        # Executor já encerrado (desligamento do backend).
+        logger.exception("Notificação da pulseira descartada (%s)", notificacao.assunto)
