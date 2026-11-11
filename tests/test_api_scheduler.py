@@ -538,14 +538,14 @@ def test_verificar_e_enviar_lembretes_compromisso_envia_para_idoso_e_familiares(
     salvar_perfil(conn, _perfil(), idoso_id="idosa-1")
     salvar_compromisso(
         conn,
-        Compromisso(id="comp-1", titulo="Exame", data_hora=datetime(2026, 11, 10, 14, 0), local="Lab", tipo=TipoCompromisso.EXAME),
+        Compromisso(id="comp-1", titulo="Exame", data_hora=datetime(2030, 11, 10, 14, 0), local="Lab", tipo=TipoCompromisso.EXAME),
         idoso_id="idosa-1",
     )
 
     class _DatetimeFixo:
         @staticmethod
         def now():
-            return datetime(2026, 11, 1, 9, 0)
+            return datetime(2030, 11, 1, 9, 0)
 
     monkeypatch.setattr("zela.api.scheduler.datetime", _DatetimeFixo)
 
@@ -563,14 +563,14 @@ def test_verificar_e_enviar_lembretes_compromisso_nao_repete_instantaneo(tmp_pat
     salvar_perfil(conn, _perfil(), idoso_id="idosa-1")
     salvar_compromisso(
         conn,
-        Compromisso(id="comp-1", titulo="Exame", data_hora=datetime(2026, 11, 10, 14, 0), local="Lab", tipo=TipoCompromisso.EXAME),
+        Compromisso(id="comp-1", titulo="Exame", data_hora=datetime(2030, 11, 10, 14, 0), local="Lab", tipo=TipoCompromisso.EXAME),
         idoso_id="idosa-1",
     )
 
     class _DatetimeFixo:
         @staticmethod
         def now():
-            return datetime(2026, 11, 1, 9, 0)
+            return datetime(2030, 11, 1, 9, 0)
 
     monkeypatch.setattr("zela.api.scheduler.datetime", _DatetimeFixo)
 
@@ -604,7 +604,7 @@ def test_verificar_e_enviar_lembretes_compromisso_continua_apos_falha_em_um_fami
     salvar_compromisso(
         conn,
         Compromisso(
-            id="comp-1", titulo="Exame", data_hora=datetime(2026, 11, 10, 14, 0),
+            id="comp-1", titulo="Exame", data_hora=datetime(2030, 11, 10, 14, 0),
             local="Lab", tipo=TipoCompromisso.EXAME,
         ),
         idoso_id="idosa-1",
@@ -613,7 +613,7 @@ def test_verificar_e_enviar_lembretes_compromisso_continua_apos_falha_em_um_fami
     class _DatetimeFixo:
         @staticmethod
         def now():
-            return datetime(2026, 11, 1, 9, 0)
+            return datetime(2030, 11, 1, 9, 0)
 
     monkeypatch.setattr("zela.api.scheduler.datetime", _DatetimeFixo)
 
@@ -648,7 +648,7 @@ def test_verificar_e_enviar_lembretes_compromisso_erro_em_um_compromisso_nao_abo
     salvar_compromisso(
         conn,
         Compromisso(
-            id="comp-falha", titulo="Exame", data_hora=datetime(2026, 11, 10, 14, 0),
+            id="comp-falha", titulo="Exame", data_hora=datetime(2030, 11, 10, 14, 0),
             local="Lab", tipo=TipoCompromisso.EXAME,
         ),
         idoso_id="idosa-1",
@@ -656,7 +656,7 @@ def test_verificar_e_enviar_lembretes_compromisso_erro_em_um_compromisso_nao_abo
     salvar_compromisso(
         conn,
         Compromisso(
-            id="comp-ok", titulo="Consulta", data_hora=datetime(2026, 11, 12, 10, 0),
+            id="comp-ok", titulo="Consulta", data_hora=datetime(2030, 11, 12, 10, 0),
             local="Clínica", tipo=TipoCompromisso.CONSULTA,
         ),
         idoso_id="idosa-1",
@@ -665,7 +665,7 @@ def test_verificar_e_enviar_lembretes_compromisso_erro_em_um_compromisso_nao_abo
     class _DatetimeFixo:
         @staticmethod
         def now():
-            return datetime(2026, 11, 1, 9, 0)
+            return datetime(2030, 11, 1, 9, 0)
 
     monkeypatch.setattr("zela.api.scheduler.datetime", _DatetimeFixo)
 
@@ -698,7 +698,7 @@ def test_verificar_e_enviar_lembretes_compromisso_envia_cancelamento_apos_remoca
     salvar_perfil(conn, _perfil(), idoso_id="idosa-1")
     salvar_compromisso(
         conn,
-        Compromisso(id="comp-1", titulo="Exame", data_hora=datetime(2026, 11, 10, 14, 0), local="Lab", tipo=TipoCompromisso.EXAME),
+        Compromisso(id="comp-1", titulo="Exame", data_hora=datetime(2030, 11, 10, 14, 0), local="Lab", tipo=TipoCompromisso.EXAME),
         idoso_id="idosa-1",
     )
     remover_compromisso(conn, "comp-1", idoso_id="idosa-1")
@@ -706,7 +706,7 @@ def test_verificar_e_enviar_lembretes_compromisso_envia_cancelamento_apos_remoca
     class _DatetimeFixo:
         @staticmethod
         def now():
-            return datetime(2026, 11, 1, 9, 0)
+            return datetime(2030, 11, 1, 9, 0)
 
     monkeypatch.setattr("zela.api.scheduler.datetime", _DatetimeFixo)
 
@@ -750,14 +750,14 @@ def test_sincronizar_compromissos_cria_evento_novo_e_salva_o_id(tmp_path, monkey
     conn = conectar(caminho_db)
     salvar_compromisso(
         conn,
-        Compromisso(id="comp-1", titulo="Exame", data_hora=datetime(2026, 11, 10, 14, 0), local="Lab", tipo=TipoCompromisso.EXAME),
+        Compromisso(id="comp-1", titulo="Exame", data_hora=datetime(2030, 11, 10, 14, 0), local="Lab", tipo=TipoCompromisso.EXAME),
         idoso_id="idosa-1",
     )
 
     class _DatetimeFixo:
         @staticmethod
         def now():
-            return datetime(2026, 11, 1, 9, 0)
+            return datetime(2030, 11, 1, 9, 0)
 
     monkeypatch.setattr("zela.api.scheduler.datetime", _DatetimeFixo)
 
@@ -775,20 +775,20 @@ def test_sincronizar_compromissos_atualiza_evento_existente(tmp_path, monkeypatc
     conn = conectar(caminho_db)
     salvar_compromisso(
         conn,
-        Compromisso(id="comp-1", titulo="Exame", data_hora=datetime(2026, 11, 10, 14, 0), local="Lab", tipo=TipoCompromisso.EXAME),
+        Compromisso(id="comp-1", titulo="Exame", data_hora=datetime(2030, 11, 10, 14, 0), local="Lab", tipo=TipoCompromisso.EXAME),
         idoso_id="idosa-1",
     )
     marcar_google_sync_feito(conn, "comp-1", google_event_id="evt-existente")
     salvar_compromisso(
         conn,
-        Compromisso(id="comp-1", titulo="Exame", data_hora=datetime(2026, 11, 11, 14, 0), local="Lab", tipo=TipoCompromisso.EXAME),
+        Compromisso(id="comp-1", titulo="Exame", data_hora=datetime(2030, 11, 11, 14, 0), local="Lab", tipo=TipoCompromisso.EXAME),
         idoso_id="idosa-1",
     )  # edição marca google_sync_pendente = 1 de novo
 
     class _DatetimeFixo:
         @staticmethod
         def now():
-            return datetime(2026, 11, 1, 9, 0)
+            return datetime(2030, 11, 1, 9, 0)
 
     monkeypatch.setattr("zela.api.scheduler.datetime", _DatetimeFixo)
 
@@ -804,7 +804,7 @@ def test_sincronizar_compromissos_remove_evento_e_ignora_se_nunca_sincronizado(t
     conn = conectar(caminho_db)
     salvar_compromisso(
         conn,
-        Compromisso(id="comp-1", titulo="Exame", data_hora=datetime(2026, 11, 10, 14, 0), local="Lab", tipo=TipoCompromisso.EXAME),
+        Compromisso(id="comp-1", titulo="Exame", data_hora=datetime(2030, 11, 10, 14, 0), local="Lab", tipo=TipoCompromisso.EXAME),
         idoso_id="idosa-1",
     )
     remover_compromisso(conn, "comp-1", idoso_id="idosa-1")  # nunca teve google_event_id
@@ -812,7 +812,7 @@ def test_sincronizar_compromissos_remove_evento_e_ignora_se_nunca_sincronizado(t
     class _DatetimeFixo:
         @staticmethod
         def now():
-            return datetime(2026, 11, 1, 9, 0)
+            return datetime(2030, 11, 1, 9, 0)
 
     monkeypatch.setattr("zela.api.scheduler.datetime", _DatetimeFixo)
 
@@ -828,14 +828,14 @@ def test_sincronizar_compromissos_falha_na_api_mantem_pendente(tmp_path, monkeyp
     conn = conectar(caminho_db)
     salvar_compromisso(
         conn,
-        Compromisso(id="comp-1", titulo="Exame", data_hora=datetime(2026, 11, 10, 14, 0), local="Lab", tipo=TipoCompromisso.EXAME),
+        Compromisso(id="comp-1", titulo="Exame", data_hora=datetime(2030, 11, 10, 14, 0), local="Lab", tipo=TipoCompromisso.EXAME),
         idoso_id="idosa-1",
     )
 
     class _DatetimeFixo:
         @staticmethod
         def now():
-            return datetime(2026, 11, 1, 9, 0)
+            return datetime(2030, 11, 1, 9, 0)
 
     monkeypatch.setattr("zela.api.scheduler.datetime", _DatetimeFixo)
 
