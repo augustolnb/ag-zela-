@@ -2,6 +2,15 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# tzdata: a imagem slim não vem com o banco de fusos horários do sistema.
+# Sem isso, a variável de ambiente TZ (ver docker-compose.yml) é ignorada
+# silenciosamente e o relógio do container cai em UTC — o que faria todo
+# lembrete (inclusive o "manha" fixo às 08:00 local) disparar ~3h adiantado
+# em relação ao horário de São Paulo digitado no painel.
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
 # Instala as dependências num passo isolado da cópia do código: enquanto
 # pyproject.toml não mudar, o Docker reaproveita este layer e não baixa de
 # novo os ~1.3GB de deps (google-adk, chromadb, streamlit, ...) a cada
