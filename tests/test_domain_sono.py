@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from zela.domain.sono import avaliar_sono
+from zela.domain.sono import _horas_por_data, avaliar_sono
 from zela.models.monitoramento import FonteSensor, LeituraSensor, StatusMonitoramento, TipoLeitura
 
 AGORA = datetime(2026, 10, 29, 9, 0)
@@ -57,3 +57,44 @@ def test_base_usa_no_maximo_14_noites():
 
 def test_mistura_timestamp_com_fuso_sem_erro():
     assert avaliar_sono(historico() + [sessao(0, 7, aware=True)], AGORA) is None
+
+
+# Dados reais de produção: o Mi Fitness atualiza a sessão em andamento, e cada
+# versão chega com o mesmo início (fim − duração) e um fim mais tarde.
+def versao(fim, horas):
+    return LeituraSensor(
+        fonte=FonteSensor.SMARTWATCH, tipo=TipoLeitura.SONO, valor=horas, unidade="horas", timestamp=fim
+    )
+
+
+def test_versoes_da_mesma_noite_contam_so_a_mais_longa():
+    noite = [versao(AGORA.replace(hour=3, minute=23), 2.02), versao(AGORA.replace(hour=6, minute=17), 4.92)]
+    assert avaliar_sono(historico(horas=5) + noite, AGORA) is None
+
+
+def test_versoes_repetidas_nao_inflam_a_media():
+    anteriores = []
+    for d in range(1, 15):
+        dia = AGORA - timedelta(days=d)
+        anteriores += [
+            versao(dia.replace(hour=5, minute=42), 6.05),
+            versao(dia.replace(hour=6, minute=25), 6.77),
+            versao(dia.replace(hour=7, minute=37), 7.97),
+        ]
+    evento = avaliar_sono(anteriores + [versao(AGORA.replace(hour=6, minute=17), 4.92)], AGORA)
+    assert "(média 8.0h)" in evento.motivo
+
+
+def test_versao_parcial_antes_da_meia_noite_conta_so_no_dia_do_fim():
+    ontem = AGORA - timedelta(days=1)
+    leituras = [versao(ontem.replace(hour=23, minute=17), 1.08), versao(AGORA.replace(hour=6, minute=6), 7.9)]
+    assert _horas_por_data(leituras) == {AGORA.date(): 7.9}
+
+
+def test_inicios_com_diferenca_de_arredondamento_sao_a_mesma_sessao():
+    leituras = [
+        versao(AGORA.replace(hour=5, minute=58), 2.53),
+        versao(AGORA.replace(hour=6, minute=30), 3.07),
+        versao(AGORA.replace(hour=7, minute=50), 4.4),
+    ]
+    assert _horas_por_data(leituras) == {AGORA.date(): 4.4}
