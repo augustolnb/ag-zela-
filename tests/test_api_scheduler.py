@@ -857,3 +857,114 @@ def test_iniciar_scheduler_so_registra_job_de_google_agenda_quando_cliente_e_pas
     com_google = iniciar_scheduler(caminho_db, "idosa-1", _WahaFalso(), google_calendar_client=_GoogleCalendarFalso())
     assert "sincronizar_compromissos_google_agenda" in {j.id for j in com_google.get_jobs()}
     com_google.shutdown()
+
+
+# Notificações na pulseira (Gmail) — plano 2026-11-11-gmail-pulseira, Task 5.
+class _GmailFalso:
+    def __init__(self, erro=None):
+        self.chamadas = []
+        self.erro = erro
+
+    def notificar(self, assunto, corpo):
+        if self.erro:
+            raise self.erro
+        self.chamadas.append((assunto, corpo))
+        return "msg-1"
+
+
+def _preparar_lembrete(tmp_path, monkeypatch):
+    monkeypatch.setattr("zela.api.scheduler._lembretes_ja_enviados", set())
+    caminho_db = str(tmp_path / "teste.db")
+    conn = conectar(caminho_db)
+    salvar_perfil(conn, _perfil(), idoso_id="idosa-1")
+    salvar_medicamento(
+        conn,
+        Medicamento(id="med-g1", nome="Losartana", dosagem=Dosagem(quantidade=50, unidade="mg"), horarios=[time(8, 0)]),
+        idoso_id="idosa-1",
+    )
+
+    class _DatetimeFixo:
+        @staticmethod
+        def now():
+            from datetime import datetime as _dt
+            return _dt(2026, 9, 14, 8, 5)
+
+    monkeypatch.setattr("zela.api.scheduler.datetime", _DatetimeFixo)
+    return caminho_db
+
+
+def test_lembrete_vai_ao_whatsapp_e_ao_gmail(tmp_path, monkeypatch):
+    caminho_db = _preparar_lembrete(tmp_path, monkeypatch)
+    waha, gmail = _WahaFalso(), _GmailFalso()
+
+    verificar_e_enviar_lembretes(caminho_db, "idosa-1", waha, gmail_client=gmail)
+
+    assert len(waha.enviados) == 1
+    assert len(gmail.chamadas) == 1
+    assert gmail.chamadas[0][0] == "Zela+: hora do remédio"
+    assert "Losartana" in gmail.chamadas[0][1]
+
+
+def test_lembrete_repetido_no_mesmo_horario_nao_gera_segundo_email(tmp_path, monkeypatch):
+    caminho_db = _preparar_lembrete(tmp_path, monkeypatch)
+    gmail = _GmailFalso()
+
+    verificar_e_enviar_lembretes(caminho_db, "idosa-1", _WahaFalso(), gmail_client=gmail)
+    verificar_e_enviar_lembretes(caminho_db, "idosa-1", _WahaFalso(), gmail_client=gmail)
+
+    assert len(gmail.chamadas) == 1
+
+
+def test_gmail_com_falha_nao_impede_o_lembrete(tmp_path, monkeypatch):
+    caminho_db = _preparar_lembrete(tmp_path, monkeypatch)
+    waha = _WahaFalso()
+
+    enviadas = verificar_e_enviar_lembretes(
+        caminho_db, "idosa-1", waha, gmail_client=_GmailFalso(erro=RuntimeError("Gmail fora"))
+    )
+
+    assert len(enviadas) == 1
+    assert len(waha.enviados) == 1
+
+
+def _alerta_pulseira(destinatario, simulado=False):
+    return Alerta(
+        nivel=NivelAlerta.ATENCAO, destinatario=destinatario, canal=CanalAlerta.WHATSAPP,
+        mensagem="Tudo bem? Detectamos: ESP32 parado.", timestamp=datetime(2026, 11, 2, 10, 0), simulado=simulado,
+    )
+
+
+def test_checagem_ao_idoso_vai_ao_gmail_mas_aviso_a_familia_nao(tmp_path):
+    conn = conectar(str(tmp_path / "t.db"))
+    gmail = _GmailFalso()
+
+    despachar_alertas(
+        conn, [_alerta_pulseira("Maria da Silva"), _alerta_pulseira("João")], _perfil(), "idosa-1", _WahaFalso(),
+        gmail_client=gmail,
+    )
+
+    assert len(gmail.chamadas) == 1
+    assert gmail.chamadas[0][0] == "Zela+: está tudo bem?"
+
+
+def test_alerta_simulado_nao_vai_ao_gmail(tmp_path):
+    conn = conectar(str(tmp_path / "t.db"))
+    gmail = _GmailFalso()
+
+    despachar_alertas(
+        conn, [_alerta_pulseira("Maria da Silva", simulado=True)], _perfil(), "idosa-1", _WahaFalso(),
+        gmail_client=gmail,
+    )
+
+    assert gmail.chamadas == []
+
+
+def test_gmail_com_falha_nao_impede_salvar_o_alerta(tmp_path):
+    conn = conectar(str(tmp_path / "t.db"))
+
+    despachar_alertas(
+        conn, [_alerta_pulseira("Maria da Silva")], _perfil(), "idosa-1", _WahaFalso(),
+        gmail_client=_GmailFalso(erro=RuntimeError("Gmail fora")),
+    )
+
+    assert len(listar_alertas(conn, "idosa-1")) == 1

@@ -4,12 +4,14 @@ from datetime import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from zela.api.aviso_familia import processar_episodios
+from zela.api.pulseira import notificar_pulseira
 from zela.domain.compromisso_lembretes import (
     calcular_overrides_minutos_google,
     lembretes_compromisso_pendentes,
 )
 from zela.domain.comunicacao import formatar_lembrete, formatar_lembrete_compromisso
 from zela.domain.emergencia import EstadoEscalonamento, EstagioEscalonamento
+from zela.domain.pulseira import notificacao_checagem, notificacao_lembrete_remedio
 from zela.domain.rotina import JANELA_LEMBRETE
 from zela.models.alertas import Alerta, CanalAlerta, NivelAlerta, StatusAlerta
 from zela.models.monitoramento import EventoMonitoramento, StatusMonitoramento
@@ -63,7 +65,7 @@ def _horario_atual_pendente(medicamento, agora: datetime):
     return None
 
 
-def verificar_e_enviar_lembretes(caminho_db: str, id_idoso: str, waha_client) -> list[str]:
+def verificar_e_enviar_lembretes(caminho_db: str, id_idoso: str, waha_client, gmail_client=None) -> list[str]:
     conn = conectar(caminho_db)
     perfil = obter_perfil(conn, id_idoso)
     if perfil is None:
@@ -82,6 +84,7 @@ def verificar_e_enviar_lembretes(caminho_db: str, id_idoso: str, waha_client) ->
             continue
         texto = formatar_lembrete(medicamento)
         waha_client.enviar_texto(perfil.lid_whatsapp or perfil.telefone, texto)
+        notificar_pulseira(gmail_client, notificacao_lembrete_remedio(medicamento))
         _lembretes_ja_enviados.add(chave)
         enviadas.append(texto)
     return enviadas
@@ -170,12 +173,15 @@ def _tentar_enviar(waha_client, telefone: str, alerta: Alerta) -> bool:
 
 
 def despachar_alertas(
-    conn, alertas: list[Alerta], perfil: PerfilIdoso, idoso_id: str, waha_client
+    conn, alertas: list[Alerta], perfil: PerfilIdoso, idoso_id: str, waha_client, gmail_client=None
 ) -> None:
     for alerta in alertas:
         telefone = None if alerta.simulado else _telefone_por_nome(perfil, alerta.destinatario)
         if telefone is not None and not _tentar_enviar(waha_client, telefone, alerta):
             alerta = alerta.model_copy(update={"status": StatusAlerta.FALHOU})
+        # Checagem ao próprio idoso também vai à pulseira, mesmo se o WhatsApp falhou.
+        if not alerta.simulado and alerta.destinatario == perfil.nome:
+            notificar_pulseira(gmail_client, notificacao_checagem(alerta.mensagem))
         salvar_alerta(conn, alerta, idoso_id)
 
 
@@ -202,7 +208,7 @@ def _enviar_aviso(
     return [alerta]
 
 
-def verificar_e_escalonar_riscos(caminho_db: str, id_idoso: str, waha_client) -> list[Alerta]:
+def verificar_e_escalonar_riscos(caminho_db: str, id_idoso: str, waha_client, gmail_client=None) -> list[Alerta]:
     conn = conectar(caminho_db)
     perfil = obter_perfil(conn, id_idoso)
     if perfil is None:
@@ -228,7 +234,7 @@ def verificar_e_escalonar_riscos(caminho_db: str, id_idoso: str, waha_client) ->
                 _avisos_ja_enviados.discard(chave)
 
     alertas = aplicar_escalonamento(conn, id_idoso, evento, perfil, agora)
-    despachar_alertas(conn, alertas, perfil, id_idoso, waha_client)
+    despachar_alertas(conn, alertas, perfil, id_idoso, waha_client, gmail_client)
     return alertas
 
 
@@ -286,14 +292,19 @@ def sincronizar_compromissos_google_agenda(
 
 
 def iniciar_scheduler(
-    caminho_db: str, id_idoso: str, waha_client, reindexar=None, google_calendar_client=None
+    caminho_db: str,
+    id_idoso: str,
+    waha_client,
+    reindexar=None,
+    google_calendar_client=None,
+    gmail_client=None,
 ) -> BackgroundScheduler:
     agendador = BackgroundScheduler()
     agendador.add_job(
         verificar_e_enviar_lembretes,
         "interval",
         minutes=INTERVALO_MINUTOS,
-        args=[caminho_db, id_idoso, waha_client],
+        args=[caminho_db, id_idoso, waha_client, gmail_client],
         id="verificar_lembretes",
     )
     agendador.add_job(
@@ -307,7 +318,7 @@ def iniciar_scheduler(
         verificar_e_escalonar_riscos,
         "interval",
         minutes=INTERVALO_MONITORAMENTO_MINUTOS,
-        args=[caminho_db, id_idoso, waha_client],
+        args=[caminho_db, id_idoso, waha_client, gmail_client],
         id="verificar_riscos",
     )
     agendador.add_job(
