@@ -556,8 +556,8 @@ clientes). Esta configuração é manual e feita uma única vez na instalação.
 
 1. **Crie a conta Google dedicada** (ex.: `familia-sobrenome.zela@gmail.com`).
 2. **Crie o projeto no Google Cloud e a credencial OAuth:** crie um projeto,
-   ative a *Google Calendar API* e crie uma credencial OAuth do tipo
-   **Desktop app**. Na tela de consentimento OAuth, publique o app
+   ative a *Google Calendar API* e a *Gmail API* (usada pelas notificações
+   na pulseira) e crie uma credencial OAuth do tipo **Desktop app**. Na tela de consentimento OAuth, publique o app
    mudando o status de publicação para **"Em produção"** ("In production")
    — não é preciso passar pela verificação do Google para isso, mas a tela
    de consentimento vai exibir um aviso de "app não verificado"; para uma
@@ -576,7 +576,12 @@ clientes). Esta configuração é manual e feita uma única vez na instalação.
    ```
    Informe o `client_id` e o `client_secret` da etapa anterior, autorize a
    conta dedicada no navegador que abrir, e o script imprime o
-   `refresh_token`. Trate esse valor como senha.
+   `refresh_token`. Trate esse valor como senha. O script pede, em um
+   único consentimento, o Google Agenda e o Gmail (`gmail.insert` e
+   `gmail.send`). O `gmail.insert` é um escopo restrito: se o Google
+   recusar a autorização, o modo `send` do Gmail continua disponível.
+   Para escolher o modo, rode `python scripts/testar_gmail_pulseira.py` e
+   veja qual mensagem de teste aparece na pulseira.
 4. **Configure as 4 variáveis de ambiente do deploy** (no `.env` usado pelo
    `docker-compose.yml`, container `backend`):
    - `ZELA_GOOGLE_CALENDAR_CLIENT_ID` — client ID da credencial OAuth

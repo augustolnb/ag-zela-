@@ -28,7 +28,15 @@ import webbrowser
 
 URL_AUTORIZACAO = "https://accounts.google.com/o/oauth2/v2/auth"
 URL_TOKEN = "https://oauth2.googleapis.com/token"
-ESCOPO = "https://www.googleapis.com/auth/calendar"
+# Um único consentimento para o Google Agenda e para as notificações na
+# pulseira via Gmail (insert e send; ver docs/superpowers/specs/2026-11-11-gmail-pulseira-design.md).
+ESCOPO = " ".join(
+    [
+        "https://www.googleapis.com/auth/calendar",
+        "https://www.googleapis.com/auth/gmail.insert",
+        "https://www.googleapis.com/auth/gmail.send",
+    ]
+)
 
 
 def _receber_codigo(estado_esperado: str, resultado: dict) -> http.server.HTTPServer:
