@@ -176,11 +176,14 @@ def despachar_alertas(
     conn, alertas: list[Alerta], perfil: PerfilIdoso, idoso_id: str, waha_client, gmail_client=None
 ) -> None:
     for alerta in alertas:
-        telefone = None if alerta.simulado else _telefone_por_nome(perfil, alerta.destinatario)
+        if alerta.simulado:
+            telefone = None
+        else:
+            telefone = alerta.telefone or _telefone_por_nome(perfil, alerta.destinatario)
         if telefone is not None and not _tentar_enviar(waha_client, telefone, alerta):
             alerta = alerta.model_copy(update={"status": StatusAlerta.FALHOU})
         # Checagem ao próprio idoso também vai à pulseira, mesmo se o WhatsApp falhou.
-        if not alerta.simulado and alerta.destinatario == perfil.nome:
+        if not alerta.simulado and alerta.para_idoso:
             notificar_pulseira_em_segundo_plano(gmail_client, notificacao_checagem(alerta.mensagem))
         salvar_alerta(conn, alerta, idoso_id)
 

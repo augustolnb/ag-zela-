@@ -930,9 +930,11 @@ def test_gmail_com_falha_nao_impede_o_lembrete(tmp_path, monkeypatch):
 
 
 def _alerta_pulseira(destinatario, simulado=False):
+    # Como em decidir_proxima_acao: a checagem ao idoso vem marcada com para_idoso.
     return Alerta(
         nivel=NivelAlerta.ATENCAO, destinatario=destinatario, canal=CanalAlerta.WHATSAPP,
         mensagem="Tudo bem? Detectamos: ESP32 parado.", timestamp=datetime(2026, 11, 2, 10, 0), simulado=simulado,
+        para_idoso=destinatario == "Maria da Silva",
     )
 
 
@@ -1008,3 +1010,42 @@ def test_gmail_travado_nao_atrasa_o_whatsapp_dos_outros_remedios(tmp_path, monke
     assert duracao < 1
     assert len(waha.enviados) == 2
     assert len(gmail.chamadas) == 2
+
+
+def _perfil_homonimo():
+    return PerfilIdoso(
+        nome="Maria",
+        telefone="+5511911111111",
+        data_nascimento=date(1945, 3, 12),
+        contatos_familiares=[ContatoFamiliar(nome="Maria", telefone="+5511987654321")],
+    )
+
+
+def test_aviso_a_familiar_homonimo_nao_vai_ao_idoso_nem_a_pulseira(tmp_path):
+    conn = conectar(str(tmp_path / "t.db"))
+    waha, gmail = _WahaFalso(), _GmailFalso()
+    aviso_familia = Alerta(
+        nivel=NivelAlerta.CRITICO, destinatario="Maria", canal=CanalAlerta.WHATSAPP, mensagem="Atenção",
+        timestamp=datetime(2026, 11, 2, 10, 0), telefone="+5511987654321",
+    )
+
+    despachar_alertas(conn, [aviso_familia], _perfil_homonimo(), "idosa-1", waha, gmail_client=gmail)
+    _esperar_pulseira()
+
+    assert waha.enviados == [("+5511987654321", "Atenção")]
+    assert gmail.chamadas == []
+
+
+def test_checagem_ao_idoso_homonimo_vai_ao_idoso_e_a_pulseira(tmp_path):
+    conn = conectar(str(tmp_path / "t.db"))
+    waha, gmail = _WahaFalso(), _GmailFalso()
+    checagem = Alerta(
+        nivel=NivelAlerta.ATENCAO, destinatario="Maria", canal=CanalAlerta.WHATSAPP, mensagem="Tudo bem?",
+        timestamp=datetime(2026, 11, 2, 10, 0), telefone="+5511911111111", para_idoso=True,
+    )
+
+    despachar_alertas(conn, [checagem], _perfil_homonimo(), "idosa-1", waha, gmail_client=gmail)
+    _esperar_pulseira()
+
+    assert waha.enviados == [("+5511911111111", "Tudo bem?")]
+    assert len(gmail.chamadas) == 1

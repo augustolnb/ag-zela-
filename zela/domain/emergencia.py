@@ -42,6 +42,8 @@ def decidir_proxima_acao(
             canal=CanalAlerta.WHATSAPP,
             mensagem=f"Tudo bem? Detectamos: {evento.motivo}. Pode confirmar que está tudo certo?",
             timestamp=agora,
+            telefone=perfil.lid_whatsapp or perfil.telefone,
+            para_idoso=True,
         )
         return novo_estado, [alerta]
 
@@ -58,6 +60,7 @@ def decidir_proxima_acao(
                 canal=CanalAlerta.WHATSAPP,
                 mensagem=f"Atenção: {perfil.nome} não respondeu. Motivo do alerta: {evento.motivo}.",
                 timestamp=agora,
+                telefone=contato.telefone,
             )
             for contato in perfil.contatos_familiares
         ]
