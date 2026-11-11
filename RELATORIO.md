@@ -1,8 +1,8 @@
 # Zela+ — Relatório do Trabalho Final (Agentes de IA)
 
-**Autor:** Lucas Augusto
+**Autor:** Lucas Augusto Nunes de Barros
 **Repositório:** https://github.com/augustolnb/ag-zela-
-**Vídeo pitch:** ver `docs/pitch/roteiro.md` para o roteiro; o arquivo de vídeo fica em `docs/pitch/zela-pitch.mp4` no repositório.
+**Vídeo pitch:** roteiro em `docs/pitch/roteiro.md`; o vídeo fica em `docs/pitch/`.
 
 ---
 
@@ -10,114 +10,109 @@
 
 ### 1.1 Problema
 
-Idosos que moram sozinhos enfrentam três riscos recorrentes que motivaram
-este projeto, a partir de um caso real (avó do autor, que mora sozinha):
+O projeto nasceu de um caso real: a avó do autor mora sozinha, esquece
+consultas, fica em dúvida se tomou um remédio e perde horários de
+medicamentos que não são de uso diário. Um smartwatch comum registra dados,
+mas não resolve o problema. Três riscos orientaram o projeto:
 
-1. **Esquecimento de medicação e compromissos** — sem alguém por perto para
+1. **Esquecimento de medicação e compromissos.** Sem alguém por perto para
    lembrar, doses e consultas são perdidas.
-2. **Falta de detecção precoce de risco** — uma queda, uma ausência de
-   movimento prolongada, ou uma alteração de sinais vitais pode passar
-   despercebida por horas.
-3. **Família fora do loop** — parentes que não moram junto não têm
-   visibilidade do dia a dia (a medicação foi tomada? está tudo bem hoje?)
-   sem ligar toda hora, o que é cansativo para os dois lados.
+2. **Falta de detecção precoce de risco.** Uma queda, uma ausência longa de
+   movimento ou um mal-estar pode passar despercebido por horas.
+3. **Família fora do loop.** Parentes que não moram junto não sabem como
+   está o dia a dia sem ligar toda hora.
 
-### 1.2 Oportunidade e escopo do MVP
+### 1.2 Escopo do MVP
 
-O escopo mínimo viável do Zela+ cobre as três dores acima com o menor
-conjunto de funcionalidades que já demonstra valor de ponta a ponta:
+- **Lembretes** de medicamentos por WhatsApp, com confirmação pelo idoso.
+  Lembretes de compromissos por WhatsApp e pelo **Google Agenda**, cuja
+  notificação o Mi Fitness espelha na pulseira.
+- **Monitoramento** com hardware real: pulseira Xiaomi Smart Band 10 Pro
+  (passos, sono e frequência cardíaca, via Health Connect) e um ESP32 com
+  2 sensores de presença PIR (sala e quarto).
+- **Aviso à família em 60 segundos:** um classificador determinístico de
+  sintomas, que roda antes da IA, reconhece relatos como "coração acelerado"
+  ou "caí". O bot pergunta se está tudo bem e, sem resposta em 60 s, avisa
+  todos os familiares.
+- **Escada de escalonamento determinística**, nunca decidida por um LLM:
+  pergunta ao idoso, avisa a família e, em último caso, simula o contato com
+  um serviço de emergência.
+- **RAG em bulas:** o bot responde dúvidas sobre 5 medicamentos citando a
+  bula e nunca orienta mudança de dose.
+- **Painel Streamlit** para a família: status, medicação, alertas,
+  atividade e cadastros.
+- **Fluxo visual em n8n**, pedido pelo card no lugar do Langflow (seção 3.4).
+- **Produção:** tudo roda em uma VPS com HTTPS, usado diariamente pelo autor
+  com um perfil de teste.
 
-- Lembretes de medicamentos/compromissos via WhatsApp, com confirmação
-  pelo próprio idoso.
-- Monitoramento de risco combinando sinais vitais reais via smartwatch
-  (Xiaomi Smart Band, via Health Connect — frequência cardíaca, passos e
-  sono) e a interpretação de mensagens de texto do idoso (classificadas
-  por similaridade de embeddings).
-- Uma escada de escalonamento determinística (nunca decidida por um LLM)
-  que avisa a família e, em último caso, simula contato com um serviço de
-  emergência.
-- Um painel Streamlit para a família acompanhar status, medicação, alertas
-  e um histórico de presença, além de cadastrar/editar medicamentos e
-  compromissos.
-- Um fluxo visual (n8n) que demonstra separadamente a lógica de
-  classificação de urgência de uma mensagem, item explicitamente pedido
-  pelo card (o curso migrou de Langflow para n8n — ver nota na seção 3.4).
-
-Ficou **fora** do escopo do MVP (documentado como trabalho futuro):
-transcrição de áudio (STT/TTS) nas mensagens de WhatsApp, autenticação
-robusta nos endpoints internos, e um piso de confiança mínimo no
-classificador de urgência por similaridade — ver seção 6.
+**Fora do escopo** (trabalho futuro): áudio (STT/TTS) no WhatsApp,
+batimentos cardíacos contínuos (seção 6), vários idosos por instalação e
+ligação telefônica real.
 
 ---
 
-## 2. Arquitetura do agente/sistema multiagente
+## 2. Arquitetura
 
-O Zela+ usa uma arquitetura de **5 agentes especializados**, orquestrados
-pelo Google ADK, cada um com responsabilidade única e um contrato de dados
-Pydantic próprio:
+O Zela+ usa **5 agentes ADK** (um orquestrador e 4 especializados) cercados
+por uma camada de regras determinísticas. A IA conversa, consulta e
+explica. Quem decide avisar a família é sempre código determinístico e
+testado.
 
-```
-                         ┌─────────────────────────┐
-        WhatsApp ───────▶│   Agente de Comunicação  │◀──────── Streamlit
-     (idoso, texto/áudio)│  (STT/TTS, roteamento)   │      (dashboard família)
-                         └────────────┬─────────────┘
-                                      │
-                                      ▼
-                         ┌─────────────────────────┐
-                         │   Agente Orquestrador    │  (ADK root agent)
-                         └──┬──────┬──────┬─────────┘
-                            │      │      │
-              ┌─────────────┘      │      └─────────────┐
-              ▼                    ▼                     ▼
-   ┌──────────────────┐ ┌────────────────────┐ ┌────────────────────┐
-   │ Agente de Rotina/ │ │ Agente de          │ │ Agente de          │
-   │ Medicação         │ │ Monitoramento de   │ │ Emergência/Alertas │
-   │ (agenda, lembrete)│ │ Saúde/Risco        │ │ (aciona família /  │
-   └──────────────────┘ │ (embeddings p/     │ │  serviço emerg.,   │
-                         │  classificar risco)│ │  simulado)         │
-                         └─────────┬───────────┘ └────────────────────┘
-                                   │
-                                   ▼
-                         Xiaomi Smart Band (Health Connect,
-                         via HC Webhook)
-```
+![Arquitetura multiagente do Zela+](docs/relatorio/imagens/arquitetura_zela.png)
 
-**Decisão de design mais importante do projeto:** a decisão de escalonar
-uma emergência (avisar a família, simular contato de emergência) **nunca**
-é tomada por um LLM. Ela é calculada por uma máquina de estados
-determinística e pura (`zela/domain/emergencia.py` +
-`zela/storage/escalonamento.py`), testada exaustivamente com `pytest`. Os
-agentes de IA (inclusive o classificador de urgência por embeddings)
-apenas **alimentam** essa máquina com eventos (`EventoMonitoramento`) — a
-decisão de agir sobre um evento de risco é sempre determinística e
-auditável, nunca uma alucinação do modelo.
+**Decisão de design mais importante:** nenhuma decisão de emergência
+depende de um LLM. O aviso em 60 s (`zela/domain/sintomas.py` +
+`zela/api/aviso_familia.py`) e a escada de escalonamento
+(`zela/domain/emergencia.py`) são código puro, testado com `pytest`. Se a
+API do LLM cair, a família continua sendo avisada.
 
 ### 2.1 Papel de cada agente
 
 | Agente | Responsabilidade | Ferramentas (tools ADK) |
 |---|---|---|
-| **Orquestrador** (`orquestrador_zela`) | Direciona cada mensagem ao agente especializado certo | — (`sub_agents`) |
-| **Rotina/Medicação** | Lembretes de medicamentos/compromissos, registra confirmações | `verificar_lembretes_pendentes`, `confirmar_medicamento` |
-| **Monitoramento de Saúde/Risco** | Relata o status já calculado (normal/atenção/risco) | `consultar_status_atual` |
-| **Comunicação** | Conversa com idoso/família, busca RAG em bulas e mensagens passadas | `consultar_conhecimento` |
-| **Emergência/Alertas** | Relata alertas e ocorrências já registrados | `consultar_historico_alertas` |
+| **Orquestrador** (`orquestrador_zela`) | Direciona cada mensagem ao agente certo | `sub_agents` |
+| **Rotina/Medicação** | Lembretes e confirmações de remédios e compromissos | `verificar_lembretes_pendentes`, `confirmar_medicamento` |
+| **Monitoramento** | Relata o status já calculado pelas regras | `consultar_status_atual` |
+| **Comunicação** | Conversa e responde dúvidas com RAG nas bulas | `consultar_conhecimento` |
+| **Emergência/Alertas** | Relata alertas e ocorrências registrados | `consultar_historico_alertas` |
 
-Nenhum agente decide sozinho um estado de risco ou dispara um alerta real
-— todos consultam ferramentas que refletem cálculos já feitos pela camada
-de domínio (`zela/domain/`), pura e testável sem LLM nem rede.
+### 2.2 Fluxo de uma mensagem
 
-### 2.2 Fluxo de ponta a ponta (exemplo)
+![Fluxo de uma mensagem do WhatsApp](docs/relatorio/imagens/fluxo_mensagem_whatsapp.png)
 
-1. Hora de um remédio → Agente de Rotina dispara lembrete → Agente de
-   Comunicação envia a mensagem via WhatsApp ao idoso.
-2. Idoso confirma por WhatsApp → Orquestrador registra a confirmação.
-3. Em paralelo, o Agente de Monitoramento consome leituras do smartwatch
-   (a cada 15 min) e mensagens de texto do idoso (classificadas por
-   embeddings), gerando um status: `normal` / `atenção` / `risco`.
-4. `atenção` → aviso à família via Streamlit/histórico de alertas.
-5. `risco` → escalonamento determinístico: contato com o idoso → família →
-   simulação de contato de emergência.
-6. A família consulta o Streamlit a qualquer momento.
+1. O WAHA entrega a mensagem ao webhook, que só aceita remetentes
+   cadastrados (telefone ou LID).
+2. O classificador de sintomas roda **antes** da IA:
+   - pedido de ajuda: todos os familiares são avisados na hora;
+   - sintoma grave: o bot pergunta se está tudo bem e, sem resposta em
+     60 s, avisa todos os familiares;
+   - "estou bem" ou "não avise" cancelam o aviso. Duas recusas em 7 dias
+     geram uma advertência aos familiares.
+3. As demais mensagens vão ao orquestrador ADK, que responde pelo agente
+   adequado.
+4. Depois da resposta, a classificação por similaridade registra no painel
+   mensagens que lembram situações de atenção, sem escalar.
+
+Em paralelo, o scheduler (APScheduler) envia lembretes a cada 5 min,
+avalia as regras de monitoramento a cada 15 min, verifica o sono às 09:00 e
+sincroniza compromissos com o Google Agenda.
+
+### 2.3 Infraestrutura
+
+![Infraestrutura e implantação](docs/relatorio/imagens/infraestrutura_vps.png)
+
+- **VPS** (Ubuntu 24.04) com nginx e HTTPS em três subdomínios: `api.`
+  (backend), `painel.` (Streamlit) e `whatsapp.` (WAHA).
+- **Docker Compose** com três serviços: `backend` (FastAPI, ADK,
+  APScheduler, SQLite e ChromaDB), `streamlit` e `waha`. Containers no fuso
+  `America/Sao_Paulo`.
+- **LLM de conversação: DeepSeek** (`deepseek-chat`, via LiteLLM). O Gemini
+  gratuito limita a 5 requisições por minuto, pouco para uma conversa real.
+  O provedor muda com a variável `ZELA_LLM_PROVEDOR`.
+- **Embeddings: Gemini** (`gemini-embedding-2`, 3072 dimensões) na
+  classificação por similaridade e na busca semântica do RAG.
+- **Endpoints de ingestão** (`/ingest/esp32`, `/ingest/health-connect`) e
+  webhook protegidos por token no header `X-Api-Key`.
 
 ---
 
@@ -125,279 +120,203 @@ de domínio (`zela/domain/`), pura e testável sem LLM nem rede.
 
 ### 3.1 Validação de dados com Pydantic (card 3.3)
 
-Todos os dados que entram no sistema — leituras de sensor, mensagens de
-WhatsApp, cadastro de medicamentos, perfil do idoso — são validados por
-modelos Pydantic antes de tocar qualquer lógica de negócio:
+Todo dado de entrada passa por modelos Pydantic antes da lógica de negócio
+(`zela/models/`):
 
-- `zela/models/perfil.py` — `PerfilIdoso`, `ContatoFamiliar`
-- `zela/models/rotina.py` — `Medicamento`, `Dosagem`, `Compromisso`,
-  `ConfirmacaoMedicacao` (com validação de que `data_hora` de um
-  compromisso não pode estar no passado na criação)
-- `zela/models/monitoramento.py` — `LeituraSensor`, `EventoMonitoramento`,
-  além dos enums `StatusMonitoramento` (normal/atenção/risco),
-  `MetodoClassificacao`
-- `zela/models/alertas.py` — `Alerta`, com os enums `NivelAlerta`,
-  `CanalAlerta`, `StatusAlerta`
-- `zela/models/comunicacao.py` — `MensagemEntrada`, `TipoMensagem`
-
-Um caso não-trivial de uso de Pydantic: o modelo `Compromisso` valida que
-a data não é passada **na criação**, mas ler um compromisso histórico do
-banco (já no passado, por definição) precisa contornar essa mesma
-validação — resolvido com `Compromisso.model_construct(...)` no caminho
-de leitura (`zela/storage/rotina.py::_linha_para_compromisso`), preservando
-a validação onde ela importa (escrita) sem quebrar a leitura de dados
-antigos.
+- `perfil.py`: `PerfilIdoso` e `ContatoFamiliar`, com telefone no formato
+  E.164, ao menos um familiar e o campo `lid_whatsapp`;
+- `rotina.py`: `Medicamento`, `Dosagem`, `Compromisso` (data no futuro na
+  criação) e `ConfirmacaoMedicacao`;
+- `monitoramento.py`: `LeituraSensor`, `EventoMonitoramento` e os status
+  `NORMAL`, `AVISO`, `ATENCAO` e `RISCO`;
+- `alertas.py` e `episodio.py`: alertas com status real de entrega
+  (`enviado` ou `falhou`) e episódios de sintoma do aviso em 60 s.
 
 ### 3.2 Embeddings e RAG (card 3.5)
 
-Duas aplicações de embeddings no MVP, ambas usando a API de embeddings do
-Gemini (`zela/embeddings/client.py`):
+Os embeddings vêm do Gemini (`zela/embeddings/client.py`) e têm dois usos:
 
-1. **Classificação de urgência por similaridade** (`zela/embeddings/classificador.py`):
-   uma mensagem de texto do idoso (ex.: "caí no banheiro e não consigo
-   levantar") é comparada por similaridade de cosseno contra 18 exemplos
-   de referência rotulados em português (`zela/embeddings/exemplos_referencia.py`)
-   e classificada como `NORMAL` / `ATENCAO` / `RISCO` pelo vizinho mais
-   próximo. O resultado alimenta a mesma máquina de escalonamento usada
-   pelos sensores — nunca decide um alerta sozinho.
-2. **RAG (Retrieval-Augmented Generation)** sobre bulas de medicamentos
-   cadastrados e o histórico de mensagens do idoso, usando um vector store
-   Chroma local (`zela/embeddings/vetorial.py`). O Agente de Comunicação
-   usa isso para responder perguntas como "para que serve esse remédio?"
-   ou "o que a vó disse ontem?" sem inventar uma resposta quando não há
-   contexto relevante.
-
-Decisão de implementação notável: o cliente de embeddings
-(`ClienteEmbeddingGemini`) constrói o cliente real do Gemini de forma
-**preguiçosa** (só na primeira chamada, nunca no `__init__`) — isso permite
-importar o módulo em testes sem exigir uma chave de API configurada.
+1. **Classificação por similaridade** (`zela/embeddings/classificador.py`):
+   a mensagem é comparada por similaridade de cosseno com 18 exemplos
+   rotulados (`exemplos_referencia.py`) e recebe o rótulo do mais próximo.
+   Em produção, essa classificação gerou alarmes falsos. Hoje ela só
+   registra no painel. A detecção de sintomas que avisa a família é
+   determinística (seção 2.2).
+2. **RAG em bulas:** 5 bulas (dipirona, losartana, metformina, sinvastatina
+   e dapagliflozina) em `zela/conhecimento/bulas/`, divididas em trechos de
+   até 1.500 caracteres e indexadas no ChromaDB (97 trechos em produção). A
+   reindexação é incremental, por hash, e roda em segundo plano. O agente de
+   Comunicação responde só com base nos trechos encontrados, cita a bula e
+   nunca orienta mudança de dose.
 
 ### 3.3 Orquestração multiagente com ADK (card 3.6)
 
-A orquestração usa o Google Agent Development Kit (ADK):
 `zela/agents/orchestrator.py` define os 5 agentes da seção 2.1 como
-`google.adk.agents.Agent`, com o orquestrador registrando os 4
-especializados como `sub_agents`. O roteamento entre eles é feito pelo
-próprio ADK a partir da `instruction` de cada agente — não há um roteador
-determinístico escrito à mão. As ferramentas (`tools`) de cada agente são
-funções Python puras que chamam a camada de armazenamento/domínio, nunca
-lógica de negócio direto no agente.
+`google.adk.agents.Agent`. O orquestrador registra os 4 especializados como
+`sub_agents`, e o ADK roteia a partir da `instruction` de cada um. As
+ferramentas são funções Python que consultam a camada de domínio. O
+comportamento pode ser verificado com `adk run zela/agents`.
 
-O comportamento pode ser verificado interativamente com `adk run
-zela/agents` (ver README, seção "Verificando o comportamento do agente").
-
-**LLM de conversação/orquestração:** configurável via `ZELA_LLM_PROVEDOR`
-— padrão Gemini (`gemini-3.8-flash`), com DeepSeek (`deepseek-chat`, via
-`LiteLlm`) como alternativa. Na VPS de produção, o provedor ativo é o
-**DeepSeek**: o Gemini no tier gratuito tem limite de 5 requisições por
-minuto, insuficiente para mensagens em sequência rápida (confirmado na
-prática — ver seção 6, item 7), e o Gemini fica como reserva, fácil de
-reativar trocando uma variável de ambiente. Os embeddings (classificação
-de urgência e RAG, seção 3.2) continuam usando o Gemini independente
-dessa variável.
+O modelo vem de `_montar_modelo_padrao()`: `ZELA_LLM_PROVEDOR=deepseek` usa
+`LiteLlm(model="deepseek/deepseek-chat")`, e o padrão usa o Gemini. As
+versões de `google-adk`, `litellm` e `mcp` estão fixas no `pyproject.toml`,
+porque um build sem versões fixas derrubou o bot em produção (seção 4).
 
 ### 3.4 Workflow n8n (card 3.4/3.8)
 
-**Nota sobre a ferramenta:** o card original menciona Langflow; o curso
-migrou para n8n durante o desenvolvimento deste trabalho, então o fluxo
-visual foi implementado em n8n (`docs/n8n/zela-classificacao-mensagem.json`).
+O card cita o Langflow, mas o curso migrou para o n8n, então o fluxo visual
+foi feito em n8n (`docs/n8n/zela-classificacao-mensagem.json`). Um nó
+Webhook recebe a mensagem, um nó HTTP Request chama
+`POST /api/classificar-mensagem` no backend, e dois nós `If` roteiam o
+resultado para três respostas. É uma demonstração visual da classificação;
+a integração real com o WhatsApp é feita pelo WAHA.
 
-O workflow representa, de forma simplificada e visual, a fatia "mensagem
-recebida → classificação de urgência → roteamento" do sistema: um nó
-Webhook recebe a mensagem, um nó HTTP Request chama o endpoint real do
-backend (`POST /api/classificar-mensagem`, que reusa o mesmo classificador
-por embeddings da seção 3.2), e dois nós `If` encadeados roteiam a
-resposta para um de três nós de resposta (`alertar_familia` /
-`verificar_idosa` / `normal`) conforme o status retornado. Ele não
-substitui a integração real WhatsApp↔backend (que continua funcionando
-via WAHA, seção 3.6) — é uma demonstração visual isolada da lógica de
-classificação/roteamento, como pede o card.
+![Workflow n8n](docs/relatorio/imagens/n8n_workflow.png)
 
-![Workflow n8n — captura do editor](docs/relatorio/imagens/n8n_workflow.png)
+### 3.5 Painel Streamlit (card 3.7)
 
-### 3.5 Interface de usuário com Streamlit (card 3.7)
+O painel (`zela/streamlit_app/`) mostra status atual, medicação do dia,
+últimos alertas, atividade do dia (presença do ESP32 e passos da pulseira)
+e formulários de medicamentos e compromissos. O acesso é protegido por
+senha (`STREAMLIT_SENHA`). As capturas abaixo são da produção em 11/11/2026,
+com o ESP32 desligado, o que o próprio painel aponta.
 
-O painel Streamlit (`zela/streamlit_app/`) é a interface da família:
-status atual, medicação do dia, histórico de alertas e um gráfico de
-presença (leitura, somente exibição), além de formulários para
-cadastrar/editar medicamentos e compromissos (escrita). Acesso protegido
-por senha (`STREAMLIT_SENHA`), com uma tela de erro amigável em vez de
-stack traces para qualquer seção que falhe.
+![Painel: status atual](docs/relatorio/imagens/painel_status.png)
 
-| Seção | Captura de tela |
-|---|---|
-| Status atual | ![Status](docs/relatorio/imagens/streamlit_status.png) |
-| Medicação do dia | ![Medicação](docs/relatorio/imagens/streamlit_medicacao.png) |
-| Histórico de alertas | ![Alertas](docs/relatorio/imagens/streamlit_alertas.png) |
-| Atividade de hoje (presença) | ![Atividade](docs/relatorio/imagens/streamlit_grafico.png) |
+![Painel: medicação, últimos alertas e atividade de hoje](docs/relatorio/imagens/painel_alertas_atividade.png)
+
+![Painel: cadastro de medicamento e compromisso](docs/relatorio/imagens/painel_cadastro.png)
 
 ### 3.6 Comunicação via WhatsApp (card 3.8)
 
-A comunicação com o idoso e a família acontece via WhatsApp, integrada por
-meio do WAHA (WhatsApp HTTP API) — um webhook (`zela/api/webhook.py`)
-recebe mensagens recebidas pelo WAHA e as encaminha para o ADK Runner, que
-roteia ao agente apropriado; o cliente WAHA (`zela/integrations/waha_client.py`)
-envia as respostas de volta. Ver README para o passo a passo de
-configuração (Docker Compose + QR code + webhook).
+O WAHA (WhatsApp HTTP API, self-hosted) mantém a sessão do WhatsApp Web. O
+webhook (`zela/api/webhook.py`) recebe as mensagens, e o `WahaClient`
+(`zela/integrations/waha_client.py`) envia as respostas. Contas com LID
+recebem mensagens pelo `chatId` resolvido com `check-exists`.
 
-![Dashboard do WAHA — sessão conectada](docs/relatorio/imagens/waha_dashboard.png)
+![Dashboard do WAHA](docs/relatorio/imagens/waha_dashboard.png)
 
----
+### 3.7 Hardware: ESP32 e pulseira
 
-## 4. Resultados obtidos
+**ESP32 com 2 sensores PIR SR602** (sala e quarto), alimentados em 3,3 V,
+com saída direto no GPIO 13 e no GPIO 14. A cada mudança de presença e a
+cada 5 minutos (sinal de vida), a placa envia um POST HTTPS a
+`/ingest/esp32`. O HC-SR505 fica como trabalho futuro. Detalhes em
+`docs/hardware/automacao_esp32.md`.
 
-*(Detalhamento completo — estratégia de testes, justificativa de cada
-decisão de design, cobertura por arquivo e o que fica fora da suíte
-automatizada — em `docs/testes/estrategia-e-resultados.md`.)*
+![Diagrama elétrico ESP32 + 2 PIR SR602](docs/hardware/imagens/zela_presenca_diagrama_eletrico.png)
 
-- **235 testes automatizados** passando (`pytest -v`), cobrindo modelos
-  Pydantic, lógica de domínio pura (rotina, monitoramento, emergência,
-  comunicação), repositórios de armazenamento (SQLite), API (webhook,
-  ingestão de sensores, classificação, scheduler), embeddings
-  (classificador, cliente, vector store), orquestração ADK (nomes,
-  hierarquia de sub-agentes, ferramentas) e o painel Streamlit (via
-  `streamlit.testing.v1.AppTest`, execução real do script sem mocks).
-- Todo o projeto foi construído em **6 fases sequenciais** (planos), cada
-  uma testável e mergeada independentemente: Fundação → Comunicação Real →
-  Ingestão de Sensores → Embeddings → Painel Streamlit → Workflow n8n —
-  este relatório documenta a fase final (empacotamento).
-- A propriedade de segurança central do projeto — nenhuma decisão de
-  escalonamento de emergência depende de um LLM — foi verificada
-  repetidamente ao longo das 6 fases (incluindo revisões de código
-  dedicadas a cada mudança que tocasse essa fronteira).
-- Exemplo prático de funcionamento: uma mensagem do idoso como "caí no
-  banheiro e não consigo levantar", enviada via WhatsApp ou testada via o
-  workflow n8n, é classificada como `RISCO` pelo classificador de
-  embeddings e alimenta a mesma escada de escalonamento usada pelos
-  sensores (ver seção 6 para uma limitação conhecida sobre esse fluxo).
+**Pulseira:** Band 10 Pro → Mi Fitness → Health Connect → HC Webhook
+(instalado gratuitamente pelo Obtainium) → `/ingest/health-connect`.
+
+**Regras de monitoramento** (`zela/domain/monitoramento.py`, a cada 15 min):
+
+| Situação | Resultado |
+|---|---|
+| ESP32 e pulseira sem dados (ESP32 há 15 min, pulseira há 6 h) | RISCO → escada de escalonamento |
+| ESP32 ativo e nenhum movimento há 8 h | RISCO → escada de escalonamento |
+| Frequência cardíaca fora da faixa plausível | ATENÇÃO |
+| Só uma das fontes sem dados | AVISO à família, sem escada |
+| Sono 30% acima ou abaixo da média de até 14 noites | Aviso de tendência às 09:00 |
+
+A escada pergunta ao idoso, avisa a família depois de 10 min sem resposta e
+simula o contato de emergência 15 min depois.
 
 ---
 
-## 5. Instruções de uso
+## 4. Dificuldades e problemas reais encontrados
 
-Resumo rápido — o `README.md` do repositório tem o passo a passo completo
-(instalação, configuração do WAHA, sensores, Streamlit e n8n):
+A suíte automatizada não pega problemas de integração com sistemas reais.
+Estes apareceram em uso real e estão detalhados no relatório de erros do
+autor:
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
-pytest -v                              # roda a suíte de 235 testes
-uvicorn zela.api.main:app --reload     # backend (webhook, API, scheduler)
-streamlit run zela/streamlit_app/app.py  # painel da família
-```
+| Problema | Causa | Correção |
+|---|---|---|
+| Modelos `gemini-2.0-flash` e `text-embedding-004` com 404 | Modelos descontinuados | `gemini-3.8-flash` e `gemini-embedding-2` |
+| Mensagens do WhatsApp sem resposta | Remetente chega como LID, sem telefone | Campo `lid_whatsapp` e LID aceito no webhook |
+| 401 no envio pelo WAHA | Chave aleatória a cada restart e um container antigo | `WAHA_API_KEY` fixa no `.env` |
+| "No LID for user" ao avisar a família | Envio por `<telefone>@c.us` em conta com LID | `chatId` resolvido com `check-exists`; status real de entrega |
+| Bot pedia confirmação e nunca avisava a família | Risco dependia da IA e de uma escada lenta | Classificador determinístico e aviso em 60 s |
+| Bot fora do ar com erro 500 após deploy | Dependências sem versão fixa | Versões fixas; falha da IA vira mensagem, não 500 |
+| Gemini lento em conversa | Limite de 5 requisições/min no tier gratuito | DeepSeek para conversa |
+| Alarmes falsos de similaridade | Vizinho mais próximo sem piso de confiança | Similaridade só registra no painel |
+| Leituras duplicadas (4.832 → 853) | HC Webhook reenvia 48 h a cada sincronização | Índice único e `INSERT OR IGNORE` |
+| Envio do celular recusado (413) | Lote de 1,92 MB, acima do limite do nginx | `client_max_body_size 10m` |
+| Payload do Health Connect diferente da documentação | Formato real em listas por tipo e timestamps com fuso | Ingestão reescrita para o formato real |
+| Batimentos só chegam em treinos | Mi Fitness só compartilha batimentos de treino com o Health Connect | Limitação documentada; Gadgetbridge como alternativa |
+| Aviso falso "pulseira parou" | Regra olhava só batimentos, com limite de 30 min | Qualquer dado da pulseira conta; limite de 6 h |
+| Aviso de sono com média de 12,4 h | Versões da mesma noite somadas | Sessões agrupadas pelo início |
+| Painel sem presença | Firmware apontava para o IP local | ESP32 apontado para o domínio de produção |
+| ESP32-S3 reiniciando no boot | Provável oxidação na placa | Troca por placas ESP32 DevKit novas |
+| Bulário da Anvisa recusou as buscas (403) | Bloqueio do site | Cópias de fabricantes, com fonte registrada |
 
-Para o comportamento real dos agentes (com chamadas de verdade ao Gemini),
-configuração do WAHA/WhatsApp, ingestão de sensores (Health Connect) e
-importação do workflow n8n, ver as seções correspondentes no
-`README.md`.
+---
+
+## 5. Resultados obtidos
+
+- **432 testes automatizados** passando (`pytest -q`), cobrindo modelos,
+  domínio, armazenamento, API, scheduler, embeddings, agentes ADK e painel.
+- **Em produção desde 02/11/2026**, com mensagens reais de WhatsApp, a
+  pulseira enviando passos e sono e o ESP32 enviando presença.
+- **Aviso à família validado em produção (02/11):** "preciso de ajuda"
+  avisou o familiar no mesmo segundo (10:33:48). "Não consigo mexer o braço"
+  foi classificada como possível AVC às 22:05:58 e, sem resposta, o familiar
+  foi avisado às 22:07:02, 64 s depois, dentro da tolerância do job de 10 s.
+- **RAG:** as 5 bulas estão indexadas em produção. Perguntado sobre o
+  paracetamol, que não está na base, o bot não encontrou a bula e não
+  inventou a resposta.
+- **Monitoramento:** com o ESP32 desligado e o celular sem sincronizar por
+  mais de 6 h, a escada chegou à simulação de emergência, como as regras
+  determinam.
+
+| Fase | Entregável | Status |
+|---|---|---|
+| Fundação | Modelos Pydantic, domínio dos 5 agentes, esqueleto ADK | Completo |
+| Comunicação real | WhatsApp via WAHA | Completo |
+| Sensores | Band 10 Pro via Health Connect e ESP32 com 2 PIR | Completo |
+| Embeddings | Similaridade e RAG em bulas | Completo |
+| Painel | Streamlit da família | Completo |
+| Workflow | n8n (substitui o Langflow) | Completo |
+| Produção | VPS, aviso em 60 s, Google Agenda na pulseira | Completo |
+| Empacotamento | Relatório, README e vídeo pitch | Em andamento |
 
 ---
 
 ## 6. Limitações conhecidas e trabalhos futuros
 
-Documentadas em detalhe no `README.md` ("Limitações conhecidas do Plano
-N"); resumo das mais relevantes:
-
-1. Um risco originado por uma **mensagem** de texto não avança sozinho até
-   a família — só o job periódico de sensores avança a escada de
-   escalonamento adiante; corrigir exige persistir o evento que originou o
-   escalonamento.
-2. O classificador de urgência por similaridade não tem um piso mínimo de
-   confiança — uma mensagem fora do padrão dos exemplos de referência
-   ainda recebe a classificação do vizinho mais próximo.
-3. Sessão de conversa do ADK Runner é única por idoso, não por remetente
-   (idoso e família compartilham o mesmo histórico de contexto do LLM).
-4. Autenticação por token nos endpoints `/ingest/*`, `/api/classificar-mensagem`
-   e `/webhook/whatsapp` (header `X-Api-Key`, variável `ZELA_INGESTAO_TOKEN`)
-   foi implementada, mas é opcional — sem a variável configurada, os
-   endpoints continuam abertos (padrão de MVP em rede local). Nenhum
-   exige autenticação por padrão até serem expostos fora da rede local.
-   **Atualização (deploy em VPS):** `/webhook/whatsapp` inicialmente só
-   tinha a allowlist de telefones/LID como defesa, que falha "aberta"
-   (sem filtro) antes do primeiro perfil ser cadastrado — confirmado na
-   prática durante o deploy real, um POST forjado sem autenticação
-   chegou a acionar o agente de IA de verdade. Corrigido para também
-   exigir o token, igual aos outros endpoints.
-5. Transcrição de áudio (STT/TTS) no WhatsApp ainda não implementada —
-   hoje a comunicação é só por texto.
-6. Sensor de presença via ESP32: o backend, o firmware e a documentação
-   (diagrama elétrico, BOM, lógica de leitura) estão implementados e
-   testados (`POST /ingest/esp32`, `zela/domain/monitoramento.py`), mas a
-   validação com hardware físico não foi concluída nesta entrega — a
-   placa física disponível (ESP32-S3) apresentou resets repetidos por
-   watchdog (`TG1WDT_SYS_RST`/`TG0WDT_SYS_RST`) logo no boot, mesmo após
-   isolar e descartar as causas de software mais prováveis (tamanho de
-   flash, modo/frequência de flash, PSRAM, gravação corrompida —
-   confirmada via verificação de hash byte a byte com `esptool`), o que
-   aponta para um problema de hardware (alimentação, cabo ou placa) fora
-   do escopo de diagnóstico remoto. O monitoramento de risco desta
-   entrega usa exclusivamente o smartwatch (Xiaomi Smart Band, via
-   Health Connect — ver item 8 para a verificação real desse fluxo).
-7. **Limite de requisições do Gemini (tier gratuito) descoberto no deploy
-   real:** com uma `GOOGLE_API_KEY` do tier gratuito, o Gemini limita a 5
-   requisições/minuto — mandar várias mensagens de WhatsApp em sequência
-   rápida (ex.: durante uma demonstração ao vivo) estoura essa cota, e o
-   retry automático do cliente (`tenacity`, ~30s de espera por tentativa)
-   deixa a resposta lenta a ponto de o proxy reverso (nginx) devolver 504
-   antes do backend terminar — confirmado na prática, não é só teórico.
-   Mitigado em duas frentes: timeout do nginx aumentado para 180s, e o
-   provedor de LLM de conversação trocado para DeepSeek (seção 3.3), que
-   não tem esse limite. O Gemini continua em uso para embeddings
-   (cota separada, não afetada) e fica disponível como reserva.
-8. **Formato real do payload do Health Connect Webhook, nunca verificado
-   antes do deploy real:** a documentação do app (e deste relatório,
-   antes desta verificação) assumia um formato plano
-   `{"value", "unit", "timestamp"}` — o formato real é um objeto com
-   `steps`/`sleep`/`heart_rate` como listas de registros, cada um com
-   sua própria metadata do Health Connect (ex.: estágios de sono
-   numerados). Um bug real foi encontrado no caminho: a validação de
-   timestamp comparava um `datetime` sem fuso horário com o timestamp
-   do Health Connect, que vem com offset (ex.: `-03:00`) — levantando
-   `TypeError`, capturado em silêncio como "leitura descartada".
-   Corrigido comparando com o mesmo fuso do timestamp recebido
-   (`datetime.now(timestamp.tzinfo)`). `zela/api/ingestao.py` foi
-   reescrito para reconhecer o formato real, salvando uma leitura por
-   item de cada lista — um único POST real trouxe 58 leituras numa
-   única chamada — e descartando só o item malformado, não o lote
-   inteiro. Confirmado em produção com o Xiaomi Smart Band 10 Pro:
-   58/58 leituras salvas, 0 descartadas. O app usado (HC Webhook) foi
-   instalado de graça via Obtainium, não pela versão paga da Play
-   Store — ver seção "Smartwatch" do README.md para o passo a passo.
-
-**Hipótese de causa física do item 6 (ESP32):** a placa usada já tinha
-alguns anos de uso/armazenamento antes deste projeto, e não apresentava
-esse comportamento anteriormente — a hipótese mais provável é oxidação
-em trilhas, pontos de solda ou nos pinos/contatos da placa (comum em
-ESP32 guardados por longos períodos sem uso, especialmente em ambientes
-úmidos), degradando conexões que antes funcionavam e causando os resets
-intermitentes por watchdog observados. Essa hipótese não foi testada de
-forma isolada (ex.: inspeção visual com microscópio, teste de
-continuidade ponto a ponto) porque está fora do escopo de diagnóstico
-remoto desta entrega — fica registrada como a explicação mais plausível,
-não como causa confirmada.
-
-| Detalhe — portas USB-C | Visão geral da placa | Detalhe — ângulo lateral |
-|---|---|---|
-| ![Oxidação nas portas USB-C](docs/relatorio/imagens/esp1.jpeg) | ![Visão geral da placa ESP32-S3](docs/relatorio/imagens/esp2.jpeg) | ![Oxidação — ângulo lateral](docs/relatorio/imagens/esp3.jpeg) |
-
-**Evidência do item 8 (Health Connect):** registros reais do webhook no
-app — as 3 primeiras tentativas falharam (400, antes das correções), as
-2 seguintes deram certo (200, já com o parsing e o header corretos) — e
-a confirmação de sincronização mostrando as 3 métricas chegando.
-
-| Registros do webhook (400 → 200) | Sincronização confirmada |
-|---|---|
-| ![Registros do webhook](docs/relatorio/imagens/health_connect_webhook_logs.jpeg) | ![Sincronização confirmada: passos, sono e frequência cardíaca](docs/relatorio/imagens/health_connect_webhook_sincronizacao.jpeg) |
-
-Essas limitações foram descobertas e documentadas durante o próprio
-desenvolvimento (revisões de código dedicadas ao final de cada fase), não
-depois da entrega — refletem prioridades conscientes de escopo de um MVP
-de 6 fases, não lacunas não percebidas.
+1. **Batimentos contínuos:** o Mi Fitness só compartilha os batimentos de
+   treino com o Health Connect. Testar o Gadgetbridge ou ler a transmissão
+   BLE da pulseira são os próximos passos.
+2. **Sincronização prova atividade, não uso:** a regra da pulseira mostra
+   que o celular sincroniza, não que a pulseira está no pulso. Com o ESP32
+   parado, uma demora de mais de 6 h do celular gera uma escalada.
+3. **Lista de sintomas:** formas de dizer um sintoma que o classificador não
+   conhece só chegam ao painel.
+4. **Um idoso por instalação**, com o perfil de teste em produção.
+5. **Sem áudio** no WhatsApp e **sem ligação real** para emergência
+   (simulada).
+6. **Bulas:** versões obtidas de fabricantes e farmácias; precisam ser
+   conferidas no Bulário da Anvisa.
 
 ---
 
-## 7. Vídeo pitch
+## 7. Instruções de uso
 
-Roteiro cena a cena em `docs/pitch/roteiro.md`. Arquivo final em
-`docs/pitch/zela-pitch.mp4`.
+```bash
+git clone https://github.com/augustolnb/ag-zela-.git && cd ag-zela-
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev,deepseek]"
+pytest -q                                   # 432 testes
+uvicorn zela.api.main:app --reload          # backend: webhook, API e scheduler
+streamlit run zela/streamlit_app/app.py     # painel da família
+```
+
+Em produção, `docker compose up -d --build` sobe os três serviços. O
+`README.md` explica as variáveis de ambiente, o WAHA, a pulseira, o ESP32,
+o Google Agenda, o n8n e o deploy na VPS.
+
+---
+
+## 8. Vídeo pitch
+
+Roteiro em `docs/pitch/roteiro.md`. O vídeo fica em `docs/pitch/`.

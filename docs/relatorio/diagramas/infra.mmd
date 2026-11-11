@@ -1,0 +1,33 @@
+flowchart LR
+  classDef casa fill:#fdebd0,stroke:#b9770e
+  classDef vps fill:#e8f1fb,stroke:#3b6ea5
+  classDef ext fill:#e2f0d9,stroke:#3c763d
+  subgraph Casa["Casa do idoso"]
+    ESP["ESP32 + 2 PIR SR602<br/>Wi-Fi 2,4 GHz"]:::casa
+    BAND["Band 10 Pro"]:::casa
+    CEL["Celular: Mi Fitness → Health Connect<br/>→ HC Webhook · Google Agenda"]:::casa
+    WI["WhatsApp do idoso"]:::casa
+  end
+  subgraph VPS["VPS Hostinger · Ubuntu 24.04"]
+    NG["nginx + HTTPS<br/>api. · painel. · whatsapp."]:::vps
+    subgraph DC["Docker Compose"]
+      BE["backend<br/>FastAPI + ADK + APScheduler<br/>SQLite · ChromaDB"]:::vps
+      ST["streamlit<br/>painel da família"]:::vps
+      WA["waha<br/>WhatsApp Web"]:::vps
+    end
+  end
+  subgraph Nuvem["Serviços externos"]
+    DS["DeepSeek API<br/>(LLM)"]:::ext
+    GE["Gemini API<br/>(embeddings)"]:::ext
+    GC["Google Calendar API"]:::ext
+  end
+  FAM["Família:<br/>WhatsApp e navegador"]:::casa
+  BAND <-->|Bluetooth| CEL
+  ESP -->|"HTTPS /ingest/esp32"| NG
+  CEL -->|"HTTPS /ingest/health-connect"| NG
+  NG --> BE & ST & WA
+  WA <--> WI
+  WA <--> FAM
+  FAM -->|painel| NG
+  BE --> DS & GE & GC
+  GC -->|"lembrete"| CEL
