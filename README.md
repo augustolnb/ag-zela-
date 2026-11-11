@@ -1,30 +1,35 @@
 # Zela+ — Agente de IA de Apoio ao Idoso que Mora Sozinho
 
-Trabalho final de pós-graduação em Agentes de IA. Zela+ é um agente
-multiagente (ADK) que ajuda idosos que moram sozinhos a não esquecer
-medicamentos e compromissos, monitora sinais de risco de saúde via
-smartwatch (há também um endpoint e firmware de presença via ESP32,
-implementados mas sem validação em hardware real — ver seção "ESP32"
-abaixo), e mantém a família informada, podendo escalar alertas até
-simular contato com serviço de emergência.
+Trabalho final de pós-graduação em Agentes de IA. Zela+ é um sistema
+multiagente (Google ADK) que ajuda idosos que moram sozinhos a não esquecer
+medicamentos e compromissos, monitora sinais de risco com uma pulseira
+Xiaomi Smart Band 10 Pro e um ESP32 com 2 sensores de presença, e mantém a
+família informada. Um relato de sintoma sem resposta avisa todos os
+familiares em 60 segundos, e a escada de escalonamento pode chegar a
+simular o contato com um serviço de emergência. Nenhuma dessas decisões
+depende de um LLM.
+
+O sistema roda em produção em uma VPS (Docker Compose, nginx e HTTPS). A
+conversa usa o **DeepSeek** (via LiteLLM), e os embeddings da busca
+semântica usam o **Gemini** (`gemini-embedding-2`).
 
 ## Status do projeto
 
-Este repositório está sendo construído em fases (planos sequenciais):
+Construído em fases, cada uma testada e mergeada separadamente:
 
-1. **Fundação** (Plano 1) — modelos Pydantic + lógica de domínio dos 5
-   agentes + esqueleto de orquestração ADK. Tudo testável com `pytest`,
-   sem hardware nem APIs externas.
-2. **Comunicação real** (WhatsApp via WAHA) ✓ — áudio (STT/TTS) ainda não
-   implementado.
-3. **Ingestão de sensores reais** (Health Connect/Xiaomi Smart Band 10
-   Pro ✓, verificado de ponta a ponta em produção; ESP32 implementado
-   mas sem hardware validado nesta entrega — ver seção "ESP32" abaixo)
-4. **Embeddings** (classificação de urgência + RAG) ✓
-5. **Painel Streamlit para a família** ✓
-6. **Fluxo visual em n8n** (substitui Langflow, citado no enunciado
-   original do curso — o curso migrou de ferramenta) ✓
-7. **Empacotamento final, documentação e vídeo pitch** ✓
+1. **Fundação**: modelos Pydantic, lógica de domínio dos 5 agentes e
+   orquestração ADK ✓
+2. **Comunicação real**: WhatsApp via WAHA ✓ (áudio fora do escopo)
+3. **Sensores reais**: Band 10 Pro via Health Connect e ESP32 com 2 PIR
+   SR602, ambos validados em produção ✓
+4. **Embeddings**: classificação por similaridade e RAG em 5 bulas ✓
+5. **Painel Streamlit** para a família ✓
+6. **Fluxo visual em n8n**, no lugar do Langflow citado no enunciado ✓
+7. **Produção**: VPS, aviso à família em 60 s, lembretes no Google Agenda
+   espelhados na pulseira ✓
+8. **Empacotamento**: relatório, documentação e vídeo pitch (em andamento)
+
+Suíte automatizada: 432 testes (`pytest -q`).
 
 O design completo está em
 `docs/superpowers/specs/2026-09-10-cuida-mais-agente-idoso-design.md`. O
@@ -37,8 +42,11 @@ do vídeo pitch em `docs/pitch/roteiro.md`.
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e ".[dev,deepseek]"
 ```
+
+O extra `deepseek` instala o LiteLLM, usado pelo provedor de LLM da
+produção. Sem ele, o projeto roda só com o Gemini.
 
 ## Cadastrando a idosa e os medicamentos
 
@@ -445,8 +453,9 @@ correção e status de cada um:
 2. Copie `firmware/zela_presenca/config.h.example` para
    `firmware/zela_presenca/config.h` (esse arquivo não é versionado —
    evita vazar sua senha de Wi-Fi no repositório público) e preencha
-   `WIFI_SSID`, `WIFI_SENHA`, `URL_INGESTAO` (endereço da máquina rodando
-   o backend, ex.: `http://192.168.0.10:8000/ingest/esp32`) e, se o
+   `WIFI_SSID`, `WIFI_SENHA`, `URL_INGESTAO` (em produção,
+   `https://api.augustoautomacoes.com/ingest/esp32`; em desenvolvimento, o
+   IP local do backend, ex.: `http://192.168.0.10:8000/ingest/esp32`) e, se o
    backend exigir, `TOKEN_INGESTAO` (mesmo valor de `ZELA_INGESTAO_TOKEN`).
 3. Abra `firmware/zela_presenca/zela_presenca.ino` no Arduino IDE
    (precisa do pacote de placas "esp32" por Espressif Systems instalado
@@ -525,6 +534,19 @@ Se você estiver depurando um payload diferente do documentado acima
 (apps mudam formato entre versões), o jeito mais confiável é logar o
 corpo bruto da requisição temporariamente — foi assim que esse formato
 real foi descoberto neste projeto.
+
+**Limitação dos batimentos:** o Mi Fitness só compartilha com o Health
+Connect os batimentos medidos em **treinos**. O histórico contínuo aparece
+no app, mas não nas permissões de compartilhamento, então o servidor recebe
+batimentos só nos períodos de treino. Passos e sono chegam normalmente. Por
+isso a regra de atividade da pulseira considera qualquer dado dela, com
+limite de 6 h: o Android adia a sincronização em segundo plano, e foram
+medidos intervalos de até 5h45 entre envios. Uma alternativa em estudo é
+trocar o Mi Fitness pelo Gadgetbridge, que exporta para o Health Connect.
+
+**Volume do envio:** um lote com batimentos de treino segundo a segundo
+chegou a 1,92 MB. O nginx da VPS aceita até 10 MB
+(`client_max_body_size 10m`, ver `docs/deploy/vps.md`).
 
 ## Comissionamento: Google Agenda
 
