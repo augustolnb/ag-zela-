@@ -27,6 +27,11 @@ mas não resolve o problema. Três riscos orientaram o projeto:
 - **Lembretes** de medicamentos por WhatsApp, com confirmação pelo idoso.
   Lembretes de compromissos por WhatsApp e pelo **Google Agenda**, cuja
   notificação o Mi Fitness espelha na pulseira.
+- **Notificações na pulseira via Gmail:** o lembrete de remédio, a
+  pergunta "você está bem?" depois de um sintoma e a checagem da escada de
+  risco também chegam como e-mail curto na conta Google do idoso, e o Mi
+  Fitness espelha a notificação na pulseira. É um canal redundante, que não
+  depende do WhatsApp.
 - **Monitoramento** com hardware real: pulseira Xiaomi Smart Band 10 Pro
   (passos, sono e frequência cardíaca, via Health Connect) e um ESP32 com
   2 sensores de presença PIR (sala e quarto).
@@ -95,7 +100,9 @@ API do LLM cair, a família continua sendo avisada.
 
 Em paralelo, o scheduler (APScheduler) envia lembretes a cada 5 min,
 avalia as regras de monitoramento a cada 15 min, verifica o sono às 09:00 e
-sincroniza compromissos com o Google Agenda.
+sincroniza compromissos com o Google Agenda. Os lembretes de remédio e as checagens ao
+idoso também vão para o Gmail da conta do idoso, sem bloquear o WhatsApp
+se a API do Google falhar.
 
 ### 2.3 Infraestrutura
 

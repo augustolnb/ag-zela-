@@ -597,6 +597,38 @@ clientes). Esta configuração é manual e feita uma única vez na instalação.
 
 Detalhes do fluxo: seção 5.1 de `docs/superpowers/specs/2026-10-23-lembretes-compromisso-whatsapp-google-agenda-design.md`.
 
+## Notificações na pulseira (Gmail)
+
+Além do WhatsApp, três mensagens ao idoso viram um e-mail curto na conta
+Google dele, e o Mi Fitness espelha a notificação do Gmail na pulseira:
+
+| Momento | Assunto |
+|---|---|
+| Lembrete de remédio | `Zela+: hora do remédio` |
+| Sintoma que abre o aviso de 60 s | `Zela+: você está bem?` |
+| Checagem da escada de risco | `Zela+: está tudo bem?` |
+
+Os avisos à família continuam só no WhatsApp. O Gmail é um canal extra: se
+a API do Google falhar, o WhatsApp, o aviso em 60 s e a escada seguem
+normalmente, e a falha só aparece no log.
+
+**Configuração:**
+
+1. Faça o comissionamento do Google Agenda acima (ele já pede os escopos do
+   Gmail) com a conta Google do idoso.
+2. No celular do idoso: entre no Gmail com essa conta, ligue as
+   notificações dela e libere o Gmail no espelhamento de notificações do
+   Mi Fitness.
+3. Escolha o modo: com as variáveis no ambiente, rode
+   `python scripts/testar_gmail_pulseira.py` e veja qual assunto vibra na
+   pulseira, `Zela+ teste (insert)` ou `Zela+ teste (send)`.
+4. No `.env` do deploy:
+   - `ZELA_GMAIL_PULSEIRA_EMAIL`: o e-mail da conta. Sem ele, a função fica
+     desligada.
+   - `ZELA_GMAIL_MODO`: `insert` (padrão; coloca a mensagem direto na caixa
+     de entrada como não lida) ou `send` (envia da conta para ela mesma).
+     Um valor inválido desliga só o Gmail e gera um erro no log.
+
 ## Embeddings e RAG (Plano 4)
 
 A classificação de urgência por similaridade e o RAG usam a mesma chave de
