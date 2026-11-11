@@ -10,7 +10,7 @@ from zela.api.aviso_familia import triar_mensagem
 from zela.api.classificacao import montar_roteador_classificacao
 from zela.api.ingestao import montar_roteador_ingestao
 from zela.api.monitoramento_mensagem import processar_risco_mensagem
-from zela.api.pulseira import notificar_pulseira_em_segundo_plano
+from zela.api.pulseira import encerrar_notificacoes, notificar_pulseira_em_segundo_plano
 from zela.api.reindexacao import reindexar_documentos
 from zela.api.runner import obter_runner_zela, processar_mensagem
 from zela.api.scheduler import iniciar_scheduler
@@ -92,7 +92,7 @@ def _montar_gmail_client(env: Mapping[str, str]) -> GmailClient | None:
             client_secret=client_secret,
             refresh_token=refresh_token,
             email=email,
-            modo=env.get("ZELA_GMAIL_MODO") or "insert",
+            modo=(env.get("ZELA_GMAIL_MODO") or "insert").strip().lower(),
         )
     except ValueError:
         # Erro de digitação no .env desliga só o Gmail, nunca o backend.
@@ -192,6 +192,7 @@ async def ciclo_de_vida(app: FastAPI):
         yield
     finally:
         agendador.shutdown()
+        encerrar_notificacoes()
 
 
 def _salvar_leitura(leitura, idoso_id: str) -> bool:

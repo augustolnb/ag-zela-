@@ -8,15 +8,19 @@ intervalo:
 Observe a pulseira e anote qual assunto vibrou. Esse modo vai em
 ZELA_GMAIL_MODO no .env da VPS.
 
-Uso (com as variáveis no ambiente, nunca na linha de comando):
-    export ZELA_GOOGLE_CALENDAR_CLIENT_ID=... ZELA_GOOGLE_CALENDAR_CLIENT_SECRET=...
-    export ZELA_GOOGLE_CALENDAR_REFRESH_TOKEN=... ZELA_GMAIL_PULSEIRA_EMAIL=...
+Uso:
     python scripts/testar_gmail_pulseira.py
+
+O script pede, sem mostrar na tela, cada variável que não estiver no
+ambiente. Não use `export VAR=valor` no terminal: o valor fica salvo no
+histórico do shell.
 """
 
+import getpass
 import os
 import sys
 import time
+from collections.abc import Callable, Mapping
 
 import httpx
 
@@ -31,10 +35,20 @@ VARIAVEIS = (
 INTERVALO_SEGUNDOS = 20
 
 
+def ler_variaveis(env: Mapping[str, str], perguntar: Callable[[str], str]) -> dict[str, str]:
+    """Usa o ambiente e pergunta só o que faltar."""
+    return {nome: env.get(nome) or perguntar(nome) for nome in VARIAVEIS}
+
+
+def _perguntar_sem_eco(nome: str) -> str:
+    return getpass.getpass(f"{nome}: ").strip()
+
+
 def main() -> int:
-    faltando = [nome for nome in VARIAVEIS if not os.environ.get(nome)]
+    valores = ler_variaveis(os.environ, _perguntar_sem_eco)
+    faltando = [nome for nome, valor in valores.items() if not valor]
     if faltando:
-        print("Faltam variáveis de ambiente: " + ", ".join(faltando), file=sys.stderr)
+        print("Faltam valores: " + ", ".join(faltando), file=sys.stderr)
         return 1
 
     algum_ok = False
@@ -42,10 +56,10 @@ def main() -> int:
         if indice:
             time.sleep(INTERVALO_SEGUNDOS)
         cliente = GmailClient(
-            client_id=os.environ["ZELA_GOOGLE_CALENDAR_CLIENT_ID"],
-            client_secret=os.environ["ZELA_GOOGLE_CALENDAR_CLIENT_SECRET"],
-            refresh_token=os.environ["ZELA_GOOGLE_CALENDAR_REFRESH_TOKEN"],
-            email=os.environ["ZELA_GMAIL_PULSEIRA_EMAIL"],
+            client_id=valores["ZELA_GOOGLE_CALENDAR_CLIENT_ID"],
+            client_secret=valores["ZELA_GOOGLE_CALENDAR_CLIENT_SECRET"],
+            refresh_token=valores["ZELA_GOOGLE_CALENDAR_REFRESH_TOKEN"],
+            email=valores["ZELA_GMAIL_PULSEIRA_EMAIL"],
             modo=modo,
         )
         try:

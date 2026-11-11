@@ -31,3 +31,14 @@ def notificar_pulseira_em_segundo_plano(gmail_client, notificacao: NotificacaoPu
     except RuntimeError:
         # Executor já encerrado (desligamento do backend).
         logger.exception("Notificação da pulseira descartada (%s)", notificacao.assunto)
+
+
+def encerrar_notificacoes() -> None:
+    """No desligamento: descarta a fila sem esperar uma chamada travada ao Google.
+
+    Troca por um executor novo (sem threads até o primeiro envio), para o
+    módulo continuar utilizável se o app subir de novo no mesmo processo.
+    """
+    global _executor
+    antigo, _executor = _executor, ThreadPoolExecutor(max_workers=1, thread_name_prefix="pulseira")
+    antigo.shutdown(wait=False, cancel_futures=True)

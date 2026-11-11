@@ -28,3 +28,27 @@ def test_sucesso_chama_notificar_com_assunto_e_corpo():
     gmail = _Gmail()
     assert notificar_pulseira(gmail, N) is True
     assert gmail.chamadas == [("Zela+: hora do remédio", "Dipirona")]
+
+
+def test_encerrar_descarta_a_fila_sem_esperar_e_continua_utilizavel(monkeypatch):
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    from zela.api import pulseira
+
+    antigo = ThreadPoolExecutor(max_workers=1)
+    monkeypatch.setattr(pulseira, "_executor", antigo)
+    liberar = threading.Event()
+    gmail = _Gmail()
+    antigo.submit(liberar.wait, 5)  # ocupa a única thread, como uma chamada travada
+    pulseira.notificar_pulseira_em_segundo_plano(gmail, N)  # fica na fila
+
+    pulseira.encerrar_notificacoes()
+    liberar.set()
+    antigo.shutdown(wait=True)
+
+    assert gmail.chamadas == []
+    assert pulseira._executor is not antigo
+    pulseira.notificar_pulseira_em_segundo_plano(gmail, N)
+    pulseira._executor.submit(lambda: None).result(timeout=5)
+    assert len(gmail.chamadas) == 1

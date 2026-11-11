@@ -619,15 +619,17 @@ normalmente, e a falha só aparece no log.
 2. No celular do idoso: entre no Gmail com essa conta, ligue as
    notificações dela e libere o Gmail no espelhamento de notificações do
    Mi Fitness.
-3. Escolha o modo: com as variáveis no ambiente, rode
-   `python scripts/testar_gmail_pulseira.py` e veja qual assunto vibra na
-   pulseira, `Zela+ teste (insert)` ou `Zela+ teste (send)`.
+3. Escolha o modo: rode `python scripts/testar_gmail_pulseira.py` (ele
+   pede as credenciais sem mostrá-las na tela; evite `export`, que deixa
+   os valores no histórico do shell) e veja qual assunto vibra na pulseira,
+   `Zela+ teste (insert)` ou `Zela+ teste (send)`.
 4. No `.env` do deploy:
    - `ZELA_GMAIL_PULSEIRA_EMAIL`: o e-mail da conta. Sem ele, a função fica
      desligada.
    - `ZELA_GMAIL_MODO`: `insert` (padrão; coloca a mensagem direto na caixa
      de entrada como não lida) ou `send` (envia da conta para ela mesma).
-     Um valor inválido desliga só o Gmail e gera um erro no log.
+     Maiúsculas e espaços são ignorados. Um valor inválido desliga só o
+     Gmail e gera um erro no log.
 
 ## Embeddings e RAG (Plano 4)
 

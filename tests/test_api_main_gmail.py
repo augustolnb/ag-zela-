@@ -34,3 +34,35 @@ def test_modo_invalido_desliga_gmail_sem_derrubar_o_backend():
     assert _montar_gmail_client(
         {**CREDENCIAIS, "ZELA_GMAIL_PULSEIRA_EMAIL": "teste@gmail.com", "ZELA_GMAIL_MODO": "smtp"}
     ) is None
+
+
+def test_modo_aceita_maiusculas_e_espacos():
+    cliente = _montar_gmail_client(
+        {**CREDENCIAIS, "ZELA_GMAIL_PULSEIRA_EMAIL": "teste@gmail.com", "ZELA_GMAIL_MODO": "  Send "}
+    )
+    assert cliente.modo == "send"
+
+
+def test_notificar_sintoma_nao_espera_o_gmail(monkeypatch):
+    import threading
+    import time
+
+    from zela.api import main, pulseira
+
+    liberar = threading.Event()
+    chamadas = []
+
+    class _GmailTravado:
+        def notificar(self, assunto, corpo):
+            liberar.wait(timeout=5)
+            chamadas.append(assunto)
+
+    monkeypatch.setattr(main, "gmail_client", _GmailTravado())
+    inicio = time.monotonic()
+    main._notificar_sintoma(["tontura"])
+    duracao = time.monotonic() - inicio
+    liberar.set()
+    pulseira._executor.submit(lambda: None).result(timeout=5)
+
+    assert duracao < 1
+    assert chamadas == ["Zela+: você está bem?"]
