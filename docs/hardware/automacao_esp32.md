@@ -118,7 +118,7 @@ job periódico (a cada 15 min, zela/api/scheduler.py)
   -> classificar_por_regra()
      -> >=8h sem presença com ESP32 vivo, ou ESP32 e pulseira parados -> RISCO
         -> aplicar_escalonamento() -> alerta à idosa e depois à família
-     -> só ESP32 (15 min) ou só pulseira (30 min) parados -> AVISO
+     -> só ESP32 (15 min) ou só pulseira (6 h) parados -> AVISO
         -> mensagem única ao primeiro contato familiar, sem escalonamento
 ```
 
