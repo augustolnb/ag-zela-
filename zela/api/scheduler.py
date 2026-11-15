@@ -17,6 +17,7 @@ from zela.models.alertas import Alerta, CanalAlerta, NivelAlerta, StatusAlerta
 from zela.models.monitoramento import EventoMonitoramento, StatusMonitoramento
 from zela.models.perfil import PerfilIdoso
 from zela.storage.alertas import salvar_alerta
+from zela.storage.avisos import aviso_ja_enviado, limpar_avisos_de_episodio, registrar_aviso
 from zela.storage.db import conectar
 from zela.storage.escalonamento import aplicar_escalonamento, obter_estado, salvar_estado
 from zela.storage.monitoramento import aplicar_classificacao, avaliar_sono_recente
@@ -45,10 +46,9 @@ INTERVALO_REINDEXACAO_SEGUNDOS = 60
 # comportamento anterior).
 _lembretes_ja_enviados: set[tuple[str, str]] = set()
 
-# Dedupe em memória de processo dos AVISOs, como `_lembretes_ja_enviados`: a
-# verificação roda a cada 15 min e a família só deve receber a mensagem uma vez
-# por episódio. Chave: (id_idoso, motivo) ou (id_idoso, "sono:YYYY-MM-DD").
-_avisos_ja_enviados: set[tuple[str, str]] = set()
+# Os AVISOs já enviados ficam no banco (zela/storage/avisos.py): a verificação
+# roda a cada 15 min, a família só deve receber a mensagem uma vez por episódio,
+# e um deploy não pode repetir o aviso. Chave: motivo ou "sono:YYYY-MM-DD".
 _PREFIXO_CHAVE_SONO = "sono:"
 
 
@@ -189,9 +189,9 @@ def despachar_alertas(
 
 
 def _enviar_aviso(
-    conn, perfil: PerfilIdoso, idoso_id: str, motivo: str, chave: tuple[str, str], agora: datetime, waha_client
+    conn, perfil: PerfilIdoso, idoso_id: str, motivo: str, chave: str, agora: datetime, waha_client
 ) -> list[Alerta]:
-    if chave in _avisos_ja_enviados or not perfil.contatos_familiares:
+    if aviso_ja_enviado(conn, idoso_id, chave) or not perfil.contatos_familiares:
         return []
     contato = perfil.contatos_familiares[0]
     alerta = Alerta(
@@ -202,12 +202,12 @@ def _enviar_aviso(
         timestamp=agora,
     )
     if not _tentar_enviar(waha_client, contato.telefone, alerta):
-        # Sem marcar em `_avisos_ja_enviados`: a próxima verificação tenta de novo.
+        # Sem registrar o aviso: a próxima verificação tenta de novo.
         alerta = alerta.model_copy(update={"status": StatusAlerta.FALHOU})
         salvar_alerta(conn, alerta, idoso_id)
         return [alerta]
     salvar_alerta(conn, alerta, idoso_id)
-    _avisos_ja_enviados.add(chave)
+    registrar_aviso(conn, idoso_id, chave, agora)
     return [alerta]
 
 
@@ -229,12 +229,10 @@ def verificar_e_escalonar_riscos(caminho_db: str, id_idoso: str, waha_client, gm
         estado = obter_estado(conn, id_idoso)
         if estado.estagio not in (EstagioEscalonamento.OCIOSO, EstagioEscalonamento.RESOLVIDO):
             salvar_estado(conn, id_idoso, EstadoEscalonamento(estagio=EstagioEscalonamento.RESOLVIDO))
-        return _enviar_aviso(conn, perfil, id_idoso, evento.motivo, (id_idoso, evento.motivo), agora, waha_client)
+        return _enviar_aviso(conn, perfil, id_idoso, evento.motivo, evento.motivo, agora, waha_client)
 
     if evento.status == StatusMonitoramento.NORMAL:
-        for chave in list(_avisos_ja_enviados):
-            if chave[0] == id_idoso and not chave[1].startswith(_PREFIXO_CHAVE_SONO):
-                _avisos_ja_enviados.discard(chave)
+        limpar_avisos_de_episodio(conn, id_idoso, prefixo_preservado=_PREFIXO_CHAVE_SONO)
 
     alertas = aplicar_escalonamento(conn, id_idoso, evento, perfil, agora)
     despachar_alertas(conn, alertas, perfil, id_idoso, waha_client, gmail_client)
@@ -251,7 +249,7 @@ def verificar_sono_e_avisar(caminho_db: str, id_idoso: str, waha_client) -> list
     evento = avaliar_sono_recente(conn, id_idoso, agora)
     if evento is None:
         return []
-    chave = (id_idoso, f"{_PREFIXO_CHAVE_SONO}{agora.date()}")
+    chave = f"{_PREFIXO_CHAVE_SONO}{agora.date()}"
     return _enviar_aviso(conn, perfil, id_idoso, evento.motivo, chave, agora, waha_client)
 
 

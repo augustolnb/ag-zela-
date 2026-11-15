@@ -15,6 +15,7 @@ def test_conectar_cria_todas_as_tabelas():
         "estado_escalonamento",
         "episodio_sintoma",
         "notificacao_familia",
+        "aviso_enviado",
         "lembrete_compromisso_enviado",
     }
 

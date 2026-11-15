@@ -30,11 +30,6 @@ from zela.storage.rotina import (
 )
 
 
-@pytest.fixture(autouse=True)
-def _limpa_avisos(monkeypatch):
-    monkeypatch.setattr("zela.api.scheduler._avisos_ja_enviados", set())
-
-
 class _WahaFalso:
     def __init__(self):
         self.enviados = []
@@ -1049,3 +1044,35 @@ def test_checagem_ao_idoso_homonimo_vai_ao_idoso_e_a_pulseira(tmp_path):
 
     assert waha.enviados == [("+5511911111111", "Tudo bem?")]
     assert len(gmail.chamadas) == 1
+
+
+# Controle de avisos no banco: um deploy (reinício) não pode repetir o aviso.
+def test_aviso_registrado_no_banco_nao_sai_de_novo_apos_reinicio(tmp_path, monkeypatch):
+    from zela.domain.monitoramento import MOTIVO_ESP32_SEM_SINAL
+    from zela.storage.avisos import registrar_aviso
+
+    caminho_db, conn = _cenario_com_pulseira_viva(tmp_path, monkeypatch)
+    registrar_aviso(conn, "idosa-1", MOTIVO_ESP32_SEM_SINAL, datetime(2026, 9, 16, 13, 30))
+    waha_falso = _WahaFalso()
+
+    assert verificar_e_escalonar_riscos(caminho_db, "idosa-1", waha_falso) == []
+    assert waha_falso.enviados == []
+
+
+def test_aviso_de_sono_registrado_no_banco_nao_sai_de_novo_apos_reinicio(tmp_path, monkeypatch):
+    from zela.storage.avisos import registrar_aviso
+
+    caminho_db = str(tmp_path / "teste.db")
+    conn = conectar(caminho_db)
+    salvar_perfil(conn, _perfil(), idoso_id="idosa-1")
+    agora = datetime(2026, 9, 16, 9, 0)
+    for dias in range(1, 15):
+        _salvar_sono(conn, dias, 7, agora)
+    _salvar_sono(conn, 0, 4, agora)
+    registrar_aviso(conn, "idosa-1", "sono:2026-09-16", agora)
+    _Relogio.atual = agora
+    monkeypatch.setattr("zela.api.scheduler.datetime", _Relogio)
+    waha_falso = _WahaFalso()
+
+    assert verificar_sono_e_avisar(caminho_db, "idosa-1", waha_falso) == []
+    assert waha_falso.enviados == []
