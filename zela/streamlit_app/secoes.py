@@ -33,6 +33,7 @@ def renderizar_medicacao(conn, idoso_id: str) -> None:
 
 
 MAXIMO_ALERTAS_EXIBIDOS = 10
+ALTURA_GRAFICO_ATIVIDADE = 160
 
 
 def renderizar_alertas(conn, idoso_id: str) -> None:
@@ -60,7 +61,8 @@ def renderizar_grafico(conn, idoso_id: str) -> None:
             {"presença": [l.valor for l in leituras_presenca]},
             index=[l.timestamp for l in leituras_presenca],
         )
-        st.line_chart(dados)
+        # Baixo o bastante para o resumo da pulseira caber no card sem rolar.
+        st.line_chart(dados, height=ALTURA_GRAFICO_ATIVIDADE)
     else:
         st.write("Nenhuma leitura de presença hoje ainda.")
 

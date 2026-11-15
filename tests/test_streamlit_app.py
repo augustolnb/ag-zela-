@@ -1,4 +1,5 @@
 from streamlit.testing.v1 import AppTest
+from zela.streamlit_app.estilo import ALTURA_CARD_GRADE
 
 
 def test_app_bloqueia_sem_senha_configurada(monkeypatch, tmp_path):
@@ -29,3 +30,40 @@ def test_app_renderiza_secoes_apos_autenticacao(monkeypatch, tmp_path):
     assert len(at.subheader) == 6  # status, medicação, alertas, gráfico, form. medicamento, form. compromisso
     assert len(at.columns) == 3  # grid: medicação, alertas, atividade
     assert [t.label for t in at.tabs] == ["Medicamento", "Compromisso"]
+
+
+def test_cards_da_grade_tem_altura_fixa_com_rolagem(monkeypatch, tmp_path):
+    # Altura fixa faz o Streamlit rolar o conteúdo dentro do card, em vez de
+    # o card crescer junto com a lista de medicações, alertas ou leituras.
+    monkeypatch.setenv("ZELA_DB_PATH", str(tmp_path / "teste.db"))
+    monkeypatch.setenv("STREAMLIT_SENHA", "segredo123")
+
+    at = AppTest.from_file("../zela/streamlit_app/app.py", default_timeout=10)
+    at.run()
+    at.text_input[0].set_value("segredo123").run()
+
+    alturas = []
+    for coluna in at.columns:
+        cards = list(coluna.children.values())
+        assert len(cards) == 1
+        alturas.append(cards[0].proto.height_config.pixel_height)
+    assert alturas == [ALTURA_CARD_GRADE] * 3
+
+
+def test_card_de_status_nao_tem_altura_fixa(monkeypatch, tmp_path):
+    monkeypatch.setenv("ZELA_DB_PATH", str(tmp_path / "teste.db"))
+    monkeypatch.setenv("STREAMLIT_SENHA", "segredo123")
+
+    at = AppTest.from_file("../zela/streamlit_app/app.py", default_timeout=10)
+    at.run()
+    at.text_input[0].set_value("segredo123").run()
+
+    # O status é uma linha só: com altura fixa, sobraria espaço vazio.
+    cards = [
+        bloco
+        for bloco in at.main.children.values()
+        if getattr(bloco.proto, "flex_container", None) is not None and bloco.proto.flex_container.border
+    ]
+    card_status = cards[0]
+    assert len(card_status.get("metric")) == 1
+    assert card_status.proto.height_config.pixel_height == 0
