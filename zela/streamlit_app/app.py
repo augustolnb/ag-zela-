@@ -4,7 +4,7 @@ import streamlit as st
 
 from zela.storage.db import conectar
 from zela.streamlit_app.autenticacao import exigir_autenticacao
-from zela.streamlit_app.estilo import aplicar_estilo, icone
+from zela.streamlit_app.estilo import ALTURA_CARD_GRADE, aplicar_estilo, icone
 from zela.streamlit_app.formularios import formulario_compromisso, formulario_medicamento
 from zela.streamlit_app.secoes import (
     renderizar_alertas,
@@ -24,8 +24,10 @@ def _renderizar_secao_com_seguranca(funcao, *args) -> None:
         st.error(f"Não foi possível carregar esta seção: {exc}")
 
 
-def _renderizar_card(nome_icone: str, funcao, *args) -> None:
-    with st.container(border=True):
+def _renderizar_card(nome_icone: str, funcao, *args, altura: int | str = "content") -> None:
+    # Com `altura` em pixels, o conteúdo rola dentro do card em vez de
+    # esticá-lo; "content" (padrão do Streamlit) acompanha o conteúdo.
+    with st.container(border=True, height=altura):
         st.markdown(icone(nome_icone), unsafe_allow_html=True)
         _renderizar_secao_com_seguranca(funcao, *args)
 
@@ -44,11 +46,11 @@ _renderizar_card("heart-pulse", renderizar_status, conn, ID_IDOSO)
 
 coluna_medicacao, coluna_alertas, coluna_atividade = st.columns(3)
 with coluna_medicacao:
-    _renderizar_card("pill", renderizar_medicacao, conn, ID_IDOSO)
+    _renderizar_card("pill", renderizar_medicacao, conn, ID_IDOSO, altura=ALTURA_CARD_GRADE)
 with coluna_alertas:
-    _renderizar_card("bell", renderizar_alertas, conn, ID_IDOSO)
+    _renderizar_card("bell", renderizar_alertas, conn, ID_IDOSO, altura=ALTURA_CARD_GRADE)
 with coluna_atividade:
-    _renderizar_card("activity", renderizar_grafico, conn, ID_IDOSO)
+    _renderizar_card("activity", renderizar_grafico, conn, ID_IDOSO, altura=ALTURA_CARD_GRADE)
 
 st.divider()
 

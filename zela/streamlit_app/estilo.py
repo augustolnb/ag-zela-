@@ -1,5 +1,11 @@
 import streamlit as st
 
+# Altura, em pixels, dos 3 cards da grade (medicação, alertas e atividade).
+# Com altura fixa, o Streamlit rola o conteúdo dentro do card, em vez de o
+# card crescer com a lista e empurrar o resto da página. Os 3 cards ficam
+# com a mesma altura, lado a lado.
+ALTURA_CARD_GRADE = 420
+
 # Paleta "saúde": fundo claro, azul como cor primária, âmbar reservado para
 # chamar atenção (alertas) e vermelho só para o nível crítico (desvio
 # deliberado da paleta de 2 cores do design system — um alerta crítico de
