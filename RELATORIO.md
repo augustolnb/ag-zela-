@@ -256,12 +256,15 @@ autor:
 | Painel sem presença | Firmware apontava para o IP local | ESP32 apontado para o domínio de produção |
 | ESP32-S3 reiniciando no boot | Provável oxidação na placa | Troca por placas ESP32 DevKit novas |
 | Bulário da Anvisa recusou as buscas (403) | Bloqueio do site | Cópias de fabricantes, com fonte registrada |
+| "O ESP32 da casa parou" repetido a cada deploy | Avisos já enviados guardados só na memória do backend | Tabela `aviso_enviado` no banco: um aviso por episódio, mesmo com reinícios |
+| Aviso de risco a um familiar com o mesmo nome do idoso ia para o WhatsApp do idoso | Destino do alerta escolhido pelo nome | Cada alerta leva o telefone de destino e se é para o idoso |
+| Google pede política de privacidade e termos para publicar o app OAuth | Exigência da tela de consentimento | Páginas públicas em `painel.augustoautomacoes.com/privacidade` e `/termos` |
 
 ---
 
 ## 5. Resultados obtidos
 
-- **432 testes automatizados** passando (`pytest -q`), cobrindo modelos,
+- **477 testes automatizados** passando (`pytest -q`), cobrindo modelos,
   domínio, armazenamento, API, scheduler, embeddings, agentes ADK e painel.
 - **Em produção desde 02/11/2026**, com mensagens reais de WhatsApp, a
   pulseira enviando passos e sono e o ESP32 enviando presença.
@@ -274,7 +277,15 @@ autor:
   inventou a resposta.
 - **Monitoramento:** com o ESP32 desligado e o celular sem sincronizar por
   mais de 6 h, a escada chegou à simulação de emergência, como as regras
-  determinam.
+  determinam. Com o ESP32 religado em 15/11, uma queda real de 28 min
+  (14:57 a 15:24) gerou um único aviso à família, e nenhum alerta de
+  pulseira ou de sono falso apareceu desde as correções de 04/11 e 11/11.
+- **Google Agenda validado em produção (15/11):** os compromissos
+  cadastrados no painel apareceram na agenda da conta Google dedicada em
+  até 5 min, e o lembrete de cadastro e o de 1 h chegaram pelo WhatsApp.
+- **Gmail na pulseira (15/11):** as duas formas de envio da API do Gmail
+  (`insert` e `send`) fizeram a Band 10 Pro vibrar com o assunto do e-mail.
+  O Zela+ usa `insert`, que coloca o aviso direto na caixa de entrada.
 
 | Fase | Entregável | Status |
 |---|---|---|
@@ -304,6 +315,15 @@ autor:
    (simulada).
 6. **Bulas:** versões obtidas de fabricantes e farmácias; precisam ser
    conferidas no Bulário da Anvisa.
+7. **Sem aviso de retorno:** a família recebe "o ESP32 da casa parou", mas
+   não recebe um aviso quando ele volta. Como as regras rodam a cada 15
+   min, o aviso pode chegar até cerca de 30 min depois da queda, às vezes
+   quando o sinal já voltou (em 15/11, chegou 2 s depois do retorno).
+8. **App OAuth não verificado pelo Google:** funciona para até 100 contas,
+   com a tela de "app não verificado" na autorização. Para oferecer a mais
+   famílias, o escopo restrito `gmail.insert` exige a verificação do Google
+   com avaliação de segurança. O modo `send` usa um escopo sensível, que
+   pede só a verificação, sem essa avaliação.
 
 ---
 
@@ -313,7 +333,7 @@ autor:
 git clone https://github.com/augustolnb/ag-zela-.git && cd ag-zela-
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev,deepseek]"
-pytest -q                                   # 432 testes
+pytest -q                                   # 477 testes
 uvicorn zela.api.main:app --reload          # backend: webhook, API e scheduler
 streamlit run zela/streamlit_app/app.py     # painel da família
 ```

@@ -29,7 +29,7 @@ Construído em fases, cada uma testada e mergeada separadamente:
    espelhados na pulseira ✓
 8. **Empacotamento**: relatório, documentação e vídeo pitch (em andamento)
 
-Suíte automatizada: 432 testes (`pytest -q`).
+Suíte automatizada: 477 testes (`pytest -q`).
 
 O design completo está em
 `docs/superpowers/specs/2026-09-10-cuida-mais-agente-idoso-design.md`. O
