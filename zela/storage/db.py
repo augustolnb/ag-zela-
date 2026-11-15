@@ -100,6 +100,13 @@ CREATE TABLE IF NOT EXISTS notificacao_familia (
     tentativas INTEGER NOT NULL DEFAULT 0,
     proxima_tentativa_em TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS aviso_enviado (
+    idoso_id TEXT NOT NULL,
+    chave TEXT NOT NULL,
+    enviado_em TEXT NOT NULL,
+    PRIMARY KEY (idoso_id, chave)
+);
 """
 
 

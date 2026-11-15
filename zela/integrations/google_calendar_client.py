@@ -2,9 +2,11 @@ from datetime import datetime, timedelta
 
 import httpx
 
+from zela.integrations.google_oauth import TOKEN_URL, obter_access_token
+
 
 class GoogleCalendarClient:
-    TOKEN_URL = "https://oauth2.googleapis.com/token"
+    TOKEN_URL = TOKEN_URL
     API_BASE = "https://www.googleapis.com/calendar/v3"
     FUSO_HORARIO = "America/Sao_Paulo"
 
@@ -15,18 +17,7 @@ class GoogleCalendarClient:
         self.calendar_id = calendar_id
 
     def _access_token(self) -> str:
-        resposta = httpx.post(
-            self.TOKEN_URL,
-            data={
-                "client_id": self.client_id,
-                "client_secret": self.client_secret,
-                "refresh_token": self.refresh_token,
-                "grant_type": "refresh_token",
-            },
-            timeout=30,
-        )
-        resposta.raise_for_status()
-        return resposta.json()["access_token"]
+        return obter_access_token(self.client_id, self.client_secret, self.refresh_token)
 
     def _payload_evento(self, titulo: str, local: str, data_hora: datetime, overrides_minutos: list[int]) -> dict:
         fim = data_hora + timedelta(hours=1)

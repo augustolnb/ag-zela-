@@ -246,3 +246,36 @@ def test_processar_sem_perfil_nao_falha(tmp_path):
 
 def test_hora_em_brasilia():
     assert _formatar_hora(datetime(2026, 11, 2, 15, 0, tzinfo=timezone.utc)) == "12:00"
+
+
+# Notificação na pulseira (Gmail) quando um sintoma abre episódio.
+def _triar_com_callback(db, perfil, texto, agora, chamadas):
+    return triar_mensagem(
+        conectar(db), "idosa-1", perfil, texto, agora, _Waha(), ao_abrir_episodio=chamadas.append
+    )
+
+
+def test_sintoma_novo_chama_callback_com_sintomas(db, perfil):
+    chamadas = []
+    _triar_com_callback(db, perfil, "estou com tontura", T0, chamadas)
+    assert chamadas == [["tontura"]]
+
+
+def test_relato_com_episodio_aberto_nao_chama_callback_de_novo(db, perfil):
+    chamadas = []
+    _triar_com_callback(db, perfil, "estou com tontura", T0, chamadas)
+    _triar_com_callback(db, perfil, "dor no peito", T0 + timedelta(seconds=10), chamadas)
+    assert len(chamadas) == 1
+
+
+def test_callback_com_excecao_nao_impede_a_resposta_nem_o_episodio(db, perfil):
+    from zela.storage.episodios import obter_episodio_aberto
+
+    def quebra(_sintomas):
+        raise RuntimeError("Gmail fora")
+
+    resposta = triar_mensagem(
+        conectar(db), "idosa-1", perfil, "estou com tontura", T0, _Waha(), ao_abrir_episodio=quebra
+    )
+    assert "60 segundos" in resposta
+    assert obter_episodio_aberto(conectar(db), "idosa-1") is not None

@@ -81,3 +81,30 @@ def test_evento_de_risco_apos_resolvido_reinicia_contato_idoso():
     assert novo_estado.estagio == EstagioEscalonamento.CONTATO_IDOSO
     assert len(alertas) == 1
     assert alertas[0].destinatario == "Maria da Silva"
+
+
+# Destino explícito: um familiar homônimo do idoso não pode receber o aviso dele, nem o contrário.
+def _perfil_homonimo():
+    return PerfilIdoso(
+        nome="Maria",
+        telefone="+5511911111111",
+        data_nascimento=datetime(1945, 3, 12).date(),
+        contatos_familiares=[ContatoFamiliar(nome="Maria", telefone="+5511987654321")],
+        lid_whatsapp="109@lid",
+    )
+
+
+def test_checagem_ao_idoso_leva_o_destino_do_idoso():
+    agora = datetime(2026, 9, 14, 10, 0)
+    _, alertas = decidir_proxima_acao(
+        _evento(StatusMonitoramento.RISCO), _perfil_homonimo(), EstadoEscalonamento(estagio=EstagioEscalonamento.OCIOSO), agora
+    )
+    assert alertas[0].para_idoso is True
+    assert alertas[0].telefone == "109@lid"
+
+
+def test_aviso_a_familiar_homonimo_vai_para_o_telefone_do_familiar():
+    agora = datetime(2026, 9, 14, 10, 0)
+    estado = EstadoEscalonamento(estagio=EstagioEscalonamento.CONTATO_IDOSO, iniciado_em=agora - timedelta(minutes=11))
+    _, alertas = decidir_proxima_acao(_evento(StatusMonitoramento.RISCO), _perfil_homonimo(), estado, agora)
+    assert [(a.para_idoso, a.telefone) for a in alertas] == [(False, "+5511987654321")]

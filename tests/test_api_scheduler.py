@@ -30,11 +30,6 @@ from zela.storage.rotina import (
 )
 
 
-@pytest.fixture(autouse=True)
-def _limpa_avisos(monkeypatch):
-    monkeypatch.setattr("zela.api.scheduler._avisos_ja_enviados", set())
-
-
 class _WahaFalso:
     def __init__(self):
         self.enviados = []
@@ -857,3 +852,227 @@ def test_iniciar_scheduler_so_registra_job_de_google_agenda_quando_cliente_e_pas
     com_google = iniciar_scheduler(caminho_db, "idosa-1", _WahaFalso(), google_calendar_client=_GoogleCalendarFalso())
     assert "sincronizar_compromissos_google_agenda" in {j.id for j in com_google.get_jobs()}
     com_google.shutdown()
+
+
+# Notificações na pulseira (Gmail) — plano 2026-11-11-gmail-pulseira, Task 5.
+class _GmailFalso:
+    def __init__(self, erro=None):
+        self.chamadas = []
+        self.erro = erro
+
+    def notificar(self, assunto, corpo):
+        if self.erro:
+            raise self.erro
+        self.chamadas.append((assunto, corpo))
+        return "msg-1"
+
+
+def _preparar_lembrete(tmp_path, monkeypatch):
+    monkeypatch.setattr("zela.api.scheduler._lembretes_ja_enviados", set())
+    caminho_db = str(tmp_path / "teste.db")
+    conn = conectar(caminho_db)
+    salvar_perfil(conn, _perfil(), idoso_id="idosa-1")
+    salvar_medicamento(
+        conn,
+        Medicamento(id="med-g1", nome="Losartana", dosagem=Dosagem(quantidade=50, unidade="mg"), horarios=[time(8, 0)]),
+        idoso_id="idosa-1",
+    )
+
+    class _DatetimeFixo:
+        @staticmethod
+        def now():
+            from datetime import datetime as _dt
+            return _dt(2026, 9, 14, 8, 5)
+
+    monkeypatch.setattr("zela.api.scheduler.datetime", _DatetimeFixo)
+    return caminho_db
+
+
+def test_lembrete_vai_ao_whatsapp_e_ao_gmail(tmp_path, monkeypatch):
+    caminho_db = _preparar_lembrete(tmp_path, monkeypatch)
+    waha, gmail = _WahaFalso(), _GmailFalso()
+
+    verificar_e_enviar_lembretes(caminho_db, "idosa-1", waha, gmail_client=gmail)
+    _esperar_pulseira()
+
+    assert len(waha.enviados) == 1
+    assert len(gmail.chamadas) == 1
+    assert gmail.chamadas[0][0] == "Zela+: hora do remédio"
+    assert "Losartana" in gmail.chamadas[0][1]
+
+
+def test_lembrete_repetido_no_mesmo_horario_nao_gera_segundo_email(tmp_path, monkeypatch):
+    caminho_db = _preparar_lembrete(tmp_path, monkeypatch)
+    gmail = _GmailFalso()
+
+    verificar_e_enviar_lembretes(caminho_db, "idosa-1", _WahaFalso(), gmail_client=gmail)
+    verificar_e_enviar_lembretes(caminho_db, "idosa-1", _WahaFalso(), gmail_client=gmail)
+    _esperar_pulseira()
+
+    assert len(gmail.chamadas) == 1
+
+
+def test_gmail_com_falha_nao_impede_o_lembrete(tmp_path, monkeypatch):
+    caminho_db = _preparar_lembrete(tmp_path, monkeypatch)
+    waha = _WahaFalso()
+
+    enviadas = verificar_e_enviar_lembretes(
+        caminho_db, "idosa-1", waha, gmail_client=_GmailFalso(erro=RuntimeError("Gmail fora"))
+    )
+
+    assert len(enviadas) == 1
+    assert len(waha.enviados) == 1
+
+
+def _alerta_pulseira(destinatario, simulado=False):
+    # Como em decidir_proxima_acao: a checagem ao idoso vem marcada com para_idoso.
+    return Alerta(
+        nivel=NivelAlerta.ATENCAO, destinatario=destinatario, canal=CanalAlerta.WHATSAPP,
+        mensagem="Tudo bem? Detectamos: ESP32 parado.", timestamp=datetime(2026, 11, 2, 10, 0), simulado=simulado,
+        para_idoso=destinatario == "Maria da Silva",
+    )
+
+
+def test_checagem_ao_idoso_vai_ao_gmail_mas_aviso_a_familia_nao(tmp_path):
+    conn = conectar(str(tmp_path / "t.db"))
+    gmail = _GmailFalso()
+
+    despachar_alertas(
+        conn, [_alerta_pulseira("Maria da Silva"), _alerta_pulseira("João")], _perfil(), "idosa-1", _WahaFalso(),
+        gmail_client=gmail,
+    )
+    _esperar_pulseira()
+
+    assert len(gmail.chamadas) == 1
+    assert gmail.chamadas[0][0] == "Zela+: está tudo bem?"
+
+
+def test_alerta_simulado_nao_vai_ao_gmail(tmp_path):
+    conn = conectar(str(tmp_path / "t.db"))
+    gmail = _GmailFalso()
+
+    despachar_alertas(
+        conn, [_alerta_pulseira("Maria da Silva", simulado=True)], _perfil(), "idosa-1", _WahaFalso(),
+        gmail_client=gmail,
+    )
+    _esperar_pulseira()
+
+    assert gmail.chamadas == []
+
+
+def test_gmail_com_falha_nao_impede_salvar_o_alerta(tmp_path):
+    conn = conectar(str(tmp_path / "t.db"))
+
+    despachar_alertas(
+        conn, [_alerta_pulseira("Maria da Silva")], _perfil(), "idosa-1", _WahaFalso(),
+        gmail_client=_GmailFalso(erro=RuntimeError("Gmail fora")),
+    )
+
+    assert len(listar_alertas(conn, "idosa-1")) == 1
+
+
+def _esperar_pulseira():
+    # O executor da pulseira tem 1 thread e é FIFO: uma tarefa vazia termina depois das anteriores.
+    from zela.api import pulseira
+
+    pulseira._executor.submit(lambda: None).result(timeout=5)
+
+
+def test_gmail_travado_nao_atrasa_o_whatsapp_dos_outros_remedios(tmp_path, monkeypatch):
+    import threading
+    import time as _time
+
+    caminho_db = _preparar_lembrete(tmp_path, monkeypatch)
+    salvar_medicamento(
+        conectar(caminho_db),
+        Medicamento(id="med-g2", nome="Metformina", dosagem=Dosagem(quantidade=500, unidade="mg"), horarios=[time(8, 0)]),
+        idoso_id="idosa-1",
+    )
+    liberar = threading.Event()
+
+    class _GmailTravado(_GmailFalso):
+        def notificar(self, assunto, corpo):
+            liberar.wait(timeout=5)
+            return super().notificar(assunto, corpo)
+
+    waha, gmail = _WahaFalso(), _GmailTravado()
+    inicio = _time.monotonic()
+    verificar_e_enviar_lembretes(caminho_db, "idosa-1", waha, gmail_client=gmail)
+    duracao = _time.monotonic() - inicio
+    liberar.set()
+    _esperar_pulseira()
+
+    assert duracao < 1
+    assert len(waha.enviados) == 2
+    assert len(gmail.chamadas) == 2
+
+
+def _perfil_homonimo():
+    return PerfilIdoso(
+        nome="Maria",
+        telefone="+5511911111111",
+        data_nascimento=date(1945, 3, 12),
+        contatos_familiares=[ContatoFamiliar(nome="Maria", telefone="+5511987654321")],
+    )
+
+
+def test_aviso_a_familiar_homonimo_nao_vai_ao_idoso_nem_a_pulseira(tmp_path):
+    conn = conectar(str(tmp_path / "t.db"))
+    waha, gmail = _WahaFalso(), _GmailFalso()
+    aviso_familia = Alerta(
+        nivel=NivelAlerta.CRITICO, destinatario="Maria", canal=CanalAlerta.WHATSAPP, mensagem="Atenção",
+        timestamp=datetime(2026, 11, 2, 10, 0), telefone="+5511987654321",
+    )
+
+    despachar_alertas(conn, [aviso_familia], _perfil_homonimo(), "idosa-1", waha, gmail_client=gmail)
+    _esperar_pulseira()
+
+    assert waha.enviados == [("+5511987654321", "Atenção")]
+    assert gmail.chamadas == []
+
+
+def test_checagem_ao_idoso_homonimo_vai_ao_idoso_e_a_pulseira(tmp_path):
+    conn = conectar(str(tmp_path / "t.db"))
+    waha, gmail = _WahaFalso(), _GmailFalso()
+    checagem = Alerta(
+        nivel=NivelAlerta.ATENCAO, destinatario="Maria", canal=CanalAlerta.WHATSAPP, mensagem="Tudo bem?",
+        timestamp=datetime(2026, 11, 2, 10, 0), telefone="+5511911111111", para_idoso=True,
+    )
+
+    despachar_alertas(conn, [checagem], _perfil_homonimo(), "idosa-1", waha, gmail_client=gmail)
+    _esperar_pulseira()
+
+    assert waha.enviados == [("+5511911111111", "Tudo bem?")]
+    assert len(gmail.chamadas) == 1
+
+
+# Controle de avisos no banco: um deploy (reinício) não pode repetir o aviso.
+def test_aviso_registrado_no_banco_nao_sai_de_novo_apos_reinicio(tmp_path, monkeypatch):
+    from zela.domain.monitoramento import MOTIVO_ESP32_SEM_SINAL
+    from zela.storage.avisos import registrar_aviso
+
+    caminho_db, conn = _cenario_com_pulseira_viva(tmp_path, monkeypatch)
+    registrar_aviso(conn, "idosa-1", MOTIVO_ESP32_SEM_SINAL, datetime(2026, 9, 16, 13, 30))
+    waha_falso = _WahaFalso()
+
+    assert verificar_e_escalonar_riscos(caminho_db, "idosa-1", waha_falso) == []
+    assert waha_falso.enviados == []
+
+
+def test_aviso_de_sono_registrado_no_banco_nao_sai_de_novo_apos_reinicio(tmp_path, monkeypatch):
+    from zela.storage.avisos import registrar_aviso
+
+    caminho_db = str(tmp_path / "teste.db")
+    conn = conectar(caminho_db)
+    salvar_perfil(conn, _perfil(), idoso_id="idosa-1")
+    agora = datetime(2026, 9, 16, 9, 0)
+    for dias in range(1, 15):
+        _salvar_sono(conn, dias, 7, agora)
+    _salvar_sono(conn, 0, 4, agora)
+    registrar_aviso(conn, "idosa-1", "sono:2026-09-16", agora)
+    _Relogio.atual = agora
+    monkeypatch.setattr("zela.api.scheduler.datetime", _Relogio)
+    waha_falso = _WahaFalso()
+
+    assert verificar_sono_e_avisar(caminho_db, "idosa-1", waha_falso) == []
+    assert waha_falso.enviados == []

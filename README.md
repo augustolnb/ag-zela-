@@ -29,7 +29,7 @@ Construído em fases, cada uma testada e mergeada separadamente:
    espelhados na pulseira ✓
 8. **Empacotamento**: relatório, documentação e vídeo pitch (em andamento)
 
-Suíte automatizada: 432 testes (`pytest -q`).
+Suíte automatizada: 477 testes (`pytest -q`).
 
 O design completo está em
 `docs/superpowers/specs/2026-09-10-cuida-mais-agente-idoso-design.md`. O
@@ -556,8 +556,8 @@ clientes). Esta configuração é manual e feita uma única vez na instalação.
 
 1. **Crie a conta Google dedicada** (ex.: `familia-sobrenome.zela@gmail.com`).
 2. **Crie o projeto no Google Cloud e a credencial OAuth:** crie um projeto,
-   ative a *Google Calendar API* e crie uma credencial OAuth do tipo
-   **Desktop app**. Na tela de consentimento OAuth, publique o app
+   ative a *Google Calendar API* e a *Gmail API* (usada pelas notificações
+   na pulseira) e crie uma credencial OAuth do tipo **Desktop app**. Na tela de consentimento OAuth, publique o app
    mudando o status de publicação para **"Em produção"** ("In production")
    — não é preciso passar pela verificação do Google para isso, mas a tela
    de consentimento vai exibir um aviso de "app não verificado"; para uma
@@ -576,7 +576,12 @@ clientes). Esta configuração é manual e feita uma única vez na instalação.
    ```
    Informe o `client_id` e o `client_secret` da etapa anterior, autorize a
    conta dedicada no navegador que abrir, e o script imprime o
-   `refresh_token`. Trate esse valor como senha.
+   `refresh_token`. Trate esse valor como senha. O script pede, em um
+   único consentimento, o Google Agenda e o Gmail (`gmail.insert` e
+   `gmail.send`). O `gmail.insert` é um escopo restrito: se o Google
+   recusar a autorização, o modo `send` do Gmail continua disponível.
+   Para escolher o modo, rode `python scripts/testar_gmail_pulseira.py` e
+   veja qual mensagem de teste aparece na pulseira.
 4. **Configure as 4 variáveis de ambiente do deploy** (no `.env` usado pelo
    `docker-compose.yml`, container `backend`):
    - `ZELA_GOOGLE_CALENDAR_CLIENT_ID` — client ID da credencial OAuth
@@ -591,6 +596,40 @@ clientes). Esta configuração é manual e feita uma única vez na instalação.
    Google Agenda também apareça no relógio.
 
 Detalhes do fluxo: seção 5.1 de `docs/superpowers/specs/2026-10-23-lembretes-compromisso-whatsapp-google-agenda-design.md`.
+
+## Notificações na pulseira (Gmail)
+
+Além do WhatsApp, três mensagens ao idoso viram um e-mail curto na conta
+Google dele, e o Mi Fitness espelha a notificação do Gmail na pulseira:
+
+| Momento | Assunto |
+|---|---|
+| Lembrete de remédio | `Zela+: hora do remédio` |
+| Sintoma que abre o aviso de 60 s | `Zela+: você está bem?` |
+| Checagem da escada de risco | `Zela+: está tudo bem?` |
+
+Os avisos à família continuam só no WhatsApp. O Gmail é um canal extra: se
+a API do Google falhar, o WhatsApp, o aviso em 60 s e a escada seguem
+normalmente, e a falha só aparece no log.
+
+**Configuração:**
+
+1. Faça o comissionamento do Google Agenda acima (ele já pede os escopos do
+   Gmail) com a conta Google do idoso.
+2. No celular do idoso: entre no Gmail com essa conta, ligue as
+   notificações dela e libere o Gmail no espelhamento de notificações do
+   Mi Fitness.
+3. Escolha o modo: rode `python scripts/testar_gmail_pulseira.py` (ele
+   pede as credenciais sem mostrá-las na tela; evite `export`, que deixa
+   os valores no histórico do shell) e veja qual assunto vibra na pulseira,
+   `Zela+ teste (insert)` ou `Zela+ teste (send)`.
+4. No `.env` do deploy:
+   - `ZELA_GMAIL_PULSEIRA_EMAIL`: o e-mail da conta. Sem ele, a função fica
+     desligada.
+   - `ZELA_GMAIL_MODO`: `insert` (padrão; coloca a mensagem direto na caixa
+     de entrada como não lida) ou `send` (envia da conta para ela mesma).
+     Maiúsculas e espaços são ignorados. Um valor inválido desliga só o
+     Gmail e gera um erro no log.
 
 ## Embeddings e RAG (Plano 4)
 

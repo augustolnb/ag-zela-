@@ -1,5 +1,6 @@
 import logging
 import os
+from collections.abc import Mapping
 from contextlib import asynccontextmanager
 from datetime import datetime
 
@@ -9,6 +10,7 @@ from zela.api.aviso_familia import triar_mensagem
 from zela.api.classificacao import montar_roteador_classificacao
 from zela.api.ingestao import montar_roteador_ingestao
 from zela.api.monitoramento_mensagem import processar_risco_mensagem
+from zela.api.pulseira import encerrar_notificacoes, notificar_pulseira_em_segundo_plano
 from zela.api.reindexacao import reindexar_documentos
 from zela.api.runner import obter_runner_zela, processar_mensagem
 from zela.api.scheduler import iniciar_scheduler
@@ -16,7 +18,9 @@ from zela.api.webhook import montar_roteador
 from zela.embeddings.bulas import carregar_bulas
 from zela.embeddings.client import ClienteEmbeddingGemini
 from zela.embeddings.exemplos_referencia import EXEMPLOS_REFERENCIA
+from zela.domain.pulseira import notificacao_confirmacao_sintoma
 from zela.embeddings.vetorial import RepositorioVetorial
+from zela.integrations.gmail_client import GmailClient
 from zela.integrations.google_calendar_client import GoogleCalendarClient
 from zela.integrations.waha_client import WahaClient
 from zela.storage.db import conectar
@@ -68,6 +72,35 @@ if all(
     )
 else:
     google_calendar_client = None
+
+
+def _montar_gmail_client(env: Mapping[str, str]) -> GmailClient | None:
+    """Notificações na pulseira via Gmail; desligadas sem o e-mail ou as credenciais.
+
+    Reaproveita o OAuth do Google Agenda. Usa "or None" pelo mesmo motivo das
+    variáveis acima: o docker-compose define as ausentes como string vazia.
+    """
+    email = env.get("ZELA_GMAIL_PULSEIRA_EMAIL") or None
+    client_id = env.get("ZELA_GOOGLE_CALENDAR_CLIENT_ID") or None
+    client_secret = env.get("ZELA_GOOGLE_CALENDAR_CLIENT_SECRET") or None
+    refresh_token = env.get("ZELA_GOOGLE_CALENDAR_REFRESH_TOKEN") or None
+    if not all([email, client_id, client_secret, refresh_token]):
+        return None
+    try:
+        return GmailClient(
+            client_id=client_id,
+            client_secret=client_secret,
+            refresh_token=refresh_token,
+            email=email,
+            modo=(env.get("ZELA_GMAIL_MODO") or "insert").strip().lower(),
+        )
+    except ValueError:
+        # Erro de digitação no .env desliga só o Gmail, nunca o backend.
+        logging.getLogger(__name__).exception("ZELA_GMAIL_MODO inválido; notificações na pulseira desligadas")
+        return None
+
+
+gmail_client = _montar_gmail_client(os.environ)
 cliente_embedding = ClienteEmbeddingGemini()
 repositorio_vetorial = RepositorioVetorial()
 _runner = obter_runner_zela()
@@ -124,12 +157,17 @@ def _processar_risco(telefone: str, texto: str, agora: datetime) -> None:
     )
 
 
+def _notificar_sintoma(sintomas: list[str]) -> None:
+    # Em segundo plano: a resposta do webhook ao idoso não espera a API do Google.
+    notificar_pulseira_em_segundo_plano(gmail_client, notificacao_confirmacao_sintoma(sintomas))
+
+
 def _processar_emergencia(telefone: str, texto: str, agora: datetime) -> str | None:
     conexao = conectar(CAMINHO_DB)
     perfil = obter_perfil(conexao, ID_IDOSO)
     if perfil is None or telefone not in (perfil.telefone, perfil.lid_whatsapp):
         return None
-    return triar_mensagem(conexao, ID_IDOSO, perfil, texto, agora, waha_client)
+    return triar_mensagem(conexao, ID_IDOSO, perfil, texto, agora, waha_client, ao_abrir_episodio=_notificar_sintoma)
 
 
 def _reindexar() -> None:
@@ -148,11 +186,13 @@ async def ciclo_de_vida(app: FastAPI):
     agendador = iniciar_scheduler(
         CAMINHO_DB, ID_IDOSO, waha_client, reindexar=_reindexar,
         google_calendar_client=google_calendar_client,
+        gmail_client=gmail_client,
     )
     try:
         yield
     finally:
         agendador.shutdown()
+        encerrar_notificacoes()
 
 
 def _salvar_leitura(leitura, idoso_id: str) -> bool:

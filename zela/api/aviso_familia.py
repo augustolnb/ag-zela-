@@ -3,6 +3,7 @@ import logging
 import sqlite3
 import threading
 from datetime import datetime, timedelta, timezone
+from typing import Callable
 
 from zela.domain.sintomas import CategoriaMensagem, classificar_mensagem
 from zela.models.alertas import Alerta, CanalAlerta, NivelAlerta, StatusAlerta
@@ -114,12 +115,18 @@ def _tratar_pedido_ajuda(conn, idoso_id, perfil, texto, sintomas, aberto, agora,
     return "Estou avisando sua família agora. Em emergência, ligue 192."
 
 
-def _tratar_sintoma(conn, idoso_id, texto, sintomas, aberto, agora) -> str:
+def _tratar_sintoma(conn, idoso_id, texto, sintomas, aberto, agora, ao_abrir_episodio=None) -> str:
     with conn:
         if aberto is not None:
             acrescentar_relato(conn, aberto, texto, sintomas)
             return "Recebi. Sua família será avisada em instantes, a menos que você responda ESTOU BEM ou NÃO AVISE. Em emergência, ligue 192."
         abrir_episodio(conn, idoso_id, TipoEpisodio.SINTOMA, texto, sintomas, agora, agora + PRAZO_CONFIRMACAO)
+    # Depois do commit: o episódio já existe mesmo que a notificação extra falhe.
+    if ao_abrir_episodio is not None:
+        try:
+            ao_abrir_episodio(sintomas)
+        except Exception:
+            logger.exception("Falha ao avisar a abertura do episódio de sintoma")
     return (
         "Recebi sua mensagem. Você está bem? Vou avisar sua família em 60 segundos. "
         "Para cancelar, responda ESTOU BEM ou NÃO AVISE. Em emergência, ligue 192."
@@ -151,9 +158,19 @@ def _tratar_cancelamento(conn, idoso_id, perfil, estado, aberto, agora, waha_cli
 
 
 def triar_mensagem(
-    conn: sqlite3.Connection, idoso_id: str, perfil: PerfilIdoso, texto: str, agora: datetime, waha_client
+    conn: sqlite3.Connection,
+    idoso_id: str,
+    perfil: PerfilIdoso,
+    texto: str,
+    agora: datetime,
+    waha_client,
+    ao_abrir_episodio: Callable[[list[str]], None] | None = None,
 ) -> str | None:
-    """Devolve a resposta ao paciente, ou None se a mensagem deve seguir o fluxo normal."""
+    """Devolve a resposta ao paciente, ou None se a mensagem deve seguir o fluxo normal.
+
+    `ao_abrir_episodio` recebe os sintomas quando um episódio novo é aberto (usado
+    para notificar a pulseira). Não deve bloquear: roda no caminho do webhook.
+    """
     classificacao = classificar_mensagem(texto)
     categoria = classificacao.categoria
     if categoria == CategoriaMensagem.NENHUM:
@@ -164,7 +181,7 @@ def triar_mensagem(
     if categoria == CategoriaMensagem.PEDIDO_AJUDA:
         return _tratar_pedido_ajuda(conn, idoso_id, perfil, texto, sintomas, aberto, agora, waha_client)
     if categoria == CategoriaMensagem.SINTOMA_GRAVE:
-        return _tratar_sintoma(conn, idoso_id, texto, sintomas, aberto, agora)
+        return _tratar_sintoma(conn, idoso_id, texto, sintomas, aberto, agora, ao_abrir_episodio)
     estado = (
         EstadoEpisodio.CANCELADO_ESTOU_BEM
         if categoria == CategoriaMensagem.CANCELAMENTO_ESTOU_BEM
