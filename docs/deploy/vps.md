@@ -157,6 +157,36 @@ O `certbot --nginx` edita os server blocks para adicionar `listen 443
 ssl` e o redirecionamento HTTP→HTTPS automaticamente, e configura a
 renovação automática do certificado.
 
+### Política de privacidade e termos de serviço
+
+A tela de consentimento OAuth do Google (necessária para publicar o app em
+"Em produção", ver o comissionamento do Google Agenda no README) pede links
+públicos para a política de privacidade e os termos de serviço. As duas
+páginas são arquivos estáticos do repositório, servidos pelo nginx do host
+no domínio do painel, sem passar pela senha do Streamlit:
+
+- `https://painel.augustoautomacoes.com/privacidade` →
+  `docs/deploy/privacidade.html`
+- `https://painel.augustoautomacoes.com/termos` → `docs/deploy/termos.html`
+
+Copie os arquivos para `/var/www/zela/` na VPS:
+
+```bash
+scp docs/deploy/privacidade.html docs/deploy/termos.html root@api.augustoautomacoes.com:/var/www/zela/
+```
+
+e acrescente, no bloco `server` de `painel.augustoautomacoes.com` em
+`/etc/nginx/sites-available/zela-painel`, antes do `location /`:
+
+```nginx
+    location = /privacidade { default_type text/html; alias /var/www/zela/privacidade.html; }
+    location = /termos { default_type text/html; alias /var/www/zela/termos.html; }
+```
+
+Depois, `nginx -t && systemctl reload nginx`. Ao alterar o texto de uma das
+páginas, atualize a data no topo e copie o arquivo de novo (não precisa
+recarregar o nginx).
+
 ## 5. Conectar o WhatsApp
 
 Abra `https://whatsapp.augustoautomacoes.com/` (login com
