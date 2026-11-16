@@ -3,7 +3,7 @@ import os
 import streamlit as st
 
 from zela.storage.db import conectar
-from zela.streamlit_app.autenticacao import exigir_autenticacao
+from zela.streamlit_app.autenticacao import exigir_autenticacao, mostrar_usuario_conectado
 from zela.streamlit_app.estilo import ALTURA_CARD_GRADE, aplicar_estilo, icone
 from zela.streamlit_app.formularios import formulario_compromisso, formulario_medicamento
 from zela.streamlit_app.secoes import (
@@ -45,10 +45,13 @@ aplicar_estilo(noturno=noturno)
 
 st.title("Zela+ — Painel da Família")
 
-if not exigir_autenticacao():
-    st.stop()
-
 conn = conectar(CAMINHO_DB)
+
+# Antes do login, a página mostra só o formulário; depois, só o painel.
+usuario = exigir_autenticacao(conn)
+if usuario is None:
+    st.stop()
+mostrar_usuario_conectado(usuario)
 
 _renderizar_card("heart-pulse", renderizar_status, conn, ID_IDOSO)
 

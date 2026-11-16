@@ -107,7 +107,7 @@ _CSS_NOTURNO = f"""
 [data-testid="stApp"] a {{ color: {AMARELO_DESTAQUE}; }}
 hr {{ border-color: {AMARELO_DESTAQUE} !important; opacity: 0.5; }}
 
-[class*="st-key-cartao"] {{
+[class*="st-key-cartao"], [data-testid="stForm"] {{
     background-color: {AZUL_CARTAO};
     border: 1px solid {AMARELO_DESTAQUE} !important;
 }}

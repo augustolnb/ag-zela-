@@ -107,6 +107,12 @@ CREATE TABLE IF NOT EXISTS aviso_enviado (
     enviado_em TEXT NOT NULL,
     PRIMARY KEY (idoso_id, chave)
 );
+
+CREATE TABLE IF NOT EXISTS usuario_painel (
+    usuario TEXT PRIMARY KEY,
+    senha_hash TEXT NOT NULL,
+    criado_em TEXT NOT NULL
+);
 """
 
 
