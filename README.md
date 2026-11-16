@@ -673,6 +673,12 @@ O painel da família mostra o status atual, a medicação do dia, os últimos
 alertas e um gráfico de presença, além de formulários para cadastrar ou
 editar medicamentos e compromissos.
 
+O interruptor **Modo noturno**, no topo (vale também na tela de senha),
+alterna entre o tema claro (diurno) e o escuro (noturno): fundo azul
+escuro, letras brancas e detalhes em amarelo. A escolha fica na URL
+(`?noturno=true`), então sobrevive a um recarregamento e pode ficar nos
+favoritos.
+
 A aba **Histórico** reúne numa tabela só, do mais recente ao mais antigo:
 os avisos e alertas enviados, os compromissos (agendados, realizados e
 removidos) e as doses de remédio registradas (tomado, tomado com atraso,

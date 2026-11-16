@@ -84,3 +84,21 @@ def test_abas_lembram_a_aba_escolhida(monkeypatch, tmp_path):
     at.text_input(key="historico_busca").set_value("x").run()
 
     assert at.session_state["aba_painel"] == "Histórico"
+
+
+
+def test_botao_de_modo_noturno_aparece_ja_na_tela_de_senha(monkeypatch, tmp_path):
+    monkeypatch.setenv("ZELA_DB_PATH", str(tmp_path / "teste.db"))
+    monkeypatch.setenv("STREAMLIT_SENHA", "segredo123")
+
+    at = AppTest.from_file("../zela/streamlit_app/app.py", default_timeout=10)
+    at.run()
+
+    botao = at.toggle(key="noturno")
+    assert botao.label == "Modo noturno"
+    assert botao.value is False
+    assert not any("#0B1F3A" in m.value for m in at.markdown)
+
+    botao.set_value(True).run()
+
+    assert any("#0B1F3A" in m.value for m in at.markdown)

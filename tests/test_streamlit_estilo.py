@@ -38,3 +38,25 @@ aplicar_estilo()
 
     assert at.exception == []
     assert any("<style>" in m.value for m in at.markdown)
+
+
+
+# Modo noturno: azul escuro, letras brancas, detalhes amarelos.
+def _css_injetado(codigo):
+    at = AppTest.from_string(codigo)
+    at.run()
+    assert at.exception == []
+    return "".join(m.value for m in at.markdown if "<style>" in m.value)
+
+
+def test_modo_noturno_usa_azul_escuro_branco_e_amarelo():
+    from zela.streamlit_app.estilo import AMARELO_DESTAQUE, AZUL_NOTURNO, BRANCO
+
+    assert (AZUL_NOTURNO, BRANCO, AMARELO_DESTAQUE) == ("#0B1F3A", "#FFFFFF", "#FFD60A")
+    css = _css_injetado("from zela.streamlit_app.estilo import aplicar_estilo\naplicar_estilo(noturno=True)\n")
+    assert "#0B1F3A" in css and "#FFFFFF" in css and "#FFD60A" in css
+
+
+def test_modo_diurno_nao_injeta_a_paleta_noturna():
+    css = _css_injetado("from zela.streamlit_app.estilo import aplicar_estilo\naplicar_estilo()\n")
+    assert "#0B1F3A" not in css

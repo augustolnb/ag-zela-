@@ -28,18 +28,25 @@ def _renderizar_secao_com_seguranca(funcao, *args) -> None:
 def _renderizar_card(nome_icone: str, funcao, *args, altura: int | str = "content") -> None:
     # Com `altura` em pixels, o conteúdo rola dentro do card em vez de
     # esticá-lo; "content" (padrão do Streamlit) acompanha o conteúdo.
-    with st.container(border=True, height=altura):
+    with st.container(border=True, height=altura, key=f"cartao-{nome_icone}"):
         st.markdown(icone(nome_icone), unsafe_allow_html=True)
         _renderizar_secao_com_seguranca(funcao, *args)
 
 
 st.set_page_config(page_title="Zela+ — Painel da Família", page_icon="🩺")
+
+# Antes da senha, para o tema valer também na tela de entrada. Ligado à URL
+# (?noturno=true): a escolha sobrevive a um recarregamento da página.
+noturno = st.toggle(
+    "Modo noturno", key="noturno", bind="query-params",
+    help="Alterna entre o tema claro (diurno) e o escuro (noturno).",
+)
+aplicar_estilo(noturno=noturno)
+
 st.title("Zela+ — Painel da Família")
 
 if not exigir_autenticacao():
     st.stop()
-
-aplicar_estilo()
 
 conn = conectar(CAMINHO_DB)
 
@@ -55,7 +62,7 @@ with coluna_atividade:
 
 st.divider()
 
-with st.container(border=True):
+with st.container(border=True, key="cartao-abas"):
     # key + on_change="rerun": as abas lembram a escolhida. Sem isso, qualquer
     # interação na página (busca do histórico, escolher um compromisso)
     # recarrega e volta para a primeira aba.
