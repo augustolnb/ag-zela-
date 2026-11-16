@@ -107,6 +107,16 @@ CREATE TABLE IF NOT EXISTS aviso_enviado (
     enviado_em TEXT NOT NULL,
     PRIMARY KEY (idoso_id, chave)
 );
+
+CREATE TABLE IF NOT EXISTS enquete_lembrete (
+    chave TEXT PRIMARY KEY,
+    idoso_id TEXT NOT NULL,
+    medicamento_id TEXT NOT NULL,
+    horario_previsto TEXT NOT NULL,
+    enviada_em TEXT NOT NULL,
+    relembrar_em TEXT,
+    relembrado INTEGER NOT NULL DEFAULT 0
+);
 """
 
 
