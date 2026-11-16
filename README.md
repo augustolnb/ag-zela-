@@ -29,7 +29,7 @@ Construído em fases, cada uma testada e mergeada separadamente:
    espelhados na pulseira ✓
 8. **Empacotamento**: relatório, documentação e vídeo pitch (em andamento)
 
-Suíte automatizada: 477 testes (`pytest -q`).
+Suíte automatizada: 537 testes (`pytest -q`).
 
 O design completo está em
 `docs/superpowers/specs/2026-09-10-cuida-mais-agente-idoso-design.md`. O
@@ -596,6 +596,29 @@ clientes). Esta configuração é manual e feita uma única vez na instalação.
    Google Agenda também apareça no relógio.
 
 Detalhes do fluxo: seção 5.1 de `docs/superpowers/specs/2026-10-23-lembretes-compromisso-whatsapp-google-agenda-design.md`.
+
+## Lembrete de remédio com enquete
+
+O lembrete de remédio chega no WhatsApp como uma enquete de escolha única,
+para o idoso responder com um toque:
+
+> Hora de tomar dapagliflozina (1.0 comprimido). Já tomou?
+> ◯ ✅ Tomei
+> ◯ ⏰ Ainda não
+
+- **✅ Tomei** registra a dose sem passar pela IA (vira "atrasado" depois de
+  30 min do horário) e responde "Anotado! ✅ …". Votar de novo não duplica.
+- **⏰ Ainda não** reenvia o lembrete 30 min depois, como uma nova enquete,
+  no mesmo dia e só se a dose ainda não foi confirmada.
+- Escrever "tomei" continua funcionando, pelo agente.
+- Se o WAHA falhar ao enviar a enquete, sai o lembrete em texto de antes.
+- Botões de verdade só existem na API oficial da Meta; no WAHA (WhatsApp
+  Web) eles não funcionam, e a enquete é a alternativa.
+
+**Configuração do WAHA:** o webhook da sessão precisa dos eventos
+`message`, `poll.vote` e `poll.vote.failed` (ver `docs/deploy/vps.md`). Sem
+`poll.vote`, os votos não chegam ao backend; o lembrete continua saindo e
+o "tomei" por texto continua valendo.
 
 ## Notificações na pulseira (Gmail)
 

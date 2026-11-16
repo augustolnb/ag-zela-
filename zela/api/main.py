@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 from zela.api.aviso_familia import triar_mensagem
 from zela.api.classificacao import montar_roteador_classificacao
+from zela.api.enquete import processar_voto
 from zela.api.ingestao import montar_roteador_ingestao
 from zela.api.monitoramento_mensagem import processar_risco_mensagem
 from zela.api.pulseira import encerrar_notificacoes, notificar_pulseira_em_segundo_plano
@@ -170,6 +171,10 @@ def _processar_emergencia(telefone: str, texto: str, agora: datetime) -> str | N
     return triar_mensagem(conexao, ID_IDOSO, perfil, texto, agora, waha_client, ao_abrir_episodio=_notificar_sintoma)
 
 
+def _processar_voto(chave_enquete: str, selecionadas: list[str], agora: datetime) -> str | None:
+    return processar_voto(conectar(CAMINHO_DB), ID_IDOSO, chave_enquete, selecionadas, agora)
+
+
 def _reindexar() -> None:
     try:
         quantidade = reindexar_documentos(
@@ -206,6 +211,7 @@ app.include_router(
         _processar, waha_client, id_idoso=ID_IDOSO,
         telefones_permitidos=_TELEFONES_PERMITIDOS, lids_permitidos=_LIDS_PERMITIDOS,
         processar_risco=_processar_risco, token=TOKEN_INGESTAO, processar_emergencia=_processar_emergencia,
+        processar_voto=_processar_voto,
     )
 )
 app.include_router(montar_roteador_ingestao(_salvar_leitura, id_idoso=ID_IDOSO, token=TOKEN_INGESTAO))

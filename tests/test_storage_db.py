@@ -16,6 +16,7 @@ def test_conectar_cria_todas_as_tabelas():
         "episodio_sintoma",
         "notificacao_familia",
         "aviso_enviado",
+        "enquete_lembrete",
         "usuario_painel",
         "lembrete_compromisso_enviado",
     }

@@ -33,9 +33,16 @@ from zela.storage.rotina import (
 class _WahaFalso:
     def __init__(self):
         self.enviados = []
+        self.enquetes = []
 
     def enviar_texto(self, telefone, texto):
         self.enviados.append((telefone, texto))
+
+    def enviar_enquete(self, telefone, pergunta, opcoes):
+        # Lembrete de remédio sai como enquete; conta como mensagem enviada.
+        self.enviados.append((telefone, pergunta))
+        self.enquetes.append((telefone, pergunta, opcoes))
+        return f"CHAVE{len(self.enquetes)}"
 
 
 class _WahaComFalhaParaTelefone:
@@ -1076,3 +1083,114 @@ def test_aviso_de_sono_registrado_no_banco_nao_sai_de_novo_apos_reinicio(tmp_pat
 
     assert verificar_sono_e_avisar(caminho_db, "idosa-1", waha_falso) == []
     assert waha_falso.enviados == []
+
+
+# Lembrete de remédio com enquete — plano 2026-11-15-enquete-remedio, Task 3.
+def _preparar_enquete(tmp_path, monkeypatch, agora):
+    caminho_db = _preparar_lembrete(tmp_path, monkeypatch)
+
+    class _DatetimeFixo:
+        @staticmethod
+        def now():
+            return agora
+
+    monkeypatch.setattr("zela.api.scheduler.datetime", _DatetimeFixo)
+    return caminho_db
+
+
+def test_lembrete_sai_como_enquete_e_fica_guardado(tmp_path, monkeypatch):
+    from zela.domain.enquete_remedio import OPCOES
+    from zela.storage.enquetes import obter_enquete
+
+    caminho_db = _preparar_enquete(tmp_path, monkeypatch, datetime(2026, 9, 14, 8, 5))
+    waha = _WahaFalso()
+
+    enviadas = verificar_e_enviar_lembretes(caminho_db, "idosa-1", waha)
+
+    assert waha.enquetes == [("+5511911111111", "Hora de tomar Losartana (50.0 mg). Já tomou?", OPCOES)]
+    assert enviadas == ["Hora de tomar Losartana (50.0 mg). Já tomou?"]
+    enquete = obter_enquete(conectar(caminho_db), "CHAVE1")
+    assert enquete.medicamento_id == "med-g1"
+    assert enquete.idoso_id == "idosa-1"
+    assert enquete.horario_previsto == datetime(2026, 9, 14, 8, 0)
+
+
+def test_lembrete_cai_no_texto_se_a_enquete_falhar(tmp_path, monkeypatch):
+    import httpx
+
+    from zela.domain.comunicacao import formatar_lembrete
+    from zela.storage.rotina import listar_medicamentos
+
+    caminho_db = _preparar_enquete(tmp_path, monkeypatch, datetime(2026, 9, 14, 8, 5))
+
+    class _WahaSemEnquete(_WahaFalso):
+        def enviar_enquete(self, telefone, pergunta, opcoes):
+            raise httpx.HTTPError("sendPoll fora")
+
+    waha = _WahaSemEnquete()
+    verificar_e_enviar_lembretes(caminho_db, "idosa-1", waha)
+
+    medicamento = listar_medicamentos(conectar(caminho_db), "idosa-1")[0]
+    assert waha.enviados == [("+5511911111111", formatar_lembrete(medicamento))]
+    linhas = conectar(caminho_db).execute("SELECT COUNT(*) FROM enquete_lembrete").fetchone()[0]
+    assert linhas == 0
+
+
+def _enquete_com_relembrete(caminho_db, relembrar_em, previsto=datetime(2026, 9, 14, 8, 0)):
+    from zela.storage.enquetes import EnqueteLembrete, agendar_relembrete, salvar_enquete
+
+    conn = conectar(caminho_db)
+    salvar_enquete(
+        conn,
+        EnqueteLembrete(chave="CHAVE0", idoso_id="idosa-1", medicamento_id="med-g1", horario_previsto=previsto),
+        previsto,
+    )
+    agendar_relembrete(conn, "CHAVE0", relembrar_em)
+
+
+def test_relembrete_devido_envia_nova_enquete_com_mesmo_horario(tmp_path, monkeypatch):
+    from zela.storage.enquetes import listar_relembretes_devidos, obter_enquete
+
+    agora = datetime(2026, 9, 14, 8, 40)  # fora da janela do lembrete normal (8:00–8:15)
+    caminho_db = _preparar_enquete(tmp_path, monkeypatch, agora)
+    _enquete_com_relembrete(caminho_db, datetime(2026, 9, 14, 8, 35))
+    waha, gmail = _WahaFalso(), _GmailFalso()
+
+    verificar_e_enviar_lembretes(caminho_db, "idosa-1", waha, gmail_client=gmail)
+    verificar_e_enviar_lembretes(caminho_db, "idosa-1", waha, gmail_client=gmail)
+    _esperar_pulseira()
+
+    assert len(waha.enquetes) == 1
+    assert len(gmail.chamadas) == 1
+    nova = obter_enquete(conectar(caminho_db), "CHAVE1")
+    assert nova.horario_previsto == datetime(2026, 9, 14, 8, 0)
+    assert listar_relembretes_devidos(conectar(caminho_db), "idosa-1", agora) == []
+
+
+def test_relembrete_cancelado_se_dose_ja_confirmada(tmp_path, monkeypatch):
+    from zela.storage.enquetes import listar_relembretes_devidos
+    from zela.storage.rotina import aplicar_confirmacao, listar_medicamentos
+
+    agora = datetime(2026, 9, 14, 8, 40)
+    caminho_db = _preparar_enquete(tmp_path, monkeypatch, agora)
+    _enquete_com_relembrete(caminho_db, datetime(2026, 9, 14, 8, 35))
+    conn = conectar(caminho_db)
+    medicamento = listar_medicamentos(conn, "idosa-1")[0]
+    aplicar_confirmacao(conn, medicamento, datetime(2026, 9, 14, 8, 0), datetime(2026, 9, 14, 8, 38))
+    waha = _WahaFalso()
+
+    verificar_e_enviar_lembretes(caminho_db, "idosa-1", waha)
+
+    assert waha.enviados == []
+    assert listar_relembretes_devidos(conn, "idosa-1", agora) == []
+
+
+def test_relembrete_de_outro_dia_nao_sai(tmp_path, monkeypatch):
+    agora = datetime(2026, 9, 15, 0, 10)
+    caminho_db = _preparar_enquete(tmp_path, monkeypatch, agora)
+    _enquete_com_relembrete(caminho_db, datetime(2026, 9, 15, 0, 5), previsto=datetime(2026, 9, 14, 23, 35))
+    waha = _WahaFalso()
+
+    verificar_e_enviar_lembretes(caminho_db, "idosa-1", waha)
+
+    assert waha.enviados == []
