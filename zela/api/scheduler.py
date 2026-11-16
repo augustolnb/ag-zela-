@@ -11,20 +11,30 @@ from zela.domain.compromisso_lembretes import (
 )
 from zela.domain.comunicacao import formatar_lembrete, formatar_lembrete_compromisso
 from zela.domain.emergencia import EstadoEscalonamento, EstagioEscalonamento
+from zela.domain.enquete_remedio import OPCOES, pergunta_lembrete
 from zela.domain.pulseira import notificacao_checagem, notificacao_lembrete_remedio
 from zela.domain.rotina import JANELA_LEMBRETE
 from zela.models.alertas import Alerta, CanalAlerta, NivelAlerta, StatusAlerta
 from zela.models.monitoramento import EventoMonitoramento, StatusMonitoramento
 from zela.models.perfil import PerfilIdoso
+from zela.models.rotina import StatusConfirmacao
 from zela.storage.alertas import salvar_alerta
 from zela.storage.avisos import aviso_ja_enviado, limpar_avisos_de_episodio, registrar_aviso
 from zela.storage.db import conectar
+from zela.storage.enquetes import (
+    EnqueteLembrete,
+    listar_relembretes_devidos,
+    marcar_relembrado,
+    salvar_enquete,
+)
 from zela.storage.escalonamento import aplicar_escalonamento, obter_estado, salvar_estado
 from zela.storage.monitoramento import aplicar_classificacao, avaliar_sono_recente
 from zela.storage.perfil import obter_perfil
 from zela.storage.rotina import (
     aplicar_lembretes_pendentes,
     listar_compromissos,
+    listar_confirmacoes_do_dia,
+    listar_medicamentos,
     listar_compromissos_pendentes_sync_google,
     listar_compromissos_removidos_pendentes_cancelamento,
     listar_tipos_lembrete_enviados,
@@ -82,11 +92,79 @@ def verificar_e_enviar_lembretes(caminho_db: str, id_idoso: str, waha_client, gm
         chave = (medicamento.id, f"{agora.date()}:{horario.isoformat()}")
         if chave in _lembretes_ja_enviados:
             continue
-        texto = formatar_lembrete(medicamento)
-        waha_client.enviar_texto(perfil.lid_whatsapp or perfil.telefone, texto)
-        notificar_pulseira_em_segundo_plano(gmail_client, notificacao_lembrete_remedio(medicamento))
+        horario_previsto = agora.replace(
+            hour=horario.hour, minute=horario.minute, second=horario.second, microsecond=0
+        )
+        texto = _enviar_lembrete_remedio(
+            conn, waha_client, gmail_client, perfil, id_idoso, medicamento, horario_previsto, agora
+        )
         _lembretes_ja_enviados.add(chave)
         enviadas.append(texto)
+    enviadas.extend(_reenviar_lembretes_adiados(conn, waha_client, gmail_client, perfil, id_idoso, agora))
+    return enviadas
+
+
+def _enviar_lembrete_remedio(
+    conn, waha_client, gmail_client, perfil: PerfilIdoso, id_idoso: str, medicamento,
+    horario_previsto: datetime, agora: datetime,
+) -> str:
+    """Enquete "✅ Tomei / ⏰ Ainda não"; se o WAHA falhar, o texto de antes."""
+    destino = perfil.lid_whatsapp or perfil.telefone
+    pergunta = pergunta_lembrete(medicamento)
+    try:
+        chave_enquete = waha_client.enviar_enquete(destino, pergunta, OPCOES)
+    except Exception:
+        logger.exception("Falha ao enviar a enquete do lembrete; enviando em texto")
+        texto = formatar_lembrete(medicamento)
+        waha_client.enviar_texto(destino, texto)
+    else:
+        texto = pergunta
+        salvar_enquete(
+            conn,
+            EnqueteLembrete(
+                chave=chave_enquete, idoso_id=id_idoso,
+                medicamento_id=medicamento.id, horario_previsto=horario_previsto,
+            ),
+            agora,
+        )
+    notificar_pulseira_em_segundo_plano(gmail_client, notificacao_lembrete_remedio(medicamento))
+    return texto
+
+
+_STATUS_DOSE_TOMADA = (StatusConfirmacao.CONFIRMADO, StatusConfirmacao.ATRASADO)
+
+
+def _reenviar_lembretes_adiados(conn, waha_client, gmail_client, perfil: PerfilIdoso, id_idoso: str, agora: datetime) -> list[str]:
+    """Reenvia os lembretes adiados com "⏰ Ainda não", se a dose ainda não foi tomada."""
+    devidos = listar_relembretes_devidos(conn, id_idoso, agora)
+    if not devidos:
+        return []
+    medicamentos = {m.id: m for m in listar_medicamentos(conn, id_idoso)}
+    confirmacoes = listar_confirmacoes_do_dia(conn, id_idoso, agora)
+    enviadas = []
+    for enquete in devidos:
+        # Marca antes de enviar: uma falha não pode virar reenvio a cada 5 min.
+        marcar_relembrado(conn, enquete.chave)
+        medicamento = medicamentos.get(enquete.medicamento_id)
+        if medicamento is None or not medicamento.ativo:
+            continue
+        if enquete.horario_previsto.date() != agora.date():
+            continue
+        if any(
+            c.medicamento_id == enquete.medicamento_id
+            and c.horario_previsto == enquete.horario_previsto
+            and c.status in _STATUS_DOSE_TOMADA
+            for c in confirmacoes
+        ):
+            continue
+        try:
+            enviadas.append(
+                _enviar_lembrete_remedio(
+                    conn, waha_client, gmail_client, perfil, id_idoso, medicamento, enquete.horario_previsto, agora
+                )
+            )
+        except Exception:
+            logger.exception("Falha ao reenviar o lembrete adiado %s", enquete.chave)
     return enviadas
 
 
