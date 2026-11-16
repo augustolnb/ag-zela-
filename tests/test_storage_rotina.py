@@ -277,3 +277,51 @@ def test_listar_compromissos_pendentes_sync_google_e_marcar_feito():
     assert listar_compromissos_pendentes_sync_google(conn, "idosa-1") == []
     linha = conn.execute("SELECT google_event_id FROM compromisso WHERE id = ?", ("comp-1",)).fetchone()
     assert linha["google_event_id"] == "evt-abc"
+
+
+# Histórico do painel.
+def test_listar_compromissos_com_removidos_marca_os_removidos(tmp_path):
+    from datetime import datetime as _dt
+
+    from zela.models.rotina import Compromisso, TipoCompromisso
+    from zela.storage.rotina import listar_compromissos_com_removidos, remover_compromisso, salvar_compromisso
+
+    conn = conectar(str(tmp_path / "h.db"))
+    for id_, quando in (("c1", _dt(2030, 1, 2, 9, 0)), ("c2", _dt(2030, 1, 1, 9, 0))):
+        salvar_compromisso(
+            conn, Compromisso(id=id_, titulo=id_, data_hora=quando, local="x", tipo=TipoCompromisso.OUTRO), "idosa-1"
+        )
+    remover_compromisso(conn, "c1", "idosa-1")
+
+    resultado = [(c.id, removido) for c, removido in listar_compromissos_com_removidos(conn, "idosa-1")]
+
+    assert resultado == [("c2", False), ("c1", True)]
+    assert listar_compromissos_com_removidos(conn, "outra") == []
+
+
+def test_listar_confirmacoes_traz_todos_os_dias_do_idoso(tmp_path):
+    from datetime import datetime as _dt
+    from datetime import time as _time
+
+    from zela.models.rotina import CanalConfirmacao, ConfirmacaoMedicacao, Dosagem, Medicamento, StatusConfirmacao
+    from zela.storage.rotina import listar_confirmacoes, salvar_confirmacao, salvar_medicamento
+
+    conn = conectar(str(tmp_path / "h.db"))
+    salvar_medicamento(
+        conn, Medicamento(id="m1", nome="A", dosagem=Dosagem(quantidade=1, unidade="cp"), horarios=[_time(8)]), "idosa-1"
+    )
+    salvar_medicamento(
+        conn, Medicamento(id="m2", nome="B", dosagem=Dosagem(quantidade=1, unidade="cp"), horarios=[_time(8)]), "idosa-2"
+    )
+    for med, dia in (("m1", 1), ("m1", 2), ("m2", 1)):
+        salvar_confirmacao(
+            conn,
+            ConfirmacaoMedicacao(
+                medicamento_id=med, horario_previsto=_dt(2026, 11, dia, 8), horario_confirmado=_dt(2026, 11, dia, 8, 5),
+                status=StatusConfirmacao.CONFIRMADO, canal=CanalConfirmacao.WHATSAPP,
+            ),
+        )
+
+    resultado = listar_confirmacoes(conn, "idosa-1")
+
+    assert [(c.medicamento_id, c.horario_previsto.day) for c in resultado] == [("m1", 1), ("m1", 2)]

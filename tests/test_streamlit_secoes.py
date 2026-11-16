@@ -365,3 +365,85 @@ renderizar_grafico(conn, "idosa-1")
         "6h" in m.value and "37" in m.value and agora.strftime("%H:%M") in m.value
         for m in at.markdown
     )
+
+
+# Aba Histórico.
+def _historico_app(caminho):
+    codigo = f"""
+from zela.storage.db import conectar
+from zela.streamlit_app.secoes import renderizar_historico
+
+renderizar_historico(conectar({caminho!r}), "idosa-1")
+"""
+    return AppTest.from_string(codigo, default_timeout=10)
+
+
+def _semear_historico(caminho):
+    conn = conectar(caminho)
+    salvar_alerta(
+        conn,
+        Alerta(nivel=NivelAlerta.INFO, destinatario="João", canal=CanalAlerta.WHATSAPP,
+               mensagem="Aviso: O ESP32 da casa parou de enviar sinal.", timestamp=datetime(2026, 11, 15, 15, 24)),
+        idoso_id="idosa-1",
+    )
+    salvar_medicamento(
+        conn,
+        Medicamento(id="med-h", nome="Dipirona", dosagem=Dosagem(quantidade=1, unidade="comprimido"), horarios=[time(8, 0)]),
+        idoso_id="idosa-1",
+    )
+    salvar_confirmacao(
+        conn,
+        ConfirmacaoMedicacao(
+            medicamento_id="med-h", horario_previsto=datetime(2026, 11, 14, 8, 0),
+            horario_confirmado=datetime(2026, 11, 14, 8, 10), status=StatusConfirmacao.CONFIRMADO,
+            canal=CanalConfirmacao.WHATSAPP,
+        ),
+    )
+
+
+def test_historico_mostra_avisos_e_doses_numa_tabela(tmp_path):
+    caminho = str(tmp_path / "teste.db")
+    _semear_historico(caminho)
+
+    at = _historico_app(caminho)
+    at.run()
+
+    assert at.exception == []
+    tabela = at.dataframe[0].value
+    assert list(tabela.columns) == ["Data e hora", "Tipo", "Situação", "Descrição"]
+    assert list(tabela["Tipo"]) == ["Aviso", "Medicação"]
+    assert tabela["Data e hora"].iloc[0] == "15/11/2026 15:24"
+
+
+def test_historico_busca_por_remedio(tmp_path):
+    caminho = str(tmp_path / "teste.db")
+    _semear_historico(caminho)
+
+    at = _historico_app(caminho)
+    at.run()
+    at.text_input(key="historico_busca").set_value("dipirona").run()
+
+    assert list(at.dataframe[0].value["Tipo"]) == ["Medicação"]
+
+
+def test_historico_filtra_por_dia(tmp_path):
+    caminho = str(tmp_path / "teste.db")
+    _semear_historico(caminho)
+
+    at = _historico_app(caminho)
+    at.run()
+    at.date_input(key="historico_dia").set_value(datetime(2026, 11, 15).date()).run()
+
+    assert list(at.dataframe[0].value["Tipo"]) == ["Aviso"]
+
+
+def test_historico_vazio_avisa_sem_tabela(tmp_path):
+    caminho = str(tmp_path / "teste.db")
+    conectar(caminho)
+
+    at = _historico_app(caminho)
+    at.run()
+
+    assert at.exception == []
+    assert at.dataframe == []
+    assert any("Nenhum registro" in i.value for i in at.info)

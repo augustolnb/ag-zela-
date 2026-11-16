@@ -673,6 +673,20 @@ O painel da família mostra o status atual, a medicação do dia, os últimos
 alertas e um gráfico de presença, além de formulários para cadastrar ou
 editar medicamentos e compromissos.
 
+A aba **Histórico** reúne numa tabela só, do mais recente ao mais antigo:
+os avisos e alertas enviados, os compromissos (agendados, realizados e
+removidos) e as doses de remédio registradas (tomado, tomado com atraso,
+não confirmado). Os filtros combinam:
+
+- **Dia:** mostra só o que aconteceu naquela data;
+- **Busca:** texto livre na descrição, sem diferenciar maiúsculas nem
+  acentos (ex.: `dipirona`, `cardiologista`, `ESP32`);
+- **Tipos:** avisos, compromissos e/ou medicação.
+
+As doses só aparecem quando o idoso confirma no WhatsApp; uma dose
+esquecida, sem nenhuma resposta, não gera
+registro.
+
 1. Defina uma senha de acesso (obrigatória — o painel recusa subir sem ela):
    ```bash
    export STREAMLIT_SENHA=sua-senha-aqui
