@@ -14,7 +14,8 @@
 
 - Opções exatas: `"✅ Tomei"` e `"⏰ Ainda não"`; enquete de escolha única (`multipleAnswers: false`).
 - Pergunta: `f"Hora de tomar {nome} ({quantidade} {unidade}). Já tomou?"`.
-- Respostas: `"Anotado! ✅ Dose de {nome} registrada."` e `"Tudo bem! Quando tomar, é só tocar em ✅ Tomei ou me escrever 'tomei'."`.
+- Respostas: `"Anotado! ✅ Dose de {nome} registrada."` e `"Tudo bem! Te lembro de novo em 30 minutos."`.
+- Reenvio: `INTERVALO_RELEMBRAR = timedelta(minutes=30)`, só no mesmo dia do horário previsto, cancelado se a dose já foi confirmada (CONFIRMADO ou ATRASADO).
 - Falha da enquete nunca deixa o idoso sem lembrete: cai no `formatar_lembrete` atual.
 - O webhook nunca devolve 500 por causa de um voto, porque o WAHA repetiria o evento.
 - Commits em PT-BR, `git add` com caminhos explícitos, sem push.
@@ -42,7 +43,7 @@
   - `pergunta_lembrete(medicamento: Medicamento) -> str`
   - `chave_da_mensagem(identificador: str | dict) -> str`: com dict, usa `["_serialized"]`; devolve o trecho depois do último `_` (ou o texto inteiro se não houver `_`).
   - `interpretar_voto(selecionadas: list[str]) -> str | None`: `"tomei"`, `"ainda_nao"` ou `None` (lista vazia ou opção desconhecida).
-  - `resposta_tomei(medicamento: Medicamento) -> str`, `RESPOSTA_AINDA_NAO: str`
+  - `resposta_tomei(medicamento: Medicamento) -> str`, `RESPOSTA_AINDA_NAO: str`, `INTERVALO_RELEMBRAR: timedelta`
   - `WahaClient.enviar_enquete(telefone: str, pergunta: str, opcoes: list[str]) -> str`: POST `/api/sendPoll` com `{"session", "chatId": resolver_chat_id(telefone), "poll": {"name", "options", "multipleAnswers": False}}`, `raise_for_status`, devolve `chave_da_mensagem(resposta["id"])`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -90,12 +91,15 @@ git commit -m "feat: enquete de lembrete de remédio no WAHA"
 
 **Interfaces:**
 - Produces:
-  - Tabela `enquete_lembrete (chave TEXT PRIMARY KEY, idoso_id TEXT NOT NULL, medicamento_id TEXT NOT NULL, horario_previsto TEXT NOT NULL, enviada_em TEXT NOT NULL)`
+  - Tabela `enquete_lembrete (chave TEXT PRIMARY KEY, idoso_id TEXT NOT NULL, medicamento_id TEXT NOT NULL, horario_previsto TEXT NOT NULL, enviada_em TEXT NOT NULL, relembrar_em TEXT, relembrado INTEGER NOT NULL DEFAULT 0)`
   - `EnqueteLembrete` (dataclass frozen em `zela/storage/enquetes.py`): `chave: str, idoso_id: str, medicamento_id: str, horario_previsto: datetime`
   - `salvar_enquete(conn, enquete: EnqueteLembrete, enviada_em: datetime) -> None` (`INSERT OR IGNORE`)
   - `obter_enquete(conn, chave: str) -> EnqueteLembrete | None`
+  - `agendar_relembrete(conn, chave: str, quando: datetime) -> bool`: grava `relembrar_em` só se ainda estiver nulo; devolve se agendou.
+  - `listar_relembretes_devidos(conn, idoso_id: str, agora: datetime) -> list[EnqueteLembrete]`: `relembrar_em <= agora` e `relembrado = 0`.
+  - `marcar_relembrado(conn, chave: str) -> None`
 
-- [ ] **Step 1: Write the failing tests**: `test_salva_e_obtem_enquete_pela_chave` (ida e volta preserva `horario_previsto`), `test_obter_enquete_desconhecida_devolve_none`, `test_salvar_a_mesma_chave_duas_vezes_nao_falha`, e `"enquete_lembrete"` na lista esperada de `tests/test_storage_db.py`.
+- [ ] **Step 1: Write the failing tests**: `test_salva_e_obtem_enquete_pela_chave` (ida e volta preserva `horario_previsto`), `test_obter_enquete_desconhecida_devolve_none`, `test_salvar_a_mesma_chave_duas_vezes_nao_falha`, `test_agendar_relembrete_so_uma_vez`, `test_lista_relembretes_devidos_e_marca_relembrado` (antes do horário não lista; depois lista; após `marcar_relembrado`, não lista mais), e `"enquete_lembrete"` na lista esperada de `tests/test_storage_db.py`.
 - [ ] **Step 2: Run, verify FAIL**: `.venv/bin/python -m pytest -q tests/test_storage_enquetes.py tests/test_storage_db.py`
 - [ ] **Step 3: Implement** the table and the functions.
 - [ ] **Step 4: Run, verify PASS.**
@@ -111,13 +115,18 @@ git commit -m "feat: enquete de lembrete de remédio no WAHA"
 - Consumes: `pergunta_lembrete`, `OPCOES`, `WahaClient.enviar_enquete`, `salvar_enquete`, `EnqueteLembrete` (Tasks 1–2).
 - Produces: `verificar_e_enviar_lembretes` mantém a assinatura e o retorno (`list[str]` com o texto enviado: a pergunta quando foi enquete, o texto antigo quando caiu no reserva).
 
-Comportamento: para cada remédio pendente, tenta `waha_client.enviar_enquete(destino, pergunta_lembrete(m), OPCOES)`. Se der certo, `salvar_enquete` com `horario_previsto = datetime.combine(agora.date(), horario)`. Se levantar exceção, loga e chama `enviar_texto(destino, formatar_lembrete(m))`. O Gmail e a desduplicação ficam como estão.
+Comportamento (envio extraído para um helper `_enviar_lembrete_remedio(conn, waha_client, gmail_client, perfil, id_idoso, medicamento, horario_previsto, agora) -> str`, usado pelo lembrete normal e pelo reenvio): para cada remédio pendente, tenta `waha_client.enviar_enquete(destino, pergunta_lembrete(m), OPCOES)`. Se der certo, `salvar_enquete` com `horario_previsto = datetime.combine(agora.date(), horario)`. Se levantar exceção, loga e chama `enviar_texto(destino, formatar_lembrete(m))`. O Gmail e a desduplicação ficam como estão.
+
+Reenvio, no mesmo job, depois dos lembretes normais: para cada `listar_relembretes_devidos`, `marcar_relembrado` primeiro (não repetir em caso de erro); pula se o remédio não existe mais, está inativo, se `horario_previsto.date() != agora.date()` ou se já há confirmação CONFIRMADO/ATRASADO para aquele `horario_previsto`; senão chama o helper com o mesmo `horario_previsto`.
 
 - [ ] **Step 1: Write the failing tests**
   - Dar ao `_WahaFalso` um `enviar_enquete` que grava `(telefone, pergunta, opcoes)` em `self.enquetes` e devolve `"CHAVE1"`.
   - `test_lembrete_sai_como_enquete_e_fica_guardado`: uma enquete enviada com `OPCOES`, nenhum `enviar_texto` e `obter_enquete(conn, "CHAVE1")` com o remédio e o horário previsto certos.
   - `test_lembrete_cai_no_texto_se_a_enquete_falhar`: o fake levanta `httpx.HTTPError`; sai um texto igual a `formatar_lembrete(m)` e nada é gravado.
   - Ajustar os testes de lembrete existentes que esperam texto, se houver.
+  - `test_relembrete_devido_envia_nova_enquete_com_mesmo_horario`: enquete "CHAVE0" com `relembrar_em` vencido → nova enquete enviada e guardada com o mesmo `horario_previsto`, e "CHAVE0" marcada como relembrada (um segundo job não reenvia).
+  - `test_relembrete_cancelado_se_dose_ja_confirmada`: nada enviado; marcada como relembrada.
+  - `test_relembrete_de_outro_dia_nao_sai`.
 - [ ] **Step 2: Run, verify FAIL**: `.venv/bin/python -m pytest -q tests/test_api_scheduler.py -k lembrete`
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run, verify PASS**, then the full suite (`.venv/bin/python -m pytest -q`).
@@ -137,7 +146,8 @@ Comportamento: para cada remédio pendente, tenta `waha_client.enviar_enquete(de
   - `test_voto_tomei_registra_confirmacao_e_responde`: confirmação gravada com o `horario_previsto` da enquete, status CONFIRMADO e resposta igual a `resposta_tomei(m)`.
   - `test_voto_tomei_depois_de_30_min_fica_atrasado`
   - `test_voto_repetido_nao_duplica_nem_responde`: segunda chamada devolve `None`, e há 1 confirmação.
-  - `test_voto_ainda_nao_nao_registra_e_responde`: nenhuma confirmação; resposta igual a `RESPOSTA_AINDA_NAO`.
+  - `test_voto_ainda_nao_agenda_reenvio_e_responde`: nenhuma confirmação; `relembrar_em == agora + INTERVALO_RELEMBRAR`; resposta igual a `RESPOSTA_AINDA_NAO`.
+  - `test_segundo_ainda_nao_na_mesma_enquete_nao_responde`: devolve `None` e não muda `relembrar_em`.
   - `test_voto_vazio_ou_enquete_desconhecida_devolve_none`
   - `test_chave_com_prefixo_encontra_a_enquete`: a enquete é salva com a chave `"ABC"` e o voto chega com `"true_1@lid_ABC"`. O callback normaliza com `chave_da_mensagem`.
 - [ ] **Step 2: Run, verify FAIL**: `.venv/bin/python -m pytest -q tests/test_api_enquete.py`

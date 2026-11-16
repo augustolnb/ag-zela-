@@ -1,6 +1,6 @@
 # Lembrete de remédio com enquete no WhatsApp: design
 
-Status: aguardando aprovação.
+Status: aprovado pelo usuário em 15/11/2026, com o reenvio após "Ainda não".
 
 ## Por que isto existe
 
@@ -44,7 +44,7 @@ O lembrete de remédio do scheduler passa a sair como enquete de escolha
 | Voto | O que o Zela+ faz |
 |---|---|
 | "✅ Tomei" | Registra a confirmação do remédio naquele horário previsto, igual à confirmação por texto (`aplicar_confirmacao`; vira ATRASADO depois de 30 min). Responde: "Anotado! ✅ Dose de dapagliflozina registrada." |
-| "⏰ Ainda não" | Não registra nada. Responde: "Tudo bem! Quando tomar, é só tocar em ✅ Tomei ou me escrever 'tomei'." |
+| "⏰ Ainda não" | Não registra nada, agenda um novo lembrete (nova enquete, mesmo remédio e horário previsto) para daqui a 30 min e responde: "Tudo bem! Te lembro de novo em 30 minutos." |
 | Voto removido (lista vazia) | Ignorado. |
 
 - **Sem a IA:** o voto é tratado por código, sem passar pelo LLM.
@@ -66,12 +66,25 @@ segurança da configuração (como no teste) e documentado no `vps.md`.
 
 ## Não objetivos
 
-- Não reenviar o lembrete depois de "Ainda não". Hoje não existe reenvio
-  para o texto também.
+- Reenvio só a partir do voto "Ainda não": a ausência de voto não gera
+  reenvio, como hoje no lembrete por texto.
 - Não desfazer a confirmação se o idoso trocar o voto para "Ainda não".
 - Não usar enquetes para os avisos à família, para o "ESTOU BEM" do episódio
   de sintoma nem para compromissos.
 - Não trocar o WAHA pela API oficial da Meta.
+
+### Reenvio depois de "Ainda não" (decisão do usuário)
+
+- O voto "Ainda não" agenda o reenvio na própria enquete (`relembrar_em =
+  agora + 30 min`). Votar "Ainda não" de novo na mesma enquete não agenda
+  outro reenvio nem responde de novo.
+- O job de lembretes (a cada 5 min) envia as enquetes de reenvio vencidas,
+  como um lembrete normal: enquete com texto de reserva e notificação no
+  Gmail da pulseira. Cada reenvio é uma enquete nova, que também pode
+  receber "Ainda não".
+- Se a dose foi confirmada antes do reenvio (por voto ou por texto), o
+  reenvio é cancelado.
+- Reenvios só no mesmo dia do horário previsto.
 
 ## Decisões técnicas (escolhas do Claude, para revisar)
 
@@ -83,8 +96,10 @@ segurança da configuração (como no teste) e documentado no `vps.md`.
 2. **Opções reconhecidas pelo texto exato** (`✅ Tomei` e `⏰ Ainda não`),
    definidas como constantes.
 3. **Tabela nova** `enquete_lembrete (chave TEXT PRIMARY KEY, idoso_id,
-   medicamento_id, horario_previsto, enviada_em)`, criada com
-   `CREATE TABLE IF NOT EXISTS`, como as outras.
+   medicamento_id, horario_previsto, enviada_em, relembrar_em, relembrado)`,
+   criada com `CREATE TABLE IF NOT EXISTS`, como as outras. `relembrar_em`
+   fica nulo até um "Ainda não"; `relembrado` (0/1) marca que o reenvio já
+   foi tratado (enviado ou cancelado por confirmação).
 4. **Webhook:** um evento `poll.vote` é desviado antes da extração de texto
    para um callback novo, `processar_voto`, injetado em `montar_roteador`,
    no mesmo padrão de `processar_emergencia`. Falhas no callback viram log,
