@@ -4,7 +4,9 @@ Trabalho final de pós-graduação em Agentes de IA. Zela+ é um sistema
 multiagente (Google ADK) que ajuda idosos que moram sozinhos a não esquecer
 medicamentos e compromissos, monitora sinais de risco com uma pulseira
 Xiaomi Smart Band 10 Pro e um ESP32 com 2 sensores de presença, e mantém a
-família informada. Um relato de sintoma sem resposta avisa todos os
+família informada. O lembrete de remédio chega como enquete ("✅ Tomei /
+⏰ Ainda não"), respondida com um toque, e também aparece na pulseira pelo
+Gmail. Um relato de sintoma sem resposta avisa todos os
 familiares em 60 segundos, e a escada de escalonamento pode chegar a
 simular o contato com um serviço de emergência. Nenhuma dessas decisões
 depende de um LLM.
@@ -23,10 +25,12 @@ Construído em fases, cada uma testada e mergeada separadamente:
 3. **Sensores reais**: Band 10 Pro via Health Connect e ESP32 com 2 PIR
    SR602, ambos validados em produção ✓
 4. **Embeddings**: classificação por similaridade e RAG em 5 bulas ✓
-5. **Painel Streamlit** para a família ✓
+5. **Painel Streamlit** para a família, com login por usuário e senha,
+   histórico com filtros e modo noturno ✓
 6. **Fluxo visual em n8n**, no lugar do Langflow citado no enunciado ✓
-7. **Produção**: VPS, aviso à família em 60 s, lembretes no Google Agenda
-   espelhados na pulseira ✓
+7. **Produção**: VPS, aviso à família em 60 s, lembretes no Google Agenda e
+   avisos via Gmail espelhados na pulseira, lembrete de remédio com
+   enquete ✓
 8. **Empacotamento**: relatório, documentação e vídeo pitch (em andamento)
 
 Suíte automatizada: 537 testes (`pytest -q`).
@@ -619,6 +623,13 @@ para o idoso responder com um toque:
 `message`, `poll.vote` e `poll.vote.failed` (ver `docs/deploy/vps.md`). Sem
 `poll.vote`, os votos não chegam ao backend; o lembrete continua saindo e
 o "tomei" por texto continua valendo.
+
+**Validação em produção (16/11/2026):** três remédios cadastrados para
+00:58, 01:00 e 01:01 receberam a enquete às 01:01:10, junto com a
+notificação na pulseira. Dois votos "✅ Tomei" (01:01:55 e 01:02:01) viraram
+doses confirmadas no banco em menos de um minuto, sem passar pela IA, e um
+"⏰ Ainda não" agendou o reenvio para 01:31. Nenhum voto ilegível
+(`poll.vote.failed`) nem erro nos logs.
 
 ## Notificações na pulseira (Gmail)
 

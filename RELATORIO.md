@@ -289,6 +289,11 @@ autor:
 - **Gmail na pulseira (15/11):** as duas formas de envio da API do Gmail
   (`insert` e `send`) fizeram a Band 10 Pro vibrar com o assunto do e-mail.
   O Zela+ usa `insert`, que coloca o aviso direto na caixa de entrada.
+- **Enquete do remédio (16/11):** três remédios receberam a enquete às
+  01:01:10; dois votos "✅ Tomei" viraram doses confirmadas em menos de um
+  minuto, sem a IA, e um "⏰ Ainda não" agendou o reenvio para 30 min depois.
+- **Painel (16/11):** login com usuário e senha, aba Histórico com filtros
+  e modo noturno em produção.
 
 | Fase | Entregável | Status |
 |---|---|---|
