@@ -194,3 +194,11 @@ def test_enviar_enquete_monta_payload_e_devolve_chave(monkeypatch):
     assert payload["chatId"] == "5511987654321@c.us"
     assert payload["session"] == "default"
     assert payload["poll"] == {"name": "P?", "options": ["✅ Tomei", "⏰ Ainda não"], "multipleAnswers": False}
+
+
+def test_enviar_enquete_sem_id_na_resposta_levanta_erro(monkeypatch):
+    # Sem chave, o voto nunca acharia a enquete: melhor cair no lembrete em texto.
+    monkeypatch.setattr(httpx, "post", lambda url, json, headers, timeout: _RespostaFalsa({}))
+
+    with pytest.raises(ValueError):
+        WahaClient(base_url="http://localhost:3000").enviar_enquete("+5511987654321", "P?", ["a", "b"])

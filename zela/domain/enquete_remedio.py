@@ -14,6 +14,7 @@ OPCOES = [OPCAO_TOMEI, OPCAO_AINDA_NAO]
 
 INTERVALO_RELEMBRAR = timedelta(minutes=30)
 RESPOSTA_AINDA_NAO = "Tudo bem! Te lembro de novo em 30 minutos."
+RESPOSTA_AINDA_NAO_SEM_REENVIO = "Tudo bem! Quando tomar, é só tocar em ✅ Tomei ou me escrever 'tomei'."
 
 
 def pergunta_lembrete(medicamento: Medicamento) -> str:

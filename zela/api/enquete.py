@@ -6,6 +6,7 @@ from datetime import datetime
 from zela.domain.enquete_remedio import (
     INTERVALO_RELEMBRAR,
     RESPOSTA_AINDA_NAO,
+    RESPOSTA_AINDA_NAO_SEM_REENVIO,
     chave_da_mensagem,
     interpretar_voto,
     resposta_tomei,
@@ -24,7 +25,10 @@ def processar_voto(
     escolha = interpretar_voto(selecionadas)
     if escolha is None:
         return None
-    enquete = obter_enquete(conn, chave_da_mensagem(chave_enquete))
+    chave = chave_da_mensagem(chave_enquete)
+    if not chave:
+        return None
+    enquete = obter_enquete(conn, chave)
     if enquete is None or enquete.idoso_id != id_idoso:
         return None
     medicamento = next((m for m in listar_medicamentos(conn, id_idoso) if m.id == enquete.medicamento_id), None)
@@ -43,6 +47,10 @@ def processar_voto(
         aplicar_confirmacao(conn, medicamento, horario_previsto=enquete.horario_previsto, agora=agora)
         return resposta_tomei(medicamento)
 
-    if agendar_relembrete(conn, enquete.chave, agora + INTERVALO_RELEMBRAR):
+    quando = agora + INTERVALO_RELEMBRAR
+    if quando.date() != enquete.horario_previsto.date():
+        # O reenvio só vale no mesmo dia: não prometer o que não vai acontecer.
+        return RESPOSTA_AINDA_NAO_SEM_REENVIO
+    if agendar_relembrete(conn, enquete.chave, quando):
         return RESPOSTA_AINDA_NAO
     return None

@@ -89,3 +89,25 @@ def test_chave_com_prefixo_encontra_a_enquete(tmp_path):
     resposta = processar_voto(conn, "idosa-1", "true_1@lid_ABC", ["✅ Tomei"], AGORA)
 
     assert resposta == resposta_tomei(medicamento)
+
+
+def test_voto_sem_chave_nao_confirma_nada(tmp_path):
+    conn, _ = _preparar(tmp_path)
+    salvar_enquete(
+        conn, EnqueteLembrete(chave="", idoso_id="idosa-1", medicamento_id="m1", horario_previsto=PREVISTO), PREVISTO
+    )
+
+    assert processar_voto(conn, "idosa-1", "", ["✅ Tomei"], AGORA) is None
+    assert listar_confirmacoes_do_dia(conn, "idosa-1", AGORA) == []
+
+
+def test_ainda_nao_perto_da_meia_noite_nao_promete_reenvio(tmp_path):
+    from zela.domain.enquete_remedio import RESPOSTA_AINDA_NAO_SEM_REENVIO
+
+    conn, _ = _preparar(tmp_path)
+    tarde = datetime(2026, 11, 15, 23, 45)
+
+    resposta = processar_voto(conn, "idosa-1", "ABC", ["⏰ Ainda não"], tarde)
+
+    assert resposta == RESPOSTA_AINDA_NAO_SEM_REENVIO
+    assert listar_relembretes_devidos(conn, "idosa-1", tarde + timedelta(hours=2)) == []

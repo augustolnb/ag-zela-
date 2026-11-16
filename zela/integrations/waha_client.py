@@ -40,7 +40,11 @@ class WahaClient:
             timeout=30,
         )
         resposta.raise_for_status()
-        return chave_da_mensagem(resposta.json().get("id", ""))
+        chave = chave_da_mensagem(resposta.json().get("id", ""))
+        if not chave:
+            # Sem chave, nenhum voto acharia a enquete: o chamador cai no texto.
+            raise ValueError("sendPoll respondeu sem id da mensagem")
+        return chave
 
     def enviar_audio(self, telefone: str, audio_base64: str, mimetype: str = "audio/ogg") -> dict:
         resposta = httpx.post(
