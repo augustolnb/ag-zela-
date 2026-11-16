@@ -24,7 +24,9 @@ mas não resolve o problema. Três riscos orientaram o projeto:
 
 ### 1.2 Escopo do MVP
 
-- **Lembretes** de medicamentos por WhatsApp, com confirmação pelo idoso.
+- **Lembretes** de medicamentos por WhatsApp, com confirmação pelo idoso:
+  o lembrete chega como enquete "✅ Tomei / ⏰ Ainda não", respondida com
+  um toque; "Ainda não" reenvia o lembrete 30 min depois.
   Lembretes de compromissos por WhatsApp e pelo **Google Agenda**, cuja
   notificação o Mi Fitness espelha na pulseira.
 - **Notificações na pulseira via Gmail:** o lembrete de remédio, a
@@ -264,7 +266,7 @@ autor:
 
 ## 5. Resultados obtidos
 
-- **477 testes automatizados** passando (`pytest -q`), cobrindo modelos,
+- **508 testes automatizados** passando (`pytest -q`), cobrindo modelos,
   domínio, armazenamento, API, scheduler, embeddings, agentes ADK e painel.
 - **Em produção desde 02/11/2026**, com mensagens reais de WhatsApp, a
   pulseira enviando passos e sono e o ESP32 enviando presença.
@@ -319,7 +321,11 @@ autor:
    não recebe um aviso quando ele volta. Como as regras rodam a cada 15
    min, o aviso pode chegar até cerca de 30 min depois da queda, às vezes
    quando o sinal já voltou (em 15/11, chegou 2 s depois do retorno).
-8. **App OAuth não verificado pelo Google:** funciona para até 100 contas,
+8. **Botões no WhatsApp:** só existem na API oficial da Meta; no WAHA eles
+   não funcionam. O lembrete de remédio usa uma enquete no lugar, e um voto
+   que o WAHA não consiga ler (`poll.vote.failed`) só aparece no log; o
+   "tomei" por texto continua como reserva.
+9. **App OAuth não verificado pelo Google:** funciona para até 100 contas,
    com a tela de "app não verificado" na autorização. Para oferecer a mais
    famílias, o escopo restrito `gmail.insert` exige a verificação do Google
    com avaliação de segurança. O modo `send` usa um escopo sensível, que
@@ -333,7 +339,7 @@ autor:
 git clone https://github.com/augustolnb/ag-zela-.git && cd ag-zela-
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev,deepseek]"
-pytest -q                                   # 477 testes
+pytest -q                                   # 508 testes
 uvicorn zela.api.main:app --reload          # backend: webhook, API e scheduler
 streamlit run zela/streamlit_app/app.py     # painel da família
 ```

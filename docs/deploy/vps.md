@@ -211,6 +211,39 @@ campo na versão que você está usando, já que isso varia entre versões do
 WAHA. Teste com `curl -i` direto (sem o header deve dar 401) antes de
 confiar que está configurado.
 
+**Eventos do webhook.** A sessão precisa enviar três eventos ao backend:
+`message` (mensagens), `poll.vote` (voto na enquete do lembrete de remédio)
+e `poll.vote.failed` (voto que o WAHA não conseguiu ler, só gera log). Para
+atualizar uma sessão já configurada, guarde antes a configuração atual e
+mude só a lista de eventos, de dentro do container do backend (que tem a
+chave do WAHA no ambiente):
+
+```bash
+cd /opt/zela && umask 077
+docker compose exec -T backend python -c "
+import os,httpx,json
+h={'X-Api-Key':os.environ['ZELA_WAHA_API_KEY']}
+print(json.dumps(httpx.get('http://waha:3000/api/sessions/default',headers=h).json()['config']))
+" </dev/null > /root/waha_config_backup.json
+
+docker compose exec -T -e CFG="$(cat /root/waha_config_backup.json)" backend python -c "
+import os,httpx,json
+h={'X-Api-Key':os.environ['ZELA_WAHA_API_KEY']}
+cfg=json.loads(os.environ['CFG'])
+for w in cfg['webhooks']:
+    if w['url'].endswith('/webhook/whatsapp'):
+        w['events']=['message','poll.vote','poll.vote.failed']
+r=httpx.put('http://waha:3000/api/sessions/default',headers=h,json={'config':cfg},timeout=60)
+print(r.status_code)
+" </dev/null
+```
+
+A sessão reinicia por alguns segundos e volta a `WORKING` sem pedir QR
+code (a sessão fica no volume `waha_data`). Para reverter, faça o mesmo
+`PUT` com o conteúdo de `/root/waha_config_backup.json`. Depois de
+conferir, apague a cópia (`shred -u /root/waha_config_backup.json`): ela
+contém a chave do webhook.
+
 ## 6. Testar
 
 ```bash
