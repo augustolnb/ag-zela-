@@ -451,3 +451,106 @@ def test_falha_do_llm_nao_impede_avaliacao_de_risco():
     TestClient(app).post("/webhook/whatsapp", json=_corpo("bom dia"))
 
     assert riscos == ["bom dia"]
+
+
+# Votos de enquete — plano 2026-11-15-enquete-remedio, Task 5. Formato observado em produção.
+_LID = "109281332445239@lid"
+
+
+def _voto(selecionadas, de=_LID, from_me=False, evento="poll.vote"):
+    return {
+        "event": evento,
+        "payload": {
+            "vote": {
+                "id": "v1", "to": "x@c.us", "from": de, "fromMe": from_me,
+                "selectedOptions": selecionadas, "timestamp": 1794783590309,
+            },
+            "poll": {"id": "true_x@lid_ABC", "to": de, "from": "x@c.us", "fromMe": True},
+        },
+    }
+
+
+def _cliente_voto(waha, processar_voto, lids_permitidos=None, processar=None):
+    def llm(*args):
+        raise AssertionError("LLM não pode ser chamado para votos")
+
+    app = FastAPI()
+    app.include_router(
+        montar_roteador(
+            processar or llm, waha, lids_permitidos=lids_permitidos, processar_voto=processar_voto,
+            processar_emergencia=lambda *a: (_ for _ in ()).throw(AssertionError("triagem não vale para votos")),
+        )
+    )
+    return TestClient(app)
+
+
+def test_voto_chama_processar_voto_e_responde_quem_votou():
+    waha, chamadas = _WahaFalso(), []
+
+    def processar_voto(chave, selecionadas, agora):
+        chamadas.append((chave, selecionadas))
+        return "Anotado!"
+
+    resposta = _cliente_voto(waha, processar_voto, lids_permitidos=[_LID]).post(
+        "/webhook/whatsapp", json=_voto(["✅ Tomei"])
+    )
+
+    assert resposta.json() == {"status": "voto"}
+    assert chamadas == [("true_x@lid_ABC", ["✅ Tomei"])]
+    assert waha.enviados == [(_LID, "Anotado!")]
+
+
+def test_voto_fora_da_lista_permitida_e_ignorado():
+    waha = _WahaFalso()
+
+    def processar_voto(*args):
+        raise AssertionError("não pode ser chamado")
+
+    resposta = _cliente_voto(waha, processar_voto, lids_permitidos=[_LID]).post(
+        "/webhook/whatsapp", json=_voto(["✅ Tomei"], de="999@lid")
+    )
+
+    assert resposta.json() == {"status": "ignorado"}
+    assert waha.enviados == []
+
+
+def test_voto_proprio_e_ignorado():
+    waha = _WahaFalso()
+    resposta = _cliente_voto(waha, lambda *a: "x").post("/webhook/whatsapp", json=_voto(["✅ Tomei"], from_me=True))
+    assert resposta.json() == {"status": "ignorado"}
+    assert waha.enviados == []
+
+
+def test_voto_falho_so_gera_log():
+    waha = _WahaFalso()
+
+    def processar_voto(*args):
+        raise AssertionError("não pode ser chamado")
+
+    resposta = _cliente_voto(waha, processar_voto).post(
+        "/webhook/whatsapp", json=_voto([], evento="poll.vote.failed")
+    )
+
+    assert resposta.status_code == 200
+    assert resposta.json() == {"status": "ignorado"}
+    assert waha.enviados == []
+
+
+def test_voto_com_erro_no_callback_responde_200_sem_enviar():
+    waha = _WahaFalso()
+
+    def processar_voto(*args):
+        raise RuntimeError("banco fora")
+
+    resposta = _cliente_voto(waha, processar_voto).post("/webhook/whatsapp", json=_voto(["✅ Tomei"]))
+
+    assert resposta.status_code == 200
+    assert resposta.json() == {"status": "voto"}
+    assert waha.enviados == []
+
+
+def test_voto_sem_resposta_nao_envia_nada():
+    waha = _WahaFalso()
+    resposta = _cliente_voto(waha, lambda *a: None).post("/webhook/whatsapp", json=_voto(["✅ Tomei"]))
+    assert resposta.json() == {"status": "voto"}
+    assert waha.enviados == []

@@ -30,11 +30,18 @@ def _extrair_telefone_e_texto(payload: dict) -> tuple[str, str] | None:
     texto = dados.get("body")
     if not remetente or not texto:
         return None
+    return _identificador(remetente), texto
+
+
+def _identificador(remetente: str) -> str:
     if remetente.endswith("@lid"):
-        telefone = remetente
-    else:
-        telefone = "+" + remetente.split("@")[0]
-    return telefone, texto
+        return remetente
+    return "+" + remetente.split("@")[0]
+
+
+def _permitido(telefone: str, telefones_permitidos, lids_permitidos) -> bool:
+    lista_permitida = lids_permitidos if telefone.endswith("@lid") else telefones_permitidos
+    return lista_permitida is None or telefone in lista_permitida
 
 
 def montar_roteador(
@@ -46,6 +53,7 @@ def montar_roteador(
     processar_risco=None,
     token: str | None = None,
     processar_emergencia=None,
+    processar_voto=None,
 ) -> APIRouter:
     roteador = APIRouter()
 
@@ -60,12 +68,20 @@ def montar_roteador(
             return JSONResponse(status_code=401, content={"erro": "token inválido"})
 
         payload = await request.json()
+
+        evento = payload.get("event")
+        if evento == "poll.vote.failed":
+            # O WAHA não conseguiu decifrar o voto; o idoso ainda pode responder "tomei".
+            logger.warning("Voto de enquete ilegível (poll.vote.failed)")
+            return {"status": "ignorado"}
+        if evento == "poll.vote":
+            return await _tratar_voto(payload.get("payload", {}))
+
         extraido = _extrair_telefone_e_texto(payload)
         if extraido is None:
             return {"status": "ignorado"}
         telefone, texto = extraido
-        lista_permitida = lids_permitidos if telefone.endswith("@lid") else telefones_permitidos
-        if lista_permitida is not None and telefone not in lista_permitida:
+        if not _permitido(telefone, telefones_permitidos, lids_permitidos):
             return {"status": "ignorado"}
 
         agora = datetime.now()
@@ -100,5 +116,24 @@ def montar_roteador(
                 logger.exception("Falha ao processar risco da mensagem")
 
         return {"status": "processado"}
+
+    async def _tratar_voto(dados: dict):
+        voto = dados.get("vote") or {}
+        remetente = voto.get("from")
+        if processar_voto is None or voto.get("fromMe") or not remetente:
+            return {"status": "ignorado"}
+        telefone = _identificador(remetente)
+        if not _permitido(telefone, telefones_permitidos, lids_permitidos):
+            return {"status": "ignorado"}
+        chave = (dados.get("poll") or {}).get("id", "")
+        selecionadas = voto.get("selectedOptions") or []
+        # Erros viram log, nunca 500: o WAHA repetiria o evento.
+        try:
+            resposta = await run_in_threadpool(processar_voto, chave, selecionadas, datetime.now())
+            if resposta:
+                await run_in_threadpool(waha_client.enviar_texto, telefone, resposta)
+        except Exception:
+            logger.exception("Falha ao processar voto de enquete")
+        return {"status": "voto"}
 
     return roteador
