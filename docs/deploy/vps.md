@@ -17,7 +17,7 @@ Internet (80/443) → Caddy (HTTPS automático via Let's Encrypt)
 ```
 
 - **backend**: FastAPI + scheduler embutido (webhook, ingestão, classificação).
-- **streamlit**: painel da família (já tem senha própria, `STREAMLIT_SENHA`).
+- **streamlit**: painel da família, com login por usuário e senha (usuários no banco).
 - **waha**: WhatsApp — o dashboard em `whatsapp.*` é só para você escanear
   o QR code; não precisa ficar protegido por senha adicional além da que
   já existe (`WAHA_DASHBOARD_PASSWORD`).
@@ -70,7 +70,8 @@ Edite `.env` e preencha (ver comentários no próprio arquivo):
 - `GOOGLE_API_KEY` — chave do Gemini.
 - `ZELA_INGESTAO_TOKEN` — **obrigatório aqui** (o backend fica público).
   Gere um valor aleatório forte, por exemplo: `openssl rand -hex 32`.
-- `STREAMLIT_SENHA` — senha do painel da família.
+- O painel não usa mais `STREAMLIT_SENHA`: depois de subir, crie o primeiro
+  usuário com `docker compose exec streamlit python -m zela.streamlit_app.usuarios criar <usuário>`.
 
 Se o domínio real for diferente de `augustoautomacoes.com`, ajuste os 3
 nomes de host no `Caddyfile` antes de subir.

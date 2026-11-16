@@ -117,6 +117,12 @@ CREATE TABLE IF NOT EXISTS enquete_lembrete (
     relembrar_em TEXT,
     relembrado INTEGER NOT NULL DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS usuario_painel (
+    usuario TEXT PRIMARY KEY,
+    senha_hash TEXT NOT NULL,
+    criado_em TEXT NOT NULL
+);
 """
 
 

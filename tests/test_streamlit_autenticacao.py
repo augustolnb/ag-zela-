@@ -1,74 +1,93 @@
 from streamlit.testing.v1 import AppTest
 
-_CODIGO_TESTE = """
-import streamlit as st
-from zela.streamlit_app.autenticacao import exigir_autenticacao
+from zela.storage.db import conectar
+from zela.storage.usuarios import criar_usuario
 
-if exigir_autenticacao():
+
+def _app(caminho):
+    codigo = f"""
+import streamlit as st
+from zela.storage.db import conectar
+from zela.streamlit_app.autenticacao import exigir_autenticacao, mostrar_usuario_conectado
+
+usuario = exigir_autenticacao(conectar({caminho!r}))
+if usuario:
+    mostrar_usuario_conectado(usuario)
     st.write("liberado")
 """
+    return AppTest.from_string(codigo, default_timeout=10)
 
 
-def test_exigir_autenticacao_bloqueia_sem_variavel_de_ambiente(monkeypatch):
-    monkeypatch.delenv("STREAMLIT_SENHA", raising=False)
+def _com_usuario(tmp_path):
+    caminho = str(tmp_path / "t.db")
+    criar_usuario(conectar(caminho), "augusto", "senha-forte-1")
+    return caminho
 
-    at = AppTest.from_string(_CODIGO_TESTE)
+
+def _entrar(at, usuario, senha):
+    at.text_input(key="login_usuario").set_value(usuario)
+    at.text_input(key="login_senha").set_value(senha)
+    at.button(key="login_entrar").click().run()
+
+
+def _liberado(at):
+    return any(m.value == "liberado" for m in at.markdown)
+
+
+def test_sem_usuarios_cadastrados_explica_como_criar(tmp_path):
+    at = _app(str(tmp_path / "t.db"))
     at.run()
 
     assert at.exception == []
-    assert any("STREAMLIT_SENHA" in erro.value for erro in at.error)
-    assert at.markdown == []
+    assert any("python -m zela.streamlit_app.usuarios criar" in e.value for e in at.error)
+    assert not _liberado(at)
 
 
-def test_exigir_autenticacao_bloqueia_senha_errada(monkeypatch):
+def test_formulario_tem_usuario_senha_e_entrar(tmp_path):
     from streamlit.proto.TextInput_pb2 import TextInput
 
-    monkeypatch.setenv("STREAMLIT_SENHA", "correta123")
-
-    at = AppTest.from_string(_CODIGO_TESTE)
+    at = _app(_com_usuario(tmp_path))
     at.run()
 
-    # Antes de digitar qualquer coisa, não deve mostrar "senha incorreta" --
-    # o campo vazio é um estado distinto de "senha errada".
-    assert at.warning == []
-    assert at.text_input[0].proto.type == TextInput.PASSWORD
-
-    at.text_input[0].set_value("errada").run()
-
-    assert at.exception == []
-    assert any("incorreta" in aviso.value.lower() for aviso in at.warning)
-    assert at.markdown == []
+    assert at.text_input(key="login_usuario").label == "Usuário"
+    assert at.text_input(key="login_senha").label == "Senha"
+    assert at.text_input(key="login_senha").proto.type == TextInput.PASSWORD
+    assert at.error == []
+    assert not _liberado(at)
 
 
-def test_exigir_autenticacao_libera_com_senha_certa(monkeypatch):
-    monkeypatch.setenv("STREAMLIT_SENHA", "correta123")
-
-    at = AppTest.from_string(_CODIGO_TESTE)
+def test_credencial_errada_mostra_mensagem_unica(tmp_path):
+    at = _app(_com_usuario(tmp_path))
     at.run()
-    at.text_input[0].set_value("correta123").run()
 
-    assert at.exception == []
-    assert [m.value for m in at.markdown] == ["liberado"]
+    _entrar(at, "augusto", "errada-123")
+    assert [e.value for e in at.error] == ["Usuário ou senha incorretos."]
+    assert not _liberado(at)
+
+    _entrar(at, "ninguem", "senha-forte-1")
+    assert [e.value for e in at.error] == ["Usuário ou senha incorretos."]
 
 
-def test_exigir_autenticacao_mantem_liberado_apos_novo_run(monkeypatch):
-    monkeypatch.setenv("STREAMLIT_SENHA", "correta123")
-
-    at = AppTest.from_string(_CODIGO_TESTE)
+def test_login_certo_some_com_o_formulario_e_mostra_quem_entrou(tmp_path):
+    at = _app(_com_usuario(tmp_path))
     at.run()
-    at.text_input[0].set_value("correta123").run()
-    at.run()  # simula uma nova reexecução do script na mesma sessão
+
+    _entrar(at, "Augusto", "senha-forte-1")
 
     assert at.exception == []
-    assert [m.value for m in at.markdown] == ["liberado"]
-
-
-def test_exigir_autenticacao_aceita_senha_com_acento(monkeypatch):
-    monkeypatch.setenv("STREAMLIT_SENHA", "senha-coração")
-
-    at = AppTest.from_string(_CODIGO_TESTE)
+    assert _liberado(at)
+    assert at.text_input == []
+    assert any("augusto" in c.value for c in at.caption)
     at.run()
-    at.text_input[0].set_value("senha-coração").run()
+    assert _liberado(at)
 
-    assert at.exception == []
-    assert [m.value for m in at.markdown] == ["liberado"]
+
+def test_sair_volta_para_o_login(tmp_path):
+    at = _app(_com_usuario(tmp_path))
+    at.run()
+    _entrar(at, "augusto", "senha-forte-1")
+
+    at.button(key="sair").click().run()
+
+    assert not _liberado(at)
+    assert at.text_input(key="login_usuario").value == ""

@@ -6,8 +6,14 @@ import streamlit as st
 from zela.models.monitoramento import TipoLeitura
 from zela.storage.alertas import listar_alertas
 from zela.storage.monitoramento import aplicar_classificacao, listar_leituras_recentes
-from zela.storage.rotina import listar_confirmacoes_do_dia, listar_medicamentos
+from zela.storage.rotina import (
+    listar_compromissos_com_removidos,
+    listar_confirmacoes,
+    listar_confirmacoes_do_dia,
+    listar_medicamentos,
+)
 from zela.streamlit_app.estilo import badge_nivel
+from zela.streamlit_app.historico import TIPOS, filtrar_historico, montar_historico
 
 
 def renderizar_status(conn, idoso_id: str) -> None:
@@ -99,3 +105,44 @@ def _renderizar_resumo_smartwatch(leituras) -> None:
             f"Sono (última noite): {horas}h{minutos:02d}min — "
             f"registrado às {ultima.timestamp.strftime('%H:%M')}"
         )
+
+
+def renderizar_historico(conn, idoso_id: str) -> None:
+    st.subheader("Histórico")
+    st.caption("Avisos, compromissos e doses de remédio registradas, do mais recente ao mais antigo.")
+
+    itens = montar_historico(
+        alertas=listar_alertas(conn, idoso_id),
+        compromissos=listar_compromissos_com_removidos(conn, idoso_id),
+        confirmacoes=listar_confirmacoes(conn, idoso_id),
+        medicamentos=listar_medicamentos(conn, idoso_id),
+        agora=datetime.now(),
+    )
+
+    coluna_dia, coluna_busca = st.columns([1, 2])
+    with coluna_dia:
+        dia = st.date_input("Dia", value=None, format="DD/MM/YYYY", key="historico_dia")
+    with coluna_busca:
+        busca = st.text_input(
+            "Buscar remédio, compromisso ou aviso", key="historico_busca",
+            placeholder="Ex.: dipirona, cardiologista, ESP32",
+        )
+    tipos = st.multiselect("Tipos", TIPOS, default=TIPOS, key="historico_tipos")
+
+    filtrados = filtrar_historico(itens, dia=dia, busca=busca, tipos=set(tipos))
+    if not filtrados:
+        st.info("Nenhum registro encontrado com esses filtros." if itens else "Nenhum registro ainda.")
+        return
+
+    st.caption(f"{len(filtrados)} registro(s)")
+    tabela = pd.DataFrame(
+        {
+            "Data e hora": [i.data_hora.strftime("%d/%m/%Y %H:%M") for i in filtrados],
+            "Tipo": [i.tipo for i in filtrados],
+            # Descrição por último: é a coluna longa, e o painel é estreito.
+            "Situação": [i.situacao for i in filtrados],
+            "Descrição": [i.descricao for i in filtrados],
+        }
+    )
+    # Altura automática: até ~10 linhas visíveis, depois a tabela rola por dentro.
+    st.dataframe(tabela, hide_index=True)

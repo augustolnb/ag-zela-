@@ -93,20 +93,35 @@ def listar_confirmacoes_do_dia(
         """,
         (idoso_id, dia.isoformat()),
     ).fetchall()
-    return [
-        ConfirmacaoMedicacao(
-            medicamento_id=linha["medicamento_id"],
-            horario_previsto=datetime.fromisoformat(linha["horario_previsto"]),
-            horario_confirmado=(
-                datetime.fromisoformat(linha["horario_confirmado"])
-                if linha["horario_confirmado"]
-                else None
-            ),
-            status=StatusConfirmacao(linha["status"]),
-            canal=CanalConfirmacao(linha["canal"]),
-        )
-        for linha in linhas
-    ]
+    return [_linha_para_confirmacao(linha) for linha in linhas]
+
+
+def _linha_para_confirmacao(linha: sqlite3.Row) -> ConfirmacaoMedicacao:
+    return ConfirmacaoMedicacao(
+        medicamento_id=linha["medicamento_id"],
+        horario_previsto=datetime.fromisoformat(linha["horario_previsto"]),
+        horario_confirmado=(
+            datetime.fromisoformat(linha["horario_confirmado"])
+            if linha["horario_confirmado"]
+            else None
+        ),
+        status=StatusConfirmacao(linha["status"]),
+        canal=CanalConfirmacao(linha["canal"]),
+    )
+
+
+def listar_confirmacoes(conn: sqlite3.Connection, idoso_id: str) -> list[ConfirmacaoMedicacao]:
+    """Todas as doses registradas do idoso, para o histórico do painel."""
+    linhas = conn.execute(
+        """
+        SELECT cm.* FROM confirmacao_medicacao cm
+        JOIN medicamento m ON m.id = cm.medicamento_id
+        WHERE m.idoso_id = ?
+        ORDER BY cm.horario_previsto
+        """,
+        (idoso_id,),
+    ).fetchall()
+    return [_linha_para_confirmacao(linha) for linha in linhas]
 
 
 def aplicar_lembretes_pendentes(
@@ -181,6 +196,16 @@ def listar_compromissos(conn: sqlite3.Connection, idoso_id: str) -> list[Comprom
         (idoso_id,),
     ).fetchall()
     return [_linha_para_compromisso(linha) for linha in linhas]
+
+
+def listar_compromissos_com_removidos(
+    conn: sqlite3.Connection, idoso_id: str
+) -> list[tuple[Compromisso, bool]]:
+    """Todos os compromissos, inclusive os removidos (para o histórico), com a marca de removido."""
+    linhas = conn.execute(
+        "SELECT * FROM compromisso WHERE idoso_id = ? ORDER BY data_hora", (idoso_id,)
+    ).fetchall()
+    return [(_linha_para_compromisso(linha), bool(linha["removido"])) for linha in linhas]
 
 
 def remover_compromisso(conn: sqlite3.Connection, compromisso_id: str, idoso_id: str) -> None:

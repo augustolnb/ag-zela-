@@ -29,7 +29,7 @@ Construído em fases, cada uma testada e mergeada separadamente:
    espelhados na pulseira ✓
 8. **Empacotamento**: relatório, documentação e vídeo pitch (em andamento)
 
-Suíte automatizada: 508 testes (`pytest -q`).
+Suíte automatizada: 537 testes (`pytest -q`).
 
 O design completo está em
 `docs/superpowers/specs/2026-09-10-cuida-mais-agente-idoso-design.md`. O
@@ -696,15 +696,46 @@ O painel da família mostra o status atual, a medicação do dia, os últimos
 alertas e um gráfico de presença, além de formulários para cadastrar ou
 editar medicamentos e compromissos.
 
-1. Defina uma senha de acesso (obrigatória — o painel recusa subir sem ela):
+O interruptor **Modo noturno**, no topo (vale também na tela de login),
+alterna entre o tema claro (diurno) e o escuro (noturno): fundo azul
+escuro, letras brancas e detalhes em amarelo. A escolha fica na URL
+(`?noturno=true`), então sobrevive a um recarregamento e pode ficar nos
+favoritos.
+
+A aba **Histórico** reúne numa tabela só, do mais recente ao mais antigo:
+os avisos e alertas enviados, os compromissos (agendados, realizados e
+removidos) e as doses de remédio registradas (tomado, tomado com atraso,
+não confirmado). Os filtros combinam:
+
+- **Dia:** mostra só o que aconteceu naquela data;
+- **Busca:** texto livre na descrição, sem diferenciar maiúsculas nem
+  acentos (ex.: `dipirona`, `cardiologista`, `ESP32`);
+- **Tipos:** avisos, compromissos e/ou medicação.
+
+As doses só aparecem quando o idoso confirma no WhatsApp; uma dose
+esquecida, sem nenhuma resposta, não gera
+registro.
+
+**Login com usuário e senha.** Antes de entrar, a página mostra só o
+formulário de login; depois, o formulário some e aparece o painel, com
+"Conectado como …" e o botão **Sair**. Os usuários ficam no banco, com a
+senha guardada como hash scrypt com sal (nunca em texto). Uma tentativa
+errada mostra sempre "Usuário ou senha incorretos." (sem revelar se o
+usuário existe) e espera 1 s antes de responder.
+
+1. Crie o primeiro usuário (a senha é pedida duas vezes, sem aparecer na
+   tela; mínimo de 8 caracteres):
    ```bash
-   export STREAMLIT_SENHA=sua-senha-aqui
+   python -m zela.streamlit_app.usuarios criar familia
    ```
+   Outros comandos: `listar`, `senha <usuário>` (redefine) e
+   `remover <usuário>`. Em produção, rode dentro do container do painel:
+   `docker compose exec streamlit python -m zela.streamlit_app.usuarios criar familia`.
 2. Rode o painel (com o backend já rodando, para os dados existirem):
    ```bash
    streamlit run zela/streamlit_app/app.py
    ```
-3. Abra `http://localhost:8501` no navegador e digite a senha.
+3. Abra `http://localhost:8501` no navegador e entre com usuário e senha.
 
 **Nota sobre o banco de dados:** o painel usa a variável de ambiente
 `ZELA_DB_PATH` para achar o `zela.db` (mesmo padrão usado pelo backend
@@ -713,9 +744,9 @@ dois processos, defina a mesma variável para o outro, e rode ambos a
 partir do mesmo diretório de trabalho. Caso contrário, os dois podem
 apontar para arquivos diferentes sem nenhum aviso.
 
-**Nota:** a senha é única e compartilhada (não é um sistema de contas por
-usuário) — suficiente para o MVP, mas não deve ser considerado um controle
-de acesso robusto se o painel for exposto além da rede local/doméstica.
+**Nota:** a sessão vale enquanto a aba do navegador estiver aberta; ao
+recarregar a página, é preciso entrar de novo. Não há recuperação de senha
+por e-mail: quem tem acesso ao servidor redefine com o comando `senha`.
 
 ## Aviso à família após relato de sintomas
 

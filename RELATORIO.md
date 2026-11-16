@@ -186,8 +186,9 @@ a integração real com o WhatsApp é feita pelo WAHA.
 
 O painel (`zela/streamlit_app/`) mostra status atual, medicação do dia,
 últimos alertas, atividade do dia (presença do ESP32 e passos da pulseira)
-e formulários de medicamentos e compromissos. O acesso é protegido por
-senha (`STREAMLIT_SENHA`). As capturas abaixo são da produção em 11/11/2026,
+e formulários de medicamentos e compromissos, além de uma aba de histórico
+com filtros por dia, busca e tipo, e um modo noturno. O acesso é feito por
+login com usuário e senha (senhas guardadas como hash scrypt). As capturas abaixo são da produção em 11/11/2026,
 com o ESP32 desligado, o que o próprio painel aponta.
 
 ![Painel: status atual](docs/relatorio/imagens/painel_status.png)
@@ -266,7 +267,7 @@ autor:
 
 ## 5. Resultados obtidos
 
-- **508 testes automatizados** passando (`pytest -q`), cobrindo modelos,
+- **537 testes automatizados** passando (`pytest -q`), cobrindo modelos,
   domínio, armazenamento, API, scheduler, embeddings, agentes ADK e painel.
 - **Em produção desde 02/11/2026**, com mensagens reais de WhatsApp, a
   pulseira enviando passos e sono e o ESP32 enviando presença.
@@ -339,7 +340,7 @@ autor:
 git clone https://github.com/augustolnb/ag-zela-.git && cd ag-zela-
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev,deepseek]"
-pytest -q                                   # 508 testes
+pytest -q                                   # 537 testes
 uvicorn zela.api.main:app --reload          # backend: webhook, API e scheduler
 streamlit run zela/streamlit_app/app.py     # painel da família
 ```
