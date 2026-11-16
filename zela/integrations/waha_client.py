@@ -2,6 +2,8 @@ import logging
 
 import httpx
 
+from zela.domain.enquete_remedio import chave_da_mensagem
+
 logger = logging.getLogger(__name__)
 
 
@@ -24,6 +26,21 @@ class WahaClient:
         )
         resposta.raise_for_status()
         return resposta.json()
+
+    def enviar_enquete(self, telefone: str, pergunta: str, opcoes: list[str]) -> str:
+        """Envia uma enquete de escolha única e devolve a chave da mensagem."""
+        resposta = httpx.post(
+            f"{self.base_url}/api/sendPoll",
+            json={
+                "chatId": self.resolver_chat_id(telefone),
+                "poll": {"name": pergunta, "options": opcoes, "multipleAnswers": False},
+                "session": self.session,
+            },
+            headers=self._headers(),
+            timeout=30,
+        )
+        resposta.raise_for_status()
+        return chave_da_mensagem(resposta.json().get("id", ""))
 
     def enviar_audio(self, telefone: str, audio_base64: str, mimetype: str = "audio/ogg") -> dict:
         resposta = httpx.post(
