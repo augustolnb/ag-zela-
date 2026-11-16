@@ -85,8 +85,124 @@ _ICONES = {
 }
 
 
-def aplicar_estilo() -> None:
+# Modo noturno: fundo azul escuro, letras brancas e detalhes em amarelo.
+# O tema do Streamlit (.streamlit/config.toml) é fixo por servidor; a troca
+# por sessão é feita sobrescrevendo as cores com CSS.
+AZUL_NOTURNO = "#0B1F3A"
+AZUL_CARTAO = "#13294B"
+BRANCO = "#FFFFFF"
+AMARELO_DESTAQUE = "#FFD60A"
+_CINZA_CLARO = "#CBD5E1"
+
+# Cartões e a caixa de abas recebem key="cartao-..." (classe st-key-cartao-...)
+# para o CSS achá-los: o contêiner com borda não tem um data-testid próprio.
+_CSS_NOTURNO = f"""
+<style>
+[data-testid="stApp"], [data-testid="stHeader"] {{ background-color: {AZUL_NOTURNO}; }}
+[data-testid="stApp"], [data-testid="stApp"] p, [data-testid="stApp"] span,
+[data-testid="stApp"] label, [data-testid="stApp"] li,
+[data-testid="stApp"] h1, [data-testid="stApp"] h2, [data-testid="stApp"] h3,
+[data-testid="stMetricValue"], [data-testid="stMetricLabel"] p {{ color: {BRANCO}; }}
+[data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p {{ color: {_CINZA_CLARO}; }}
+[data-testid="stApp"] a {{ color: {AMARELO_DESTAQUE}; }}
+hr {{ border-color: {AMARELO_DESTAQUE} !important; opacity: 0.5; }}
+
+[class*="st-key-cartao"], [data-testid="stForm"] {{
+    background-color: {AZUL_CARTAO};
+    border: 1px solid {AMARELO_DESTAQUE} !important;
+}}
+.zela-icone {{ color: {AMARELO_DESTAQUE}; }}
+
+/* Campos: o fundo de todas as camadas internas fica escuro, borda amarela */
+[data-testid="stTextInputRootElement"], [data-testid="stTextInputRootElement"] *,
+[data-testid="stNumberInputContainer"], [data-testid="stNumberInputContainer"] *,
+[data-testid="stDateInputField"], [data-testid="stDateInputField"] *,
+[data-testid="stTimeInput"] [data-baseweb="select"] *,
+[data-testid="stSelectbox"] [data-baseweb="select"] *,
+[data-testid="stMultiSelect"] [data-baseweb="select"] *,
+[data-testid="stTextAreaRootElement"], [data-testid="stTextAreaRootElement"] * {{
+    background-color: {AZUL_NOTURNO} !important;
+    color: {BRANCO} !important;
+    -webkit-text-fill-color: {BRANCO};
+}}
+[data-testid="stTextInputRootElement"], [data-testid="stNumberInputContainer"],
+[data-testid="stDateInputField"], [data-testid="stTextAreaRootElement"],
+[data-testid="stSelectbox"] [data-baseweb="select"] > div,
+[data-testid="stTimeInput"] [data-baseweb="select"] > div,
+[data-testid="stMultiSelect"] [data-baseweb="select"] > div {{
+    border: 1px solid {AMARELO_DESTAQUE} !important;
+}}
+[data-testid="stApp"] input::placeholder, [data-testid="stApp"] textarea::placeholder {{
+    color: {_CINZA_CLARO} !important;
+    -webkit-text-fill-color: {_CINZA_CLARO};
+}}
+/* Etiquetas da seleção múltipla */
+[data-testid="stMultiSelectTagsContainer"] [role="group"] > *,
+[data-testid="stMultiSelectTagsContainer"] [role="group"] > * * {{
+    background-color: {AMARELO_DESTAQUE} !important;
+    color: {AZUL_NOTURNO} !important;
+    -webkit-text-fill-color: {AZUL_NOTURNO};
+}}
+[data-baseweb="popover"] ul, [data-baseweb="popover"] li, [data-baseweb="calendar"],
+[data-baseweb="calendar"] * {{
+    background-color: {AZUL_CARTAO} !important;
+    color: {BRANCO} !important;
+}}
+
+/* Interruptor ligado */
+[data-testid="stCheckbox"] label:has(input:checked) > div:not([data-testid="stWidgetLabel"]),
+[data-testid="stCheckbox"] label:has([aria-checked="true"]) > div:not([data-testid="stWidgetLabel"]) {{
+    background-color: {AMARELO_DESTAQUE} !important;
+}}
+[data-testid="stMultiSelect"] svg, [data-testid="stSelectbox"] svg, [data-testid="stDateInput"] svg {{
+    color: {BRANCO} !important;
+}}
+
+/* Caixas de seleção (simples, múltipla e horário) */
+[data-testid="stSelectbox"] div[role="group"], [data-testid="stMultiSelect"] div[role="group"],
+[data-testid="stTimeInput"] div[role="group"] {{
+    background-color: {AZUL_NOTURNO} !important;
+    border: 1px solid {AMARELO_DESTAQUE} !important;
+    color: {BRANCO} !important;
+}}
+[data-testid="stSelectbox"] div[role="group"] *, [data-testid="stTimeInput"] div[role="group"] * {{
+    color: {BRANCO} !important;
+    -webkit-text-fill-color: {BRANCO};
+}}
+
+/* Botões e abas */
+[data-testid="stApp"] button[kind], [data-testid="stFormSubmitButton"] button {{
+    background-color: {AMARELO_DESTAQUE} !important;
+    border-color: {AMARELO_DESTAQUE} !important;
+}}
+[data-testid="stApp"] button[kind] p, [data-testid="stApp"] button[kind] span,
+[data-testid="stFormSubmitButton"] button p {{
+    color: {AZUL_NOTURNO} !important;
+    font-weight: 700;
+}}
+[data-testid="stTab"] p {{ color: {BRANCO} !important; }}
+[data-testid="stTab"][aria-selected="true"] p {{ color: {AMARELO_DESTAQUE} !important; }}
+[data-testid="stTab"] .react-aria-SelectionIndicator {{ background-color: {AMARELO_DESTAQUE} !important; }}
+
+/* Selos de nível: o crítico se destaca mais */
+.zela-badge-info {{ background: transparent; color: {BRANCO}; border: 1px solid {BRANCO}; }}
+.zela-badge-atencao {{ background: transparent; color: {AMARELO_DESTAQUE}; border: 1px solid {AMARELO_DESTAQUE}; }}
+.zela-badge-critico {{ background: {AMARELO_DESTAQUE}; color: {AZUL_NOTURNO} !important; }}
+
+/* Gráfico e tabela desenham em canvas com fundo claro: inverte as cores e
+   mescla sobre o azul do cartão, para o preto invertido virar azul escuro. */
+[data-testid="stVegaLiteChart"], [data-testid="stDataFrame"] {{
+    filter: invert(1) hue-rotate(180deg);
+    mix-blend-mode: lighten;
+}}
+</style>
+"""
+
+
+def aplicar_estilo(noturno: bool = False) -> None:
     st.markdown(_CSS, unsafe_allow_html=True)
+    if noturno:
+        st.markdown(_CSS_NOTURNO, unsafe_allow_html=True)
 
 
 def icone(nome: str) -> str:

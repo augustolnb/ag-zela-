@@ -184,8 +184,9 @@ a integração real com o WhatsApp é feita pelo WAHA.
 
 O painel (`zela/streamlit_app/`) mostra status atual, medicação do dia,
 últimos alertas, atividade do dia (presença do ESP32 e passos da pulseira)
-e formulários de medicamentos e compromissos. O acesso é protegido por
-senha (`STREAMLIT_SENHA`). As capturas abaixo são da produção em 11/11/2026,
+e formulários de medicamentos e compromissos, além de uma aba de histórico
+com filtros por dia, busca e tipo, e um modo noturno. O acesso é feito por
+login com usuário e senha (senhas guardadas como hash scrypt). As capturas abaixo são da produção em 11/11/2026,
 com o ESP32 desligado, o que o próprio painel aponta.
 
 ![Painel: status atual](docs/relatorio/imagens/painel_status.png)
