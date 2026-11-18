@@ -279,8 +279,8 @@ Fitness espelha na pulseira.
 
 ### RAG sobre bulas
 
-As bulas de dipirona, losartana, metformina, sinvastatina e
-dapagliflozina ficam em `zela/conhecimento/bulas/`, com laboratório,
+As bulas de dipirona, losartana, metformina, sinvastatina, dapagliflozina,
+Histamin, omeprazol, ácido acetilsalicílico e anlodipino ficam em `zela/conhecimento/bulas/`, com laboratório,
 registro e fonte. O backend sincroniza o índice do ChromaDB e só gera
 embeddings do que mudou. Para adicionar uma bula, converta o PDF da bula do
 paciente com `pdftotext -layout` e `scripts/importar_bula.py`.
