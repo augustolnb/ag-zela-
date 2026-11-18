@@ -13,7 +13,12 @@ from zela.storage.rotina import (
     listar_medicamentos,
 )
 from zela.streamlit_app.estilo import badge_nivel
-from zela.streamlit_app.graficos import grafico_presenca, montar_faixas_presenca
+from zela.streamlit_app.graficos import (
+    ALTURA_GRAFICO,
+    grafico_presenca,
+    legenda_presenca,
+    montar_faixas_presenca,
+)
 from zela.streamlit_app.historico import TIPOS, filtrar_historico, montar_historico
 
 
@@ -66,7 +71,10 @@ def renderizar_grafico(conn, idoso_id: str) -> None:
         # Faixa de estados (Gantt) em vez de linha 0/1: não polui com muitas
         # leituras e deixa espaço para o resumo da pulseira no card.
         noturno = bool(st.session_state.get("noturno", False))
-        st.altair_chart(grafico_presenca(faixas, noturno=noturno), width="stretch")
+        st.altair_chart(
+            grafico_presenca(faixas, noturno=noturno), width="stretch", height=ALTURA_GRAFICO
+        )
+        st.markdown(legenda_presenca(noturno), unsafe_allow_html=True)
     else:
         st.write("Nenhuma leitura de presença hoje ainda.")
 

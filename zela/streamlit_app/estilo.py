@@ -189,9 +189,10 @@ hr {{ border-color: {AMARELO_DESTAQUE} !important; opacity: 0.5; }}
 .zela-badge-atencao {{ background: transparent; color: {AMARELO_DESTAQUE}; border: 1px solid {AMARELO_DESTAQUE}; }}
 .zela-badge-critico {{ background: {AMARELO_DESTAQUE}; color: {AZUL_NOTURNO} !important; }}
 
-/* Gráfico e tabela desenham em canvas com fundo claro: inverte as cores e
-   mescla sobre o azul do cartão, para o preto invertido virar azul escuro. */
-[data-testid="stVegaLiteChart"], [data-testid="stDataFrame"] {{
+/* A tabela desenha em canvas com fundo claro: inverte as cores e mescla
+   sobre o azul do cartão, para o preto invertido virar azul escuro. A faixa
+   de presença fica de fora: ela já desenha com as cores noturnas. */
+[data-testid="stDataFrame"] {{
     filter: invert(1) hue-rotate(180deg);
     mix-blend-mode: lighten;
 }}
