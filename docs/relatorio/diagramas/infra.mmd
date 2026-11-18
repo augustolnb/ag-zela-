@@ -20,6 +20,7 @@ flowchart LR
     DS["DeepSeek API<br/>(LLM)"]:::ext
     GE["Gemini API<br/>(embeddings)"]:::ext
     GC["Google Calendar API"]:::ext
+    GM["Gmail API"]:::ext
   end
   FAM["Família:<br/>WhatsApp e navegador"]:::casa
   BAND <-->|Bluetooth| CEL
@@ -29,5 +30,6 @@ flowchart LR
   WA <--> WI
   WA <--> FAM
   FAM -->|painel| NG
-  BE --> DS & GE & GC
+  BE --> DS & GE & GC & GM
   GC -->|"lembrete"| CEL
+  GM -->|"aviso na pulseira"| CEL
