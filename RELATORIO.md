@@ -44,7 +44,7 @@ mas não resolve o problema. Três riscos orientaram o projeto:
 - **Escada de escalonamento determinística**, nunca decidida por um LLM:
   pergunta ao idoso, avisa a família e, em último caso, simula o contato com
   um serviço de emergência.
-- **RAG em bulas:** o bot responde dúvidas sobre 5 medicamentos citando a
+- **RAG em bulas:** o bot responde dúvidas sobre 9 medicamentos citando a
   bula e nunca orienta mudança de dose.
 - **Painel Streamlit** para a família: status, medicação, alertas,
   atividade e cadastros.
@@ -268,7 +268,7 @@ autor:
 
 ## 5. Resultados obtidos
 
-- **537 testes automatizados** passando (`pytest -q`), cobrindo modelos,
+- **546 testes automatizados** passando (`pytest -q`), cobrindo modelos,
   domínio, armazenamento, API, scheduler, embeddings, agentes ADK e painel.
 - **Em produção** em uma VPS, com mensagens reais de WhatsApp, a pulseira
   enviando passos e sono e o ESP32 enviando presença.
@@ -347,7 +347,7 @@ autor:
 git clone https://github.com/augustolnb/ag-zela-.git && cd ag-zela-
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev,deepseek]"
-pytest -q                                   # 537 testes
+pytest -q                                   # 546 testes
 uvicorn zela.api.main:app --reload          # backend: webhook, API e scheduler
 streamlit run zela/streamlit_app/app.py     # painel da família
 ```

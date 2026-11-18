@@ -66,3 +66,20 @@ def test_grafico_usa_cores_do_tema_escolhido():
 
     assert claro["encoding"]["color"]["scale"]["range"][0] == "#2563EB"
     assert noturno["encoding"]["color"]["scale"]["range"][0] == "#FFD60A"
+
+
+def test_grafico_nao_desenha_legenda_propria():
+    # A legenda vai em HTML abaixo do gráfico: no cartão estreito, a do Vega era cortada.
+    faixas = montar_faixas_presenca([_presenca(1, 8)], AGORA)
+
+    assert grafico_presenca(faixas).to_dict()["encoding"]["color"]["legend"] is None
+
+
+def test_legenda_em_html_usa_as_cores_do_tema():
+    from zela.streamlit_app.graficos import legenda_presenca
+
+    claro, noturno = legenda_presenca(noturno=False), legenda_presenca(noturno=True)
+
+    assert COM_MOVIMENTO in claro and SEM_MOVIMENTO in claro
+    assert "#2563EB" in claro and "#E2E8F0" in claro
+    assert "#FFD60A" in noturno and "#24406B" in noturno

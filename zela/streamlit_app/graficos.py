@@ -17,6 +17,9 @@ _CORES = {
 }
 
 ALTURA_FAIXA = 44
+# Altura do elemento no Streamlit: a faixa e o eixo das horas. Sem ela, o
+# Streamlit usa só a altura da faixa e corta o eixo.
+ALTURA_GRAFICO = ALTURA_FAIXA + 36
 
 
 def montar_faixas_presenca(leituras: list[LeituraSensor], agora: datetime) -> list[dict]:
@@ -69,8 +72,9 @@ def grafico_presenca(faixas: list[dict], noturno: bool = False) -> alt.Chart:
                 "estado:N", title=None,
                 scale=alt.Scale(domain=[COM_MOVIMENTO, SEM_MOVIMENTO],
                                 range=[cores["com"], cores["sem"]]),
-                legend=alt.Legend(orient="bottom", labelColor=cores["texto"],
-                                  symbolType="circle"),
+                # Legenda em HTML (legenda_presenca): a do Vega não quebra
+                # linha e era cortada no cartão estreito.
+                legend=None,
             ),
             tooltip=[
                 alt.Tooltip("estado:N", title="Estado"),
@@ -81,3 +85,15 @@ def grafico_presenca(faixas: list[dict], noturno: bool = False) -> alt.Chart:
         )
         .configure(background="transparent", view={"stroke": "transparent"})
     )
+
+
+def legenda_presenca(noturno: bool = False) -> str:
+    """Legenda da faixa em HTML, que quebra linha quando o cartão é estreito."""
+    cores = _CORES[noturno]
+    itens = (
+        f'<span style="display:inline-flex;align-items:center;margin-right:1rem;white-space:nowrap">'
+        f'<span style="width:0.7rem;height:0.7rem;border-radius:999px;background:{cor};'
+        f'margin-right:0.35rem;display:inline-block"></span>{rotulo}</span>'
+        for rotulo, cor in ((COM_MOVIMENTO, cores["com"]), (SEM_MOVIMENTO, cores["sem"]))
+    )
+    return f'<div style="margin-top:-0.75rem;font-size:0.85rem;color:{cores["texto"]};line-height:1.8">{"".join(itens)}</div>'

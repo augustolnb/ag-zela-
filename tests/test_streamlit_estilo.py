@@ -60,3 +60,11 @@ def test_modo_noturno_usa_azul_escuro_branco_e_amarelo():
 def test_modo_diurno_nao_injeta_a_paleta_noturna():
     css = _css_injetado("from zela.streamlit_app.estilo import aplicar_estilo\naplicar_estilo()\n")
     assert "#0B1F3A" not in css
+
+
+def test_modo_noturno_nao_inverte_a_faixa_de_presenca():
+    # A faixa de presença já desenha as cores noturnas; inverter de novo
+    # trocaria o amarelo e o azul por bordô e azul-claro.
+    css = _css_injetado("from zela.streamlit_app.estilo import aplicar_estilo\naplicar_estilo(noturno=True)\n")
+    assert "stVegaLiteChart" not in css
+    assert '[data-testid="stDataFrame"]' in css
