@@ -13,6 +13,7 @@ from zela.storage.rotina import (
     listar_medicamentos,
 )
 from zela.streamlit_app.estilo import badge_nivel
+from zela.streamlit_app.graficos import grafico_presenca, montar_faixas_presenca
 from zela.streamlit_app.historico import TIPOS, filtrar_historico, montar_historico
 
 
@@ -39,7 +40,6 @@ def renderizar_medicacao(conn, idoso_id: str) -> None:
 
 
 MAXIMO_ALERTAS_EXIBIDOS = 10
-ALTURA_GRAFICO_ATIVIDADE = 160
 
 
 def renderizar_alertas(conn, idoso_id: str) -> None:
@@ -61,14 +61,12 @@ def renderizar_grafico(conn, idoso_id: str) -> None:
     inicio_do_dia = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     leituras = listar_leituras_recentes(conn, idoso_id, inicio_do_dia)
 
-    leituras_presenca = [l for l in leituras if l.tipo == TipoLeitura.PRESENCA]
-    if leituras_presenca:
-        dados = pd.DataFrame(
-            {"presença": [l.valor for l in leituras_presenca]},
-            index=[l.timestamp for l in leituras_presenca],
-        )
-        # Baixo o bastante para o resumo da pulseira caber no card sem rolar.
-        st.line_chart(dados, height=ALTURA_GRAFICO_ATIVIDADE)
+    faixas = montar_faixas_presenca(leituras, datetime.now())
+    if faixas:
+        # Faixa de estados (Gantt) em vez de linha 0/1: não polui com muitas
+        # leituras e deixa espaço para o resumo da pulseira no card.
+        noturno = bool(st.session_state.get("noturno", False))
+        st.altair_chart(grafico_presenca(faixas, noturno=noturno), width="stretch")
     else:
         st.write("Nenhuma leitura de presença hoje ainda.")
 
