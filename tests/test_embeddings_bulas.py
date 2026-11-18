@@ -7,9 +7,12 @@ def _bula(texto):
     return Bula(id="teste", nome="Teste", laboratorio="Lab", registro="1", aprovada_em="01/01/2025", fonte="u", texto=texto)
 
 
-def test_catalogo_tem_as_cinco_bulas_com_as_nove_secoes():
+def test_catalogo_tem_as_nove_bulas_com_as_nove_secoes():
     bulas = {b.id: b for b in carregar_bulas(DIRETORIO_BULAS)}
-    assert set(bulas) == {"dipirona", "losartana", "metformina", "sinvastatina", "dapagliflozina"}
+    assert set(bulas) == {
+        "dipirona", "losartana", "metformina", "sinvastatina", "dapagliflozina",
+        "histamin", "omeprazol", "acido_acetilsalicilico", "anlodipino",
+    }
     for bula in bulas.values():
         assert bula.texto.count("## ") == 9
         assert bula.laboratorio and bula.aprovada_em and bula.fonte.startswith("https://")

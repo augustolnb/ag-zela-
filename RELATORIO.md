@@ -151,9 +151,10 @@ Os embeddings vêm do Gemini (`zela/embeddings/client.py`) e têm dois usos:
    Em produção, essa classificação gerou alarmes falsos. Hoje ela só
    registra no painel. A detecção de sintomas que avisa a família é
    determinística (seção 2.2).
-2. **RAG em bulas:** 5 bulas (dipirona, losartana, metformina, sinvastatina
-   e dapagliflozina) em `zela/conhecimento/bulas/`, divididas em trechos de
-   até 1.500 caracteres e indexadas no ChromaDB (97 trechos em produção). A
+2. **RAG em bulas:** 9 bulas (dipirona, losartana, metformina, sinvastatina,
+   dapagliflozina, Histamin, omeprazol, ácido acetilsalicílico e anlodipino)
+   em `zela/conhecimento/bulas/`, divididas em trechos de até 1.500
+   caracteres e indexadas no ChromaDB (167 trechos). A
    reindexação é incremental, por hash, e roda em segundo plano. O agente de
    Comunicação responde só com base nos trechos encontrados, cita a bula e
    nunca orienta mudança de dose.
@@ -275,7 +276,7 @@ autor:
   familiar no mesmo segundo. "Não consigo mexer o braço" foi classificada
   como possível AVC e, sem resposta, o familiar foi avisado 64 s depois,
   dentro da tolerância do job de 10 s.
-- **RAG:** as 5 bulas estão indexadas em produção. Perguntado sobre o
+- **RAG:** as 9 bulas estão indexadas em produção. Perguntado sobre o
   paracetamol, que não está na base, o bot não encontrou a bula e não
   inventou a resposta.
 - **Monitoramento:** com o ESP32 desligado e o celular sem sincronizar por
