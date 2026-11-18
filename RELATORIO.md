@@ -188,7 +188,7 @@ O painel (`zela/streamlit_app/`) mostra status atual, medicação do dia,
 últimos alertas, atividade do dia (presença do ESP32 e passos da pulseira)
 e formulários de medicamentos e compromissos, além de uma aba de histórico
 com filtros por dia, busca e tipo, e um modo noturno. O acesso é feito por
-login com usuário e senha (senhas guardadas como hash scrypt). As capturas abaixo são da produção em 11/11/2026,
+login com usuário e senha (senhas guardadas como hash scrypt). As capturas abaixo são da produção,
 com o ESP32 desligado, o que o próprio painel aponta.
 
 ![Painel: status atual](docs/relatorio/imagens/painel_status.png)
@@ -269,26 +269,32 @@ autor:
 
 - **537 testes automatizados** passando (`pytest -q`), cobrindo modelos,
   domínio, armazenamento, API, scheduler, embeddings, agentes ADK e painel.
-- **Em produção desde 02/11/2026**, com mensagens reais de WhatsApp, a
-  pulseira enviando passos e sono e o ESP32 enviando presença.
-- **Aviso à família validado em produção (02/11):** "preciso de ajuda"
-  avisou o familiar no mesmo segundo (10:33:48). "Não consigo mexer o braço"
-  foi classificada como possível AVC às 22:05:58 e, sem resposta, o familiar
-  foi avisado às 22:07:02, 64 s depois, dentro da tolerância do job de 10 s.
+- **Em produção** em uma VPS, com mensagens reais de WhatsApp, a pulseira
+  enviando passos e sono e o ESP32 enviando presença.
+- **Aviso à família validado em produção:** "preciso de ajuda" avisou o
+  familiar no mesmo segundo. "Não consigo mexer o braço" foi classificada
+  como possível AVC e, sem resposta, o familiar foi avisado 64 s depois,
+  dentro da tolerância do job de 10 s.
 - **RAG:** as 5 bulas estão indexadas em produção. Perguntado sobre o
   paracetamol, que não está na base, o bot não encontrou a bula e não
   inventou a resposta.
 - **Monitoramento:** com o ESP32 desligado e o celular sem sincronizar por
   mais de 6 h, a escada chegou à simulação de emergência, como as regras
-  determinam. Com o ESP32 religado em 15/11, uma queda real de 28 min
-  (14:57 a 15:24) gerou um único aviso à família, e nenhum alerta de
-  pulseira ou de sono falso apareceu desde as correções de 04/11 e 11/11.
-- **Google Agenda validado em produção (15/11):** os compromissos
+  determinam. Com o ESP32 religado, uma queda real de 28 min gerou um único
+  aviso à família, e nenhum alerta falso de pulseira ou de sono apareceu
+  depois das correções.
+- **Google Agenda validado em produção:** os compromissos
   cadastrados no painel apareceram na agenda da conta Google dedicada em
   até 5 min, e o lembrete de cadastro e o de 1 h chegaram pelo WhatsApp.
-- **Gmail na pulseira (15/11):** as duas formas de envio da API do Gmail
+- **Gmail na pulseira:** as duas formas de envio da API do Gmail
   (`insert` e `send`) fizeram a Band 10 Pro vibrar com o assunto do e-mail.
   O Zela+ usa `insert`, que coloca o aviso direto na caixa de entrada.
+- **Enquete do remédio:** três remédios receberam a enquete junto com a
+  notificação na pulseira; dois votos "✅ Tomei" viraram doses confirmadas em
+  menos de um minuto, sem a IA, e um "⏰ Ainda não" agendou o reenvio para
+  30 min depois.
+- **Painel:** login com usuário e senha, aba Histórico com filtros
+  e modo noturno em produção.
 
 | Fase | Entregável | Status |
 |---|---|---|
@@ -298,7 +304,7 @@ autor:
 | Embeddings | Similaridade e RAG em bulas | Completo |
 | Painel | Streamlit da família | Completo |
 | Workflow | n8n (substitui o Langflow) | Completo |
-| Produção | VPS, aviso em 60 s, Google Agenda na pulseira | Completo |
+| Produção | VPS, aviso em 60 s, Google Agenda e Gmail na pulseira, lembrete com enquete | Completo |
 | Empacotamento | Relatório, README e vídeo pitch | Em andamento |
 
 ---
@@ -321,7 +327,7 @@ autor:
 7. **Sem aviso de retorno:** a família recebe "o ESP32 da casa parou", mas
    não recebe um aviso quando ele volta. Como as regras rodam a cada 15
    min, o aviso pode chegar até cerca de 30 min depois da queda, às vezes
-   quando o sinal já voltou (em 15/11, chegou 2 s depois do retorno).
+   quando o sinal já voltou.
 8. **Botões no WhatsApp:** só existem na API oficial da Meta; no WAHA eles
    não funcionam. O lembrete de remédio usa uma enquete no lugar, e um voto
    que o WAHA não consiga ler (`poll.vote.failed`) só aparece no log; o

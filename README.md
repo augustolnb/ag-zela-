@@ -1,936 +1,343 @@
 # Zela+ — Agente de IA de Apoio ao Idoso que Mora Sozinho
 
-Trabalho final de pós-graduação em Agentes de IA. Zela+ é um sistema
-multiagente (Google ADK) que ajuda idosos que moram sozinhos a não esquecer
-medicamentos e compromissos, monitora sinais de risco com uma pulseira
-Xiaomi Smart Band 10 Pro e um ESP32 com 2 sensores de presença, e mantém a
-família informada. Um relato de sintoma sem resposta avisa todos os
-familiares em 60 segundos, e a escada de escalonamento pode chegar a
-simular o contato com um serviço de emergência. Nenhuma dessas decisões
-depende de um LLM.
+Trabalho final da pós-graduação em Agentes de IA.
 
-O sistema roda em produção em uma VPS (Docker Compose, nginx e HTTPS). A
-conversa usa o **DeepSeek** (via LiteLLM), e os embeddings da busca
-semântica usam o **Gemini** (`gemini-embedding-2`).
+## O problema
 
-## Status do projeto
+Idosos que moram sozinhos esquecem remédios e compromissos, e uma queda ou
+um mal-estar pode passar horas sem que ninguém perceba. A família, longe,
+não tem visibilidade do dia a dia, e ligar toda hora cansa os dois lados.
 
-Construído em fases, cada uma testada e mergeada separadamente:
+## A solução
 
-1. **Fundação**: modelos Pydantic, lógica de domínio dos 5 agentes e
-   orquestração ADK ✓
-2. **Comunicação real**: WhatsApp via WAHA ✓ (áudio fora do escopo)
-3. **Sensores reais**: Band 10 Pro via Health Connect e ESP32 com 2 PIR
-   SR602, ambos validados em produção ✓
-4. **Embeddings**: classificação por similaridade e RAG em 5 bulas ✓
-5. **Painel Streamlit** para a família ✓
-6. **Fluxo visual em n8n**, no lugar do Langflow citado no enunciado ✓
-7. **Produção**: VPS, aviso à família em 60 s, lembretes no Google Agenda
-   espelhados na pulseira ✓
-8. **Empacotamento**: relatório, documentação e vídeo pitch (em andamento)
+O Zela+ é um sistema multiagente (Google ADK) que conversa com o idoso pelo
+WhatsApp, acompanha a rotina e os sinais da casa e mantém a família
+informada:
 
-Suíte automatizada: 537 testes (`pytest -q`).
+- **Lembretes de remédio** como enquete no WhatsApp ("✅ Tomei" / "⏰ Ainda
+  não"), respondida com um toque, e também como notificação na pulseira.
+- **Lembretes de compromissos** pelo WhatsApp e pelo Google Agenda, que
+  aparece na pulseira.
+- **Aviso à família em 60 segundos** quando o idoso relata um sintoma grave
+  e não responde, e na hora quando pede ajuda.
+- **Monitoramento** com uma pulseira Xiaomi Smart Band 10 Pro (passos, sono
+  e batimentos) e um ESP32 com 2 sensores de presença (sala e quarto), com
+  uma escada de escalonamento que pode chegar a simular o contato com um
+  serviço de emergência.
+- **Respostas sobre medicamentos** com RAG sobre bulas.
+- **Painel Streamlit** para a família, com login, histórico e modo noturno.
 
-O design completo está em
-`docs/superpowers/specs/2026-09-10-cuida-mais-agente-idoso-design.md`. O
-relatório final do trabalho está em `RELATORIO.md` (também disponível em
-`RELATORIO.pdf`, gerado via `scripts/gerar_relatorio_pdf.py`), e o roteiro
-do vídeo pitch em `docs/pitch/roteiro.md`.
+Nenhuma decisão de emergência depende de um LLM: o classificador de
+sintomas, as regras de monitoramento e a escada de escalonamento são
+código determinístico e testado. A IA conversa, consulta e explica.
+
+O sistema roda em produção em uma VPS, com Docker Compose e HTTPS.
+
+## Arquitetura
+
+![Arquitetura multiagente do Zela+](docs/relatorio/imagens/arquitetura_zela.png)
+
+| Agente | Responsabilidade |
+|---|---|
+| Orquestrador | Direciona cada mensagem ao agente especializado |
+| Rotina e Medicação | Lembretes, confirmação de doses e compromissos |
+| Monitoramento | Relata o status calculado pelas regras (normal, aviso, atenção, risco) |
+| Comunicação | Conversa com o idoso e a família e consulta as bulas (RAG) |
+| Emergência | Relata alertas e ocorrências registradas |
+
+![Fluxo de uma mensagem do WhatsApp](docs/relatorio/imagens/fluxo_mensagem_whatsapp.png)
+
+![Infraestrutura e implantação](docs/relatorio/imagens/infraestrutura_vps.png)
+
+## Tecnologias
+
+| Área | Tecnologia |
+|---|---|
+| Agentes e orquestração | Google ADK |
+| LLM da conversa | DeepSeek (via LiteLLM) ou Gemini |
+| Validação de dados | Pydantic |
+| Embeddings e RAG | Gemini (`gemini-embedding-2`) e ChromaDB |
+| API e agendamento | FastAPI e APScheduler |
+| Banco de dados | SQLite |
+| WhatsApp | WAHA (WhatsApp HTTP API, self-hosted) |
+| Painel | Streamlit |
+| Fluxo visual | n8n (no lugar do Langflow do enunciado) |
+| Sensores | ESP32 com 2 PIR SR602; Smart Band 10 Pro via Health Connect |
+| Notificações na pulseira | Google Agenda e Gmail |
+| Implantação | Docker Compose, nginx e Let's Encrypt |
+| Testes | pytest |
+
+## Estrutura do repositório
+
+```
+zela/
+  models/          contratos de dados Pydantic
+  domain/          regras de negócio puras (rotina, monitoramento, sintomas, escalonamento)
+  agents/          agentes ADK (orquestrador e 4 especializados)
+  storage/         repositórios SQLite
+  embeddings/      cliente de embeddings, classificador por similaridade e vector store
+  conhecimento/    bulas usadas pelo RAG
+  integrations/    clientes do WAHA, Google Agenda e Gmail
+  api/             FastAPI: webhook do WhatsApp, ingestão de sensores, scheduler
+  streamlit_app/   painel da família
+firmware/          firmware do ESP32 (Arduino)
+docs/              relatório (imagens e diagramas), n8n, hardware, deploy, testes e pitch
+scripts/           utilitários (token do Google, teste do Gmail, importação de bulas)
+tests/             suíte automatizada
+```
 
 ## Instalação
 
+Requer Python 3.11 ou superior.
+
 ```bash
+git clone https://github.com/augustolnb/ag-zela-.git
+cd ag-zela-
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev,deepseek]"
+cp .env.example .env    # preencha as chaves
 ```
 
-O extra `deepseek` instala o LiteLLM, usado pelo provedor de LLM da
-produção. Sem ele, o projeto roda só com o Gemini.
+O extra `deepseek` instala o LiteLLM. Sem ele, o projeto roda só com o
+Gemini.
 
-## Cadastrando a idosa e os medicamentos
+### Variáveis de ambiente
 
-Até o Plano 5, nenhum caminho do código em produção cadastrava dados
-sozinho. Agora o painel Streamlit (veja a seção "Painel Streamlit" abaixo)
-permite cadastrar/editar medicamentos e compromissos pela interface. Para
-o cadastro inicial da idosa em si (perfil, contatos familiares), ou para
-popular dados via script, use os repositórios de `zela/storage/`
-diretamente. O `idoso_id` usado em todo o código (webhook, scheduler,
-ferramentas do agente de rotina) é `"idosa-1"` (veja a constante
-`ID_IDOSO` em `zela/api/main.py`); use o mesmo valor ao cadastrar:
+| Variável | Uso |
+|---|---|
+| `GOOGLE_API_KEY` | Gemini: embeddings sempre, e a conversa quando o provedor é `gemini` |
+| `ZELA_LLM_PROVEDOR` | `gemini` (padrão) ou `deepseek` |
+| `DEEPSEEK_API_KEY` | Obrigatória com `ZELA_LLM_PROVEDOR=deepseek` |
+| `WAHA_API_KEY` | Chave da API do WAHA (o backend a recebe como `ZELA_WAHA_API_KEY`) |
+| `ZELA_INGESTAO_TOKEN` | Token do header `X-Api-Key` dos endpoints de ingestão, classificação e webhook. Obrigatório em servidor público |
+| `ZELA_GOOGLE_CALENDAR_*` | Credencial OAuth, `refresh_token` e ID da agenda (opcional) |
+| `ZELA_GMAIL_PULSEIRA_EMAIL`, `ZELA_GMAIL_MODO` | Aviso pelo Gmail na pulseira (opcional) |
+| `ZELA_DB_PATH` | Caminho do `zela.db`; backend e painel precisam usar o mesmo |
+
+## Executando
+
+### 1. WhatsApp (WAHA)
+
+```bash
+docker compose up -d waha
+```
+
+Abra `http://localhost:3000`, escaneie o QR code com o número que vai
+representar o Zela+ e configure o webhook da sessão para
+`http://<host-do-backend>:8000/webhook/whatsapp` com os eventos `message`,
+`poll.vote` e `poll.vote.failed`. Se `ZELA_INGESTAO_TOKEN` estiver
+definido, adicione o header `X-Api-Key` com o mesmo valor no webhook.
+
+### 2. Backend
+
+```bash
+uvicorn zela.api.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+O backend recebe as mensagens, envia lembretes, aplica as regras de
+monitoramento e sincroniza o índice do RAG.
+
+### 3. Cadastro do idoso
+
+O perfil do idoso e dos familiares é cadastrado uma vez, por script. O
+`idoso_id` usado em todo o sistema é `"idosa-1"`:
 
 ```python
-from datetime import date, time
+from datetime import date
 from zela.models.perfil import ContatoFamiliar, PerfilIdoso
-from zela.models.rotina import Dosagem, Medicamento
 from zela.storage.db import conectar
 from zela.storage.perfil import salvar_perfil
-from zela.storage.rotina import salvar_medicamento
 
 conn = conectar("zela.db")
-
-perfil = PerfilIdoso(
+salvar_perfil(conn, PerfilIdoso(
     nome="Maria da Silva",
-    telefone="+5511900000000",  # número real da idosa, formato E.164
+    telefone="+5511900000000",            # formato E.164
     data_nascimento=date(1945, 3, 12),
     contatos_familiares=[ContatoFamiliar(nome="João", telefone="+5511987654321")],
-)
-salvar_perfil(conn, perfil, idoso_id="idosa-1")
-
-medicamento = Medicamento(
-    id="med-1",
-    nome="Losartana",
-    dosagem=Dosagem(quantidade=50, unidade="mg"),
-    horarios=[time(8, 0), time(20, 0)],
-)
-salvar_medicamento(conn, medicamento, idoso_id="idosa-1")
+), idoso_id="idosa-1")
 ```
 
-Esse trecho pode ser salvo como um script (`python seed.py`) e executado
-uma vez, ou rodado interativamente (`python` / REPL). Um painel Streamlit
-de administração para fazer isso pela interface está planejado para uma
-fase posterior (ver "Status do projeto" acima).
+Se o WhatsApp do idoso chegar como LID (`<número>@lid`) em vez do telefone,
+cadastre esse identificador no campo `lid_whatsapp` do perfil. Medicamentos
+e compromissos são cadastrados pelo painel.
 
-## Rodando os testes
+### 4. Painel da família
 
 ```bash
-pytest -v
+python -m zela.streamlit_app.usuarios criar familia    # pede a senha duas vezes
+streamlit run zela/streamlit_app/app.py
 ```
 
-Para o detalhamento completo da suíte (o que cada camada testa, por que
-foi testada dessa forma, cobertura por arquivo, resultado da última
-execução e o que fica de fora dos testes automatizados), ver
-`docs/testes/estrategia-e-resultados.md`.
+Abra `http://localhost:8501` e entre com usuário e senha. Outros comandos de
+usuário: `listar`, `senha <usuário>` e `remover <usuário>`.
 
-## Verificando o comportamento do agente (adk run)
+O painel mostra o status atual, a medicação do dia, os últimos alertas e a
+atividade de hoje, com formulários de medicamentos e compromissos. A aba
+**Histórico** reúne avisos, compromissos e doses, com filtros por dia,
+busca e tipo. O interruptor **Modo noturno** alterna entre o tema claro e o
+escuro.
 
-A suíte automatizada cobre apenas a camada de domínio (lógica pura, sem
-LLM nem rede) e o esqueleto de orquestração ADK (nomes, hierarquia de
-sub-agentes). Ela deliberadamente **não** faz nenhuma chamada real a LLM
-ou à rede. Para verificar manualmente o comportamento dos agentes
-(instruções, delegação entre sub-agentes, respostas do modelo), use o
-`adk run` da própria ADK:
+![Painel: status atual](docs/relatorio/imagens/painel_status.png)
+
+![Painel: medicação, últimos alertas e atividade de hoje](docs/relatorio/imagens/painel_alertas_atividade.png)
+
+### 5. Testando os agentes sem WhatsApp
 
 ```bash
-export GOOGLE_API_KEY="sua-chave-aqui"   # ou GEMINI_API_KEY
 adk run zela/agents
 ```
 
-Os agentes usam o modelo `gemini-3.8-flash` (constante `MODELO_PADRAO` em
-`zela/agents/orchestrator.py` — o projeto começou usando `gemini-2.0-flash`,
-mas esse modelo foi descontinuado pela API do Gemini durante o
-desenvolvimento; se a mesma mensagem de erro `404 NOT_FOUND ... no longer
-available` aparecer de novo no futuro, atualize essa constante para o
-modelo recomendado pelo próprio erro), então é necessária uma
-chave de API do Gemini disponível como variável de ambiente
-(`GOOGLE_API_KEY` tem prioridade; `GEMINI_API_KEY` também é aceita —
-confira `adk run --help` ou a documentação do `google-adk` instalado
-caso a versão em uso espere algo diferente). O `root_agent`
-(orquestrador) é exportado em `zela/agents/__init__.py` /
-`zela/agents/orchestrator.py`, que é o que o `adk run` procura ao
-receber o caminho `zela/agents`.
+Em produção, cada mensagem chega aos agentes com uma linha de contexto.
+No `adk run`, digite-a antes da pergunta para testar as ferramentas:
+`[contexto do sistema: idoso_id=idosa-1; agora=2026-01-01T08:00:00] já tomei o remédio`.
 
-Este passo é manual e **não é coberto pelos testes automatizados**
-(`pytest -v`), que evitam de propósito qualquer chamada real a
-LLM/rede.
-
-### Alternativa: usando o DeepSeek em vez do Gemini
-
-**Na VPS de produção, o provedor ativo é o DeepSeek** (`ZELA_LLM_PROVEDOR=deepseek`)
-— o Gemini no tier gratuito tem limite de 5 requisições/minuto,
-insuficiente para mensagens em sequência rápida (confirmado na prática,
-ver `docs/deploy/vps.md`), e o Gemini fica configurado como reserva. Em
-desenvolvimento local, se a API do Gemini estiver instável/indisponível
-(ex.: `503 UNAVAILABLE — high demand`) e você precisar continuar
-testando os agentes, é possível trocar o LLM de orquestração/conversação
-para o DeepSeek do mesmo jeito, via [LiteLLM](https://docs.litellm.ai/):
+## Testes
 
 ```bash
-pip install -e ".[deepseek]"   # instala o litellm (extra google-adk[extensions])
-export DEEPSEEK_API_KEY="sua-chave-aqui"
-export ZELA_LLM_PROVEDOR=deepseek
-adk run zela/agents
+pytest -q
 ```
 
-Sem `ZELA_LLM_PROVEDOR` (ou com `ZELA_LLM_PROVEDOR=gemini`), o
-comportamento padrão com Gemini continua inalterado. A escolha é feita
-em `_montar_modelo_padrao()` (`zela/agents/orchestrator.py`), que monta
-`MODELO_PADRAO` como a string `"gemini-3.8-flash"` ou como um
-`LiteLlm(model="deepseek/deepseek-chat")`, conforme essa variável.
+A suíte cobre modelos, domínio, armazenamento, API, scheduler, embeddings,
+agentes ADK e painel, sem chamadas reais a LLM ou rede. A estratégia de
+testes está em `docs/testes/estrategia-e-resultados.md`.
 
-**Importante:** essa troca afeta só o LLM dos agentes ADK. O RAG
-(ferramenta `consultar_conhecimento`, usada pelo agente de comunicação) e
-a classificação de urgência por similaridade continuam usando embeddings
-do Gemini (`ClienteEmbeddingGemini`, modelo `gemini-embedding-2`)
-independentemente dessa variável — ou seja, mesmo com
-`ZELA_LLM_PROVEDOR=deepseek`, ainda é necessária uma
-`GOOGLE_API_KEY`/`GEMINI_API_KEY` válida para essas duas funcionalidades. Além disso, como as instruções dos agentes foram escritas e
-validadas com o Gemini, o comportamento de delegação entre sub-agentes
-(quando chamar qual ferramenta, como interpretar o prefixo de contexto)
-pode variar um pouco com o DeepSeek — isso é diferença de modelo, não um
-bug do projeto.
+## Funcionalidades em detalhe
 
-**Atenção ao testar com `adk run`:** em produção (webhook do WhatsApp,
-painel Streamlit), toda mensagem passa por `zela/api/runner.py`, que
-monta automaticamente uma linha de contexto no formato
-`[contexto do sistema: idoso_id=<id>; agora=<timestamp ISO 8601>]` antes
-de enviar a mensagem ao agente — é assim que os agentes sabem de qual
-idoso se trata e extraem os argumentos das ferramentas. O `adk run` fala
-direto com o agente, sem passar por `runner.py`, então **essa linha não
-é adicionada automaticamente**. Para testar o roteamento/chamadas de
-ferramenta de verdade (e não só se o agente responde algo), digite essa
-linha de contexto você mesmo antes da pergunta, por exemplo:
-`[contexto do sistema: idoso_id=idosa-1; agora=2026-01-01T08:00:00] já tomei o remédio`
-(use `idosa-1`, o `idoso_id` fixo do projeto — ver seção "Cadastrando a
-idosa e os medicamentos"). Sem essa linha, o teste só valida que o
-agente não trava com uma mensagem fora do padrão, não a orquestração em
-si.
+### Lembrete de remédio com enquete
 
-## Nota sobre fusos horários
-
-Todos os `datetime` deste código são "naive" (sem informação de fuso
-horário) e assumidos como horário local — não há nenhuma normalização
-de fuso. Uma futura integração (ingestão de sensores, webhooks) que
-receba timestamps com fuso horário (`aware`) precisa remover/normalizar
-esse fuso antes de construir qualquer objeto de `zela.models`, ou a
-aritmética de datas da camada de domínio (`agora - ultima_presenca`,
-`agora - estado.iniciado_em`, `datetime.combine(...)`, etc.) vai lançar
-`TypeError`.
-
-## Estrutura do código
-
-- `zela/models/` — contratos de dados Pydantic (validação de entrada).
-- `zela/domain/` — regras de negócio de cada agente, puras e testáveis
-  sem dependências externas.
-- `zela/agents/` — definição dos agentes ADK (orquestrador + 4
-  especializados).
-- `zela/simulacao.py` — simulação de um "dia" completo do sistema, sem
-  hardware nem APIs externas, usada para validar a lógica de domínio de
-  ponta a ponta. Ainda não tem ponto de entrada de CLI (`__main__`);
-  por enquanto é feito para ser importado e chamado a partir dos testes
-  ou de um futuro runner, não executado diretamente pela linha de
-  comando.
-- `zela/storage/` — repositórios SQLite (perfil, medicamentos,
-  confirmações) que persistem os dados usados pelos agentes.
-- `zela/embeddings/` — cliente de embeddings do Gemini, classificador de
-  urgência por similaridade (puro), e vector store Chroma para RAG.
-- `zela/integrations/` — cliente WAHA para envio/recebimento de mensagens
-  via WhatsApp.
-- `zela/api/` — webhook do WhatsApp, ponte com o ADK Runner, scheduler de
-  lembretes e montagem do app FastAPI.
-- `zela/streamlit_app/` — painel Streamlit da família (status, medicação,
-  alertas, gráfico de presença, cadastro de medicamentos e compromissos).
-
-## Configurando o WAHA (WhatsApp)
-
-> **Nota:** desde que o projeto ganhou suporte a deploy em VPS (ver seção
-> "Deploy em produção (VPS)" abaixo), o `docker-compose.yml` também define
-> os serviços `backend`, `streamlit` e `caddy` — úteis em produção, mas
-> redundantes em desenvolvimento local (onde backend/Streamlit rodam
-> direto no `.venv`, com `--reload`). Em dev local, suba só o WAHA:
-
-1. Suba o container do WAHA:
-   ```bash
-   docker compose up -d waha
-   ```
-2. Abra `http://localhost:3000/` no navegador — o WAHA expõe um painel/Swagger
-   com um QR code. Escaneie com o WhatsApp do número que vai representar o
-   Zela+ (pode ser um número dedicado ao projeto, não precisa ser o número
-   pessoal do idoso).
-3. Configure o webhook do WAHA para apontar para
-   `http://<seu-host>:8000/webhook/whatsapp` (durante desenvolvimento local,
-   use uma ferramenta de túnel como `ngrok` se o WAHA rodar em um ambiente
-   que não alcança `localhost` diretamente).
-4. Defina a variável de ambiente com a chave de API do Gemini antes de
-   rodar o backend (necessária para o ADK processar as mensagens):
-   ```bash
-   export GOOGLE_API_KEY=sua-chave-aqui
-   ```
-4.1. Se a instância do WAHA exigir autenticação na API REST (variável
-   `WAHA_API_KEY` definida no container — comum em imagens mais recentes),
-   defina a mesma chave para o backend, senão todo envio de resposta
-   falha com `401 Unauthorized`:
-   ```bash
-   export ZELA_WAHA_API_KEY=a-mesma-chave-do-container-waha
-   ```
-4.2. Opcional em rede local, **obrigatório se o backend for exposto fora
-   dela** (ex.: VPS): defina um token para proteger `/ingest/esp32`,
-   `/ingest/health-connect`, `/api/classificar-mensagem` e
-   `/webhook/whatsapp`. Sem essa variável, esses quatro endpoints não
-   exigem nenhuma autenticação — **`/webhook/whatsapp` em particular
-   aceita qualquer remetente quando nenhum perfil ainda foi cadastrado**
-   (a allowlist de telefones só existe depois do primeiro cadastro via
-   Streamlit), então deixar essa variável vazia numa VPS pública permite
-   que qualquer um acione o agente de IA de verdade (custo de API) só
-   mandando um POST.
-   ```bash
-   export ZELA_INGESTAO_TOKEN=um-token-aleatorio-forte
-   ```
-   Requisições a esses endpoints devem enviar o header `X-Api-Key` com o
-   mesmo valor. O firmware do ESP32 já suporta isso — preencha
-   `TOKEN_INGESTAO` com o mesmo token em `firmware/zela_presenca/config.h`
-   (ver seção "Configurando a ingestão de sensores"). Para
-   `/webhook/whatsapp`, configure o WAHA para enviar esse mesmo valor como
-   header `X-Api-Key` em toda chamada de webhook (campo de headers
-   customizados na configuração do webhook da sessão/dashboard do WAHA).
-5. Rode o backend:
-   ```bash
-   uvicorn zela.api.main:app --reload
-   ```
-   Para o ESP32 (ou qualquer outro dispositivo na rede) conseguir alcançar
-   o backend, ele não pode escutar só em `127.0.0.1`. Use:
-   ```bash
-   uvicorn zela.api.main:app --reload --host 0.0.0.0 --port 8000
-   ```
-
-**Nota:** o formato exato dos endpoints/payloads do WAHA usado no código
-(`zela/integrations/waha_client.py`, `zela/api/webhook.py`) foi escrito a
-partir de documentação/conhecimento geral sobre o projeto WAHA e pode
-precisar de pequenos ajustes contra a versão específica da imagem Docker
-usada — confira o Swagger da sua instância (`http://localhost:3000/`) se
-as mensagens não chegarem como esperado.
-
-### Identificador de privacidade do WhatsApp (LID)
-
-Esta seção documenta um problema real descoberto durante a validação manual
-de ponta a ponta (não um defeito teórico): nenhum dos 199 testes
-automatizados do projeto o detectou, porque todos usam payloads sintéticos
-no formato "esperado". Só apareceu ao mandar uma mensagem de verdade pelo
-WhatsApp.
-
-**O problema.** Ao testar o fluxo real (WhatsApp → WAHA → webhook → ADK →
-resposta), a mensagem enviada pelo número cadastrado nunca gerava resposta.
-Capturando o payload bruto do webhook (um servidor HTTP mínimo colocado
-temporariamente no lugar do backend), o campo do remetente veio como:
-
-```json
-"from": "109281332445239@lid"
-```
-
-em vez do formato esperado `"<telefone>@c.us"`. Isso é o **LID (Linked
-ID)**, um identificador de privacidade que o WhatsApp passou a usar em
-parte das conversas: em vez do número de telefone, a conta mostra ao
-"destinatário" (aqui, o número que representa o Zela+) um código numérico
-opaco e estável, sem revelar o telefone real. Não é um bug do WAHA — é o
-próprio cliente WhatsApp que deixa de enviar o número.
-
-Isso quebrava dois pontos do código, ambos escritos assumindo que todo
-remetente seria sempre `"<telefone>@c.us"`:
-
-1. `_extrair_telefone_e_texto` (`zela/api/webhook.py`) convertia qualquer
-   remetente para um pseudo-telefone `"+" + dígitos`. Para um LID, isso
-   gera uma string que nunca bate com o telefone cadastrado no perfil →
-   a mensagem era silenciosamente descartada (`{"status": "ignorado"}`).
-2. Mesmo ignorando o filtro, a resposta teria sido enviada para o chat
-   errado: `WahaClient._para_chat_id` sempre completava o destino com
-   `@c.us`, o que aponta para um chat por telefone — inexistente nesse
-   caso — em vez do chat `@lid` real de onde a mensagem veio.
-
-**Solução implementada.** Em vez de tentar resolver o LID para um telefone
-(o WhatsApp não expõe essa informação para contas com esse recurso de
-privacidade ativado — não existe chamada de API que recupere isso), o
-projeto passou a tratar o LID como um identificador alternativo,
-cadastrado manualmente uma única vez, da mesma forma que já cadastramos o
-telefone:
-
-- Novo campo opcional `lid_whatsapp: str | None` em `PerfilIdoso`
-  (`zela/models/perfil.py`).
-- Migração de schema idempotente para a coluna `lid_whatsapp` em
-  `perfil_idoso` (`zela/storage/db.py`), seguindo o mesmo padrão já usado
-  para a coluna `bula` de medicamentos — roda a cada `conectar()` e não
-  falha se a coluna já existir.
-- `_extrair_telefone_e_texto` agora ramifica pelo sufixo do remetente:
-  `...@c.us` continua convertido para E.164 (`+<dígitos>`, comportamento
-  inalterado); `...@lid` é devolvido como o JID completo, sem conversão.
-- `montar_roteador` ganhou o parâmetro `lids_permitidos`, verificado
-  apenas quando o remetente é um LID — a lista de telefones permitidos
-  continua sendo a única regra para remetentes normais.
-- `WahaClient._para_chat_id` passou a reconhecer um JID já completo
-  (contém `"@"`) e repassá-lo sem reformatar, em vez de sempre anexar
-  `@c.us`. Isso corrige o roteamento da resposta para remetentes LID sem
-  alterar nenhuma chamada existente que já passa um telefone puro (os
-  lembretes/alertas proativos do `scheduler.py`, por exemplo).
-- `_processar_risco` (`zela/api/main.py`) passou a comparar o identificador
-  recebido tanto contra `perfil.telefone` quanto contra
-  `perfil.lid_whatsapp`.
-- O `lid_whatsapp` real capturado durante a validação foi gravado no
-  perfil da `idosa-1` no banco local, permitindo testar o fluxo completo
-  de verdade pelo WhatsApp.
-
-**Por que essas decisões.** O cadastro manual do LID (em vez de resolução
-automática) é proporcional ao escopo de MVP de tenant único: o WhatsApp
-não expõe o telefone real por trás de um LID como recurso deliberado de
-privacidade, então qualquer automação aqui estaria tentando contornar essa
-proteção. Preservar o formato `"+telefone"` para remetentes `@c.us` evitou
-tocar na lógica de comparação já testada em `_processar_risco` e no
-contrato de lista de permitidos cobertos pelos testes existentes — a
-correção ficou isolada por tipo de identificador, reduzindo o risco de
-regressão. E a verificação `"@" in valor` em `_para_chat_id` é segura
-porque todo JID válido do WAHA contém `"@"`, enquanto um telefone puro
-(usado pelo agendador de lembretes) nunca contém — não há ambiguidade
-entre os dois formatos de entrada.
-
-**Como funciona agora, passo a passo:**
-1. WAHA entrega o webhook com `payload.from` no formato `@c.us` ou `@lid`.
-2. `_extrair_telefone_e_texto` identifica o formato e devolve o
-   identificador correspondente (telefone E.164 ou JID LID completo).
-3. `montar_roteador` escolhe a lista de permissão certa (`telefones_permitidos`
-   ou `lids_permitidos`) de acordo com o sufixo do identificador.
-4. Se permitido, a mensagem é processada normalmente pelo agente e a
-   resposta é enviada de volta usando o mesmo identificador — `_para_chat_id`
-   decide se precisa completar com `@c.us` (telefone puro) ou repassar o
-   JID como está (já completo).
-5. `_processar_risco` aplica a mesma lógica de "é a própria idosa?" nos dois
-   formatos, mantendo o escalonamento de risco funcionando
-   independentemente de como o WhatsApp identifica o remetente.
-
-**Testes adicionados** cobrindo esse fluxo: `tests/test_storage_db.py`
-(migração da coluna), `tests/test_storage_perfil.py` e
-`tests/test_models_perfil.py` (persistência e validação do campo),
-`tests/test_integrations_waha_client.py` (repasse do JID sem reformatar),
-`tests/test_api_webhook.py` (filtro por LID permitido/não permitido, e
-resposta enviada para o JID correto) e `tests/test_api_main.py`
-(`_processar_risco` e `_obter_lids_permitidos` com um perfil que tem LID
-cadastrado).
-
-### Segundo problema encontrado na mesma validação: WAHA exige API key
-
-Depois de corrigir o LID, o teste de ponta a ponta ainda não respondia.
-Reproduzindo o payload real diretamente contra o backend (com
-`TestClient(app, raise_server_exceptions=True)`, que propaga a exceção em
-vez de só devolver um 500 genérico), o traceback mostrou exatamente onde
-parava: a mensagem chegava, passava pelo filtro de permissão (LID já
-corrigido), o agente ADK processava e gerava a resposta — e o envio de
-volta pelo WAHA (`POST /api/sendText`) falhava com `401 Unauthorized`.
-
-**Causa:** `WahaClient` (`zela/integrations/waha_client.py`) nunca enviava
-nenhum cabeçalho de autenticação, e esta instância do WAHA está configurada
-com `WAHA_API_KEY` (variável de ambiente do container), que passou a
-exigir o cabeçalho `X-Api-Key` em toda chamada da API REST — inclusive
-`/api/sendText`. Isso não tem relação com o LID; é um problema distinto,
-só visível depois que o primeiro foi corrigido e a mensagem passou a
-chegar até esse ponto do fluxo.
-
-**Solução:** `WahaClient.__init__` ganhou o parâmetro opcional `api_key`,
-incluído como `X-Api-Key` em todas as chamadas (`enviar_texto`,
-`enviar_audio`) quando configurado. O backend lê o valor da nova variável
-de ambiente `ZELA_WAHA_API_KEY` (`zela/api/main.py`) — veja o passo 4.1
-em "Configurando o WAHA (WhatsApp)" acima. Quando não configurada, o
-cliente não envia o cabeçalho, preservando o comportamento de instâncias
-do WAHA sem autenticação (como as usadas nos testes automatizados).
-
-**Status:** ⚠️ bloqueado. O código já está pronto para enviar a chave,
-mas a chave real desta instância do WAHA ainda não foi localizada — a
-seção "Registro de erros da validação manual" abaixo detalha o que foi
-tentado e o que falta decidir.
-
-### Registro de erros da validação manual (WhatsApp/WAHA)
-
-Esta validação manual de ponta a ponta (não coberta pelos 200 testes
-automatizados, que usam dublês/payloads sintéticos) encontrou uma série
-de problemas reais, cada um só visível depois que o anterior foi
-corrigido e o fluxo avançou um passo. Lista cronológica, com causa,
-correção e status de cada um:
-
-| # | Erro encontrado | Causa raiz | Correção | Status |
-|---|---|---|---|---|
-| 1 | `404 NOT_FOUND` ao chamar o modelo Gemini do orquestrador | Modelo `gemini-2.0-flash` descontinuado pela API | Trocado para `gemini-3.8-flash` (`zela/agents/orchestrator.py`) | ✅ Corrigido |
-| 2 | `404 NOT_FOUND` ao gerar embeddings no boot da API | Modelo `text-embedding-004` descontinuado | Trocado para `gemini-embedding-2`, confirmado via `ListModels` (`zela/embeddings/client.py`) | ✅ Corrigido |
-| 3 | Painel de execução do n8n mostra o dado de entrada em vez da resposta real do nó "Respond to Webhook" | Particularidade documentada no próprio código do nó (`RespondToWebhook.node.js`, `typeVersion` 1.1): o painel sempre exibe o input, não o HTTP de fato enviado | Não é um bug do projeto — comportamento confirmado como correto via `curl -i` direto no webhook ativo | ✅ Documentado como comportamento esperado |
-| 4 | Mensagem real do WhatsApp nunca gerava resposta; payload capturado mostrava `"from": "<id>@lid"` em vez de `"<telefone>@c.us"` | Recurso de privacidade do WhatsApp (LID): o número real não é mais revelado para certos remetentes; o código assumia sempre o formato de telefone | Campo `lid_whatsapp` cadastrado manualmente no perfil; webhook e `WahaClient` passaram a tratar `@lid` como identificador válido (ver seção "Identificador de privacidade do WhatsApp (LID)" acima) | ✅ Corrigido (commit `6dcb545`) |
-| 5 | Com o LID corrigido, a mensagem era processada e respondida pelo agente, mas o envio de volta falhava com `401 Unauthorized` em `POST /api/sendText` | `WahaClient` nunca enviava nenhum cabeçalho de autenticação; esta instância do WAHA exige `X-Api-Key` | `WahaClient` ganhou suporte a `api_key` (header `X-Api-Key`), lido de `ZELA_WAHA_API_KEY` (commit `7d06393`) | ⚠️ Código corrigido, **chave real ainda não localizada** |
-| 6 | Não foi possível encontrar a chave de API do WAHA pelo dashboard | A versão do dashboard usada (`2026.9.1`) não expõe claramente a `WAHA_API_KEY` configurada no container em nenhuma tela de configurações visitada até agora | Tentativas de adivinhar a chave via `curl` (`local-dev-key`, Basic Auth com a senha do dashboard) retornaram `401` até em endpoints públicos como `/` e `/api-json`, o que sugere que a chave configurada é diferente da esperada ou há outro mecanismo de autenticação em jogo | ❌ Pendente — próximo passo é inspecionar a variável de ambiente diretamente no container (`docker inspect <container> --format '{{json .Config.Env}}'`) ou recriar o container com uma chave conhecida, decisão que requer confirmação explícita por afetar a sessão do WhatsApp já conectada |
-
-## Configurando a ingestão de sensores
-
-### ESP32 (sensor de presença)
-
-1. Monte o circuito: 2 sensores PIR SR602, um na sala (`OUT` no GPIO 13)
-   e um no quarto (`OUT` no GPIO 14), alimentados em 3,3V. Nenhum divisor
-   de tensão é necessário — o SR602 tem saída `OUT` fixa em 3,3V,
-   independente da alimentação. Diagrama completo em
-   `docs/hardware/automacao_esp32.md`.
-2. Copie `firmware/zela_presenca/config.h.example` para
-   `firmware/zela_presenca/config.h` (esse arquivo não é versionado —
-   evita vazar sua senha de Wi-Fi no repositório público) e preencha
-   `WIFI_SSID`, `WIFI_SENHA`, `URL_INGESTAO` (em produção,
-   `https://api.augustoautomacoes.com/ingest/esp32`; em desenvolvimento, o
-   IP local do backend, ex.: `http://192.168.0.10:8000/ingest/esp32`) e, se o
-   backend exigir, `TOKEN_INGESTAO` (mesmo valor de `ZELA_INGESTAO_TOKEN`).
-3. Abra `firmware/zela_presenca/zela_presenca.ino` no Arduino IDE
-   (precisa do pacote de placas "esp32" por Espressif Systems instalado
-   via Boards Manager), com a placa "ESP32 Dev Module" selecionada.
-4. Grave no ESP32 e abra o Serial Monitor (115200 bps) para confirmar a
-   conexão WiFi, a sincronização de hora via NTP, e os envios
-   (`POST /ingest/esp32 -> 200`) ao mover a mão na frente do sensor.
-
-### Regras de monitoramento
-
-Vale a condição mais grave, verificada a cada 15 min:
-
-| Status | Condição |
-|---|---|
-| RISCO | 8 h ou mais sem movimento, com o ESP32 enviando sinal de vida |
-| RISCO | ESP32 sem comunicação há 15 min **e** nenhum dado da pulseira (batimentos, passos ou sono) há 6 h |
-| ATENÇÃO | Frequência cardíaca fora de 30–220 bpm |
-| AVISO | Só uma das fontes sem dados: mensagem única ao primeiro familiar, sem escalonamento |
-| NORMAL | Nenhuma das condições acima |
-
-Sem nenhuma leitura, as duas fontes contam como paradas e o status é RISCO. O
-firmware envia sinal de vida a cada 5 min. Às 09:00, uma noite de sono 30% menor
-ou maior que a média das 14 anteriores (mínimo de 7 noites) gera um AVISO.
-
-### Smartwatch (Xiaomi Smart Band 10 Pro → Health Connect → HC Webhook)
-
-Verificado de ponta a ponta em produção (frequência cardíaca, passos e
-sono) — não é mais um fluxo teórico.
-
-1. Instale o **Obtainium** (github.com/ImranR98/Obtainium) — baixe o APK
-   direto da seção *Assets* da release mais recente e instale (ative
-   "instalar de fontes desconhecidas" pro navegador quando o Android
-   pedir). O app oficial na Play Store (`com.hcwebhook.app`) é pago; o
-   mesmo projeto publica builds gratuitas no GitHub.
-2. No Obtainium, adicione um app novo com o repositório
-   `https://github.com/mcnaveen/health-connect-webhook` — ele baixa e
-   instala o **HC Webhook** direto do GitHub Releases.
-3. Abra o HC Webhook, autorize as permissões do Health Connect para os
-   tipos desejados (passos, sono, frequência cardíaca) e configure:
-   - URL do webhook: `http://<seu-servidor>:8000/ingest/health-connect`
-     (ou o domínio de produção, ex.: `https://api.<seu-domínio>/ingest/health-connect`)
-   - Formato de entrega: **JSON** (não Protobuf/gRPC)
-   - Um **header customizado** `x-api-key` com o mesmo valor de
-     `ZELA_INGESTAO_TOKEN`, já que o endpoint exige token como os
-     demais.
-4. Dispare uma sincronização manual ("Sincronizar agora") e confira o
-   resultado na tela de "Registros de webhook" do próprio app (mostra
-   status HTTP de cada envio) ou nos logs do backend.
-
-![Apps instalados via Obtainium (HC Webhook + Obtainium)](docs/relatorio/imagens/obtainium_apps_instalados.jpeg)
-![Permissões de saúde concedidas ao HC Webhook](docs/relatorio/imagens/health_connect_webhook_permissoes.jpeg)
-![Configuração da URL e do header do webhook](docs/relatorio/imagens/health_connect_webhook_config.jpeg)
-![Sincronização confirmada: passos, sono e frequência cardíaca](docs/relatorio/imagens/health_connect_webhook_sincronizacao.jpeg)
-
-**Formato real do payload** (confirmado em produção, não o que a
-documentação do app descreve — por isso vale conferir sempre na
-prática): um objeto JSON com uma chave por tipo de dado selecionado,
-cada uma uma lista de registros:
-
-```json
-{
-  "timestamp": "2026-10-19T13:37:37-03:00",
-  "steps": [{"count": 1359, "start_time": "...", "end_time": "..."}],
-  "sleep": [{"session_end_time": "...", "duration_seconds": 23820, "stages": [...]}],
-  "heart_rate": [{"time": "...", "bpm": 72, "avg": 72, "min": 72, "max": 72}]
-}
-```
-
-`zela/api/ingestao.py` salva uma `LeituraSensor` por item de cada
-lista (um único POST real já trouxe 58 leituras numa chamada só) e
-descarta individualmente qualquer item malformado, sem derrubar o
-lote inteiro. O painel Streamlit mostra um resumo dessas 3 métricas
-(valor mais recente + horário) no card "Atividade de hoje".
-
-Se você estiver depurando um payload diferente do documentado acima
-(apps mudam formato entre versões), o jeito mais confiável é logar o
-corpo bruto da requisição temporariamente — foi assim que esse formato
-real foi descoberto neste projeto.
-
-**Limitação dos batimentos:** o Mi Fitness só compartilha com o Health
-Connect os batimentos medidos em **treinos**. O histórico contínuo aparece
-no app, mas não nas permissões de compartilhamento, então o servidor recebe
-batimentos só nos períodos de treino. Passos e sono chegam normalmente. Por
-isso a regra de atividade da pulseira considera qualquer dado dela, com
-limite de 6 h: o Android adia a sincronização em segundo plano, e foram
-medidos intervalos de até 5h45 entre envios. Uma alternativa em estudo é
-trocar o Mi Fitness pelo Gadgetbridge, que exporta para o Health Connect.
-
-**Volume do envio:** um lote com batimentos de treino segundo a segundo
-chegou a 1,92 MB. O nginx da VPS aceita até 10 MB
-(`client_max_body_size 10m`, ver `docs/deploy/vps.md`).
-
-## Comissionamento: Google Agenda
-
-Os lembretes de compromisso são enviados por WhatsApp e sincronizados com
-uma conta Google dedicada (uma por família — não compartilhe a conta entre
-clientes). Esta configuração é manual e feita uma única vez na instalação.
-
-1. **Crie a conta Google dedicada** (ex.: `familia-sobrenome.zela@gmail.com`).
-2. **Crie o projeto no Google Cloud e a credencial OAuth:** crie um projeto,
-   ative a *Google Calendar API* e a *Gmail API* (usada pelas notificações
-   na pulseira) e crie uma credencial OAuth do tipo **Desktop app**. Na tela de consentimento OAuth, publique o app
-   mudando o status de publicação para **"Em produção"** ("In production")
-   — não é preciso passar pela verificação do Google para isso, mas a tela
-   de consentimento vai exibir um aviso de "app não verificado"; para uma
-   única conta dedicada da família, está tudo bem clicar em "Avançado" →
-   "Acessar [app] (não seguro)" para seguir adiante. **Não deixe o app em
-   "Testes"**: nesse modo o Google invalida o `refresh_token` depois de
-   cerca de 7 dias, o que quebra a sincronização da agenda silenciosamente
-   uma semana depois da instalação, sem erro visível até os lembretes
-   pararem de aparecer. Se isso acontecer (ou se você preferir não publicar
-   o app), o sintoma é a sincronização parar sem mensagem de erro clara; a
-   recuperação é publicar o app em produção (recomendado) ou, no mínimo,
-   rodar o script do passo 3 de novo para gerar um `refresh_token` novo.
-3. **Obtenha o `refresh_token`:** na sua máquina local, rode uma vez
-   ```bash
-   python scripts/obter_refresh_token_google.py
-   ```
-   Informe o `client_id` e o `client_secret` da etapa anterior, autorize a
-   conta dedicada no navegador que abrir, e o script imprime o
-   `refresh_token`. Trate esse valor como senha. O script pede, em um
-   único consentimento, o Google Agenda e o Gmail (`gmail.insert` e
-   `gmail.send`). O `gmail.insert` é um escopo restrito: se o Google
-   recusar a autorização, o modo `send` do Gmail continua disponível.
-   Para escolher o modo, rode `python scripts/testar_gmail_pulseira.py` e
-   veja qual mensagem de teste aparece na pulseira.
-4. **Configure as 4 variáveis de ambiente do deploy** (no `.env` usado pelo
-   `docker-compose.yml`, container `backend`):
-   - `ZELA_GOOGLE_CALENDAR_CLIENT_ID` — client ID da credencial OAuth
-   - `ZELA_GOOGLE_CALENDAR_CLIENT_SECRET` — client secret da credencial OAuth
-   - `ZELA_GOOGLE_CALENDAR_REFRESH_TOKEN` — o valor impresso no passo 3
-   - `ZELA_GOOGLE_CALENDAR_CALENDAR_ID` — ID da agenda a usar (para a agenda
-     principal da conta dedicada, o próprio e-mail da conta)
-5. **No celular do idoso:** adicione a mesma conta Google como conta
-   secundária (Android permite várias contas), habilite as notificações de
-   lembrete do Google Agenda para ela, e habilite/whitelist o Google Agenda
-   no espelhamento de notificações do Mi Fitness, para que o lembrete do
-   Google Agenda também apareça no relógio.
-
-Detalhes do fluxo: seção 5.1 de `docs/superpowers/specs/2026-10-23-lembretes-compromisso-whatsapp-google-agenda-design.md`.
-
-## Lembrete de remédio com enquete
-
-O lembrete de remédio chega no WhatsApp como uma enquete de escolha única,
-para o idoso responder com um toque:
+O lembrete chega como enquete de escolha única:
 
 > Hora de tomar dapagliflozina (1.0 comprimido). Já tomou?
 > ◯ ✅ Tomei
 > ◯ ⏰ Ainda não
 
-- **✅ Tomei** registra a dose sem passar pela IA (vira "atrasado" depois de
-  30 min do horário) e responde "Anotado! ✅ …". Votar de novo não duplica.
-- **⏰ Ainda não** reenvia o lembrete 30 min depois, como uma nova enquete,
-  no mesmo dia e só se a dose ainda não foi confirmada.
-- Escrever "tomei" continua funcionando, pelo agente.
-- Se o WAHA falhar ao enviar a enquete, sai o lembrete em texto de antes.
-- Botões de verdade só existem na API oficial da Meta; no WAHA (WhatsApp
-  Web) eles não funcionam, e a enquete é a alternativa.
+- **✅ Tomei** registra a dose sem passar pela IA (como atrasada depois de
+  30 min do horário). Votar de novo não duplica.
+- **⏰ Ainda não** reenvia o lembrete 30 min depois, no mesmo dia e só se a
+  dose não foi confirmada.
+- Escrever "tomei" continua funcionando. Se a enquete falhar, sai o
+  lembrete em texto.
 
-**Configuração do WAHA:** o webhook da sessão precisa dos eventos
-`message`, `poll.vote` e `poll.vote.failed` (ver `docs/deploy/vps.md`). Sem
-`poll.vote`, os votos não chegam ao backend; o lembrete continua saindo e
-o "tomei" por texto continua valendo.
+Botões só existem na API oficial da Meta; no WAHA (WhatsApp Web), a enquete
+é a alternativa.
 
-## Notificações na pulseira (Gmail)
+### Aviso à família após relato de sintomas
 
-Além do WhatsApp, três mensagens ao idoso viram um e-mail curto na conta
-Google dele, e o Mi Fitness espelha a notificação do Gmail na pulseira:
+Toda mensagem do idoso passa antes por um classificador determinístico de
+sintomas. Um sintoma grave faz o bot perguntar se está tudo bem; sem
+resposta em 60 segundos, todos os familiares são avisados. Pedido de ajuda
+avisa na hora. "Estou bem" ou "não avise" cancelam o aviso, e duas recusas
+em 7 dias geram uma advertência à família.
 
-| Momento | Assunto |
+### Regras de monitoramento
+
+Avaliadas a cada 15 min; vale a condição mais grave:
+
+| Status | Condição |
 |---|---|
-| Lembrete de remédio | `Zela+: hora do remédio` |
-| Sintoma que abre o aviso de 60 s | `Zela+: você está bem?` |
-| Checagem da escada de risco | `Zela+: está tudo bem?` |
+| RISCO | 8 h ou mais sem movimento, com o ESP32 enviando sinal de vida |
+| RISCO | ESP32 sem sinal há 15 min **e** pulseira sem dados há 6 h |
+| ATENÇÃO | Frequência cardíaca fora da faixa plausível |
+| AVISO | Só uma das fontes sem dados: mensagem à família, sem escada |
+| NORMAL | Nenhuma das condições acima |
 
-Os avisos à família continuam só no WhatsApp. O Gmail é um canal extra: se
-a API do Google falhar, o WhatsApp, o aviso em 60 s e a escada seguem
-normalmente, e a falha só aparece no log.
+Em RISCO, a escada pergunta ao idoso, avisa a família depois de 10 min sem
+resposta e simula o contato de emergência 15 min depois. O sono da noite
+30% acima ou abaixo da média gera um aviso de tendência no resumo da manhã.
 
-**Configuração:**
+### Sensores
 
-1. Faça o comissionamento do Google Agenda acima (ele já pede os escopos do
-   Gmail) com a conta Google do idoso.
-2. No celular do idoso: entre no Gmail com essa conta, ligue as
-   notificações dela e libere o Gmail no espelhamento de notificações do
-   Mi Fitness.
-3. Escolha o modo: rode `python scripts/testar_gmail_pulseira.py` (ele
-   pede as credenciais sem mostrá-las na tela; evite `export`, que deixa
-   os valores no histórico do shell) e veja qual assunto vibra na pulseira,
-   `Zela+ teste (insert)` ou `Zela+ teste (send)`.
-4. No `.env` do deploy:
-   - `ZELA_GMAIL_PULSEIRA_EMAIL`: o e-mail da conta. Sem ele, a função fica
-     desligada.
-   - `ZELA_GMAIL_MODO`: `insert` (padrão; coloca a mensagem direto na caixa
-     de entrada como não lida) ou `send` (envia da conta para ela mesma).
-     Maiúsculas e espaços são ignorados. Um valor inválido desliga só o
-     Gmail e gera um erro no log.
+**ESP32:** 2 PIR SR602 (sala no GPIO 13, quarto no GPIO 14), alimentados em
+3,3 V. Copie `firmware/zela_presenca/config.h.example` para `config.h`,
+preencha Wi-Fi, URL de ingestão e token, e grave
+`firmware/zela_presenca/zela_presenca.ino` pelo Arduino IDE (placa "ESP32
+Dev Module"). Ligações e materiais em `docs/hardware/automacao_esp32.md`.
 
-## Embeddings e RAG (Plano 4)
+**Pulseira:** Smart Band 10 Pro → Mi Fitness → Health Connect →
+[HC Webhook](https://github.com/mcnaveen/health-connect-webhook) (instalado
+de graça pelo Obtainium). No HC Webhook, configure a URL
+`https://<backend>/ingest/health-connect`, formato JSON e o header
+`x-api-key` com o valor de `ZELA_INGESTAO_TOKEN`.
 
-A classificação de urgência por similaridade e o RAG usam a mesma chave de
-API do Gemini já configurada para os agentes ADK (`GOOGLE_API_KEY` ou
-`GEMINI_API_KEY` — veja a seção de setup acima). Nenhuma credencial nova é
-necessária.
+### Google Agenda e Gmail na pulseira
 
-O vector store (Chroma) persiste localmente em `./chroma_db/` (ignorado
-pelo git, recriado automaticamente na primeira execução).
+Os compromissos cadastrados no painel são criados na agenda de uma conta
+Google dedicada, e o lembrete da agenda aparece na pulseira. O lembrete de
+remédio e a pergunta "você está bem?" também chegam como e-mail, que o Mi
+Fitness espelha na pulseira.
 
-**Nota de migração:** este plano adiciona a coluna `bula` à tabela
-`medicamento`. Se você já tinha um `zela.db` de uma execução anterior a
-este plano, não é preciso apagar o arquivo — `zela/storage/db.py::conectar`
-verifica a presença da coluna `bula` a cada conexão e adiciona
-(`ALTER TABLE`) automaticamente caso ela não exista, além de criar tabelas
-novas via `CREATE TABLE IF NOT EXISTS`.
+1. No Google Cloud, ative a Google Calendar API e a Gmail API, crie uma
+   credencial OAuth do tipo **Desktop app** e publique o app em
+   **produção**. Em modo de teste, o `refresh_token` expira em poucos dias.
+2. Gere o `refresh_token` com `python scripts/obter_refresh_token_google.py`.
+3. Preencha as variáveis `ZELA_GOOGLE_CALENDAR_*` e, para o Gmail,
+   `ZELA_GMAIL_PULSEIRA_EMAIL`. Use `python scripts/testar_gmail_pulseira.py`
+   para escolher o `ZELA_GMAIL_MODO` (`insert` ou `send`).
+4. No celular do idoso, adicione a conta Google e libere o Google Agenda e
+   o Gmail no espelhamento de notificações do Mi Fitness.
 
-Para que um medicamento tenha sua bula pesquisável pelo RAG, cadastre-o
-com o campo `bula` preenchido — pelo painel Streamlit (Plano 5, veja
-abaixo) ou via script de seed usando `Medicamento(..., bula="...")` e
-`salvar_medicamento`. A reindexação no vector store acontece
-automaticamente a cada subida da API.
+### RAG sobre bulas
 
-Os embeddings usam o modelo `gemini-embedding-2` (constante `MODELO_PADRAO`
-em `zela/embeddings/client.py` — o projeto começou usando
-`text-embedding-004`, mas esse modelo foi descontinuado pela API do
-Gemini durante o desenvolvimento, com erro `404 NOT_FOUND ... is not
-found for API version v1beta, or is not supported for embedContent`; se
-isso acontecer de novo no futuro, rode
-`.venv/bin/python -c "from google import genai; [print(m.name) for m in genai.Client().models.list() if 'embedContent' in (m.supported_actions or [])]"`
-para listar os modelos atuais com suporte a `embedContent` e atualize essa
-constante). Se você trocar o modelo de embeddings depois de já ter
-documentos indexados, apague `./chroma_db/` antes de subir a API de novo
-— modelos diferentes podem gerar vetores de dimensão diferente, e o
-Chroma rejeita misturar dimensões na mesma coleção.
+As bulas de dipirona, losartana, metformina, sinvastatina e
+dapagliflozina ficam em `zela/conhecimento/bulas/`, com laboratório,
+registro e fonte. O backend sincroniza o índice do ChromaDB e só gera
+embeddings do que mudou. Para adicionar uma bula, converta o PDF da bula do
+paciente com `pdftotext -layout` e `scripts/importar_bula.py`.
 
-## Painel Streamlit (Plano 5)
+### Workflow n8n
 
-O painel da família mostra o status atual, a medicação do dia, os últimos
-alertas e um gráfico de presença, além de formulários para cadastrar ou
-editar medicamentos e compromissos.
+`docs/n8n/zela-classificacao-mensagem.json` mostra visualmente a fatia
+"mensagem recebida → classificação → roteamento". Importe no n8n, aponte o
+nó **HTTP Request** para `http://<backend>:8000/api/classificar-mensagem` e
+dispare:
 
-O interruptor **Modo noturno**, no topo (vale também na tela de login),
-alterna entre o tema claro (diurno) e o escuro (noturno): fundo azul
-escuro, letras brancas e detalhes em amarelo. A escolha fica na URL
-(`?noturno=true`), então sobrevive a um recarregamento e pode ficar nos
-favoritos.
+```bash
+curl -X POST http://localhost:5678/webhook/zela-classificar-mensagem \
+  -H "Content-Type: application/json" \
+  -d '{"telefone": "+5511999999999", "texto": "caí no banheiro e não consigo levantar"}'
+```
 
-A aba **Histórico** reúne numa tabela só, do mais recente ao mais antigo:
-os avisos e alertas enviados, os compromissos (agendados, realizados e
-removidos) e as doses de remédio registradas (tomado, tomado com atraso,
-não confirmado). Os filtros combinam:
+O endpoint só classifica; nenhum alerta real é disparado.
 
-- **Dia:** mostra só o que aconteceu naquela data;
-- **Busca:** texto livre na descrição, sem diferenciar maiúsculas nem
-  acentos (ex.: `dipirona`, `cardiologista`, `ESP32`);
-- **Tipos:** avisos, compromissos e/ou medicação.
+![Workflow n8n](docs/relatorio/imagens/n8n_workflow.png)
 
-As doses só aparecem quando o idoso confirma no WhatsApp; uma dose
-esquecida, sem nenhuma resposta, não gera
-registro.
+## Deploy em produção
 
-**Login com usuário e senha.** Antes de entrar, a página mostra só o
-formulário de login; depois, o formulário some e aparece o painel, com
-"Conectado como …" e o botão **Sair**. Os usuários ficam no banco, com a
-senha guardada como hash scrypt com sal (nunca em texto). Uma tentativa
-errada mostra sempre "Usuário ou senha incorretos." (sem revelar se o
-usuário existe) e espera 1 s antes de responder.
-
-1. Crie o primeiro usuário (a senha é pedida duas vezes, sem aparecer na
-   tela; mínimo de 8 caracteres):
-   ```bash
-   python -m zela.streamlit_app.usuarios criar familia
-   ```
-   Outros comandos: `listar`, `senha <usuário>` (redefine) e
-   `remover <usuário>`. Em produção, rode dentro do container do painel:
-   `docker compose exec streamlit python -m zela.streamlit_app.usuarios criar familia`.
-2. Rode o painel (com o backend já rodando, para os dados existirem):
-   ```bash
-   streamlit run zela/streamlit_app/app.py
-   ```
-3. Abra `http://localhost:8501` no navegador e entre com usuário e senha.
-
-**Nota sobre o banco de dados:** o painel usa a variável de ambiente
-`ZELA_DB_PATH` para achar o `zela.db` (mesmo padrão usado pelo backend
-FastAPI, `zela/api/main.py`) — se você definir `ZELA_DB_PATH` para um dos
-dois processos, defina a mesma variável para o outro, e rode ambos a
-partir do mesmo diretório de trabalho. Caso contrário, os dois podem
-apontar para arquivos diferentes sem nenhum aviso.
-
-**Nota:** a sessão vale enquanto a aba do navegador estiver aberta; ao
-recarregar a página, é preciso entrar de novo. Não há recuperação de senha
-por e-mail: quem tem acesso ao servidor redefine com o comando `senha`.
-
-## Aviso à família após relato de sintomas
-
-Um relato de sintoma grave pelo WhatsApp abre um episódio com prazo de 60 s, sem
-passar pelo Gemini. Sem resposta, todos os familiares são notificados (o job roda
-a cada 10 s, então o aviso sai entre 60 e cerca de 70 s). "Estou bem" ou "não
-avise" cancelam dentro do prazo, e a segunda recusa em 7 dias envia uma advertência
-à família. Pedido explícito de ajuda notifica na hora. Falhas são reenviadas a cada
-30 s, até 5 tentativas; se ninguém receber, o paciente é orientado a ligar 192.
-Detalhes em `docs/superpowers/specs/2026-11-02-aviso-familia-60s-design.md`.
-
-## Bulas no RAG
-
-O catálogo em `zela/conhecimento/bulas/` (dipirona, losartana, metformina,
-sinvastatina e dapagliflozina) é independente dos medicamentos cadastrados, então
-não gera lembretes. Cada arquivo traz laboratório, registro, data de aprovação e
-fonte. Para adicionar uma bula, converta o PDF com `pdftotext -layout` e
-`scripts/importar_bula.py`. O backend sincroniza o índice a cada 60 s e só gera
-embeddings do que mudou, inclusive das bulas salvas no painel.
-
-As cópias não vieram do Bulário Eletrônico da Anvisa, que bloqueou o acesso
-automatizado: confira cada versão no bulário antes do uso real.
-
-## Workflow n8n (Plano 6)
-
-Este workflow representa, de forma simplificada, a fatia "mensagem
-recebida → classificação de urgência → roteamento" do sistema — **não**
-substitui a integração real WhatsApp↔backend (WAHA→FastAPI, Plano 2), que
-continua funcionando de forma independente. É um webhook próprio, só para
-demonstrar a lógica de classificação/roteamento visualmente, conforme os
-itens 3.4/3.8 do card.
-
-1. Rode o backend normalmente (`uvicorn zela.api.main:app --reload`).
-2. No seu n8n, importe `docs/n8n/zela-classificacao-mensagem.json`
-   ("Import from File" ou colar o JSON em "Import from Clipboard").
-3. Confira a URL configurada no nó **HTTP Request**
-   (`http://localhost:8000/api/classificar-mensagem`) — se o n8n rodar em
-   um container Docker separado do backend, troque `localhost` por
-   `host.docker.internal` (ou o IP da máquina host); se rodar na mesma
-   máquina fora de container, o padrão já funciona.
-4. Ative o workflow (ou use "Execute Workflow"/"Listen for Test Event" no
-   próprio n8n) e dispare o webhook com uma mensagem de teste:
-   ```bash
-   curl -X POST http://localhost:5678/webhook/zela-classificar-mensagem \
-     -H "Content-Type: application/json" \
-     -d '{"telefone": "+5511999999999", "texto": "caí no banheiro e não consigo levantar"}'
-   ```
-   (ajuste a porta `5678` se seu n8n usar outra, e use
-   `/webhook-test/...` em vez de `/webhook/...` se estiver no modo de
-   teste do editor, conforme a própria interface do n8n indicar).
-5. Confirme que a resposta reflete o roteamento esperado (`"acao":
-   "alertar_familia"` para uma mensagem de risco, por exemplo) e tire uma
-   captura de tela do workflow no editor do n8n (com uma execução recente
-   visível) — salve como `docs/n8n/screenshot.png` para o item 3.4 do
-   card.
-
-**Nota:** o endpoint `/api/classificar-mensagem` só classifica — nunca
-decide nem dispara escalonamento de verdade (isso continua sendo
-responsabilidade exclusiva do scheduler determinístico, Plano 3/4). Testar
-este workflow à vontade não aciona nenhum alerta real à família.
-
-**Nota sobre o painel do n8n (bug aparente, não real):** nos nós "Respond
-to Webhook" na versão `typeVersion` 1.1 (a usada neste workflow), o
-painel do editor e o histórico de execuções mostram os dados de
-**entrada** do nó (o `{status, motivo}` cru vindo do nó HTTP Request
-anterior), não a resposta HTTP que ele de fato monta e envia. Isso pode
-parecer que o campo `acao`/`mensagem_ilustrativa` não foi gerado — mas a
-resposta HTTP real (a que chega pelo `curl` ou chegaria para quem chamou
-o webhook) já contém o JSON completo. Para conferir a resposta de
-verdade, não confie no painel: dispare o webhook via `curl -i` (como no
-passo 4 acima) e leia o corpo da resposta ali.
-
-## Deploy em produção (VPS)
-
-Para deixar o sistema completo (backend, Streamlit, WAHA) online com
-HTTPS e domínio próprio — útil para a apresentação do MVP aos
-avaliadores — o `docker-compose.yml` também define os serviços
-`backend`, `streamlit` e `caddy` (proxy reverso com certificado
-automático via Let's Encrypt). Guia passo a passo completo, incluindo
-DNS, firewall e checklist pré-apresentação, em
+O `docker-compose.yml` sobe `waha`, `backend` e `streamlit` (e, opcionalmente,
+`caddy` como proxy com HTTPS). Em um servidor que já tenha nginx, use o
+nginx do host com certbot apontando para as portas locais. O passo a passo
+(DNS, firewall, nginx, eventos do WAHA e criação de usuários) está em
 [`docs/deploy/vps.md`](docs/deploy/vps.md).
 
-Resumo: `cp .env.example .env`, preencher as variáveis (`ZELA_INGESTAO_TOKEN`
-passa a ser **obrigatório** nesse cenário), ajustar os 3 domínios no
-`Caddyfile` e `docker compose up -d --build`.
+```bash
+cp .env.example .env    # preencha; ZELA_INGESTAO_TOKEN é obrigatório
+docker compose up -d --build
+docker compose exec streamlit python -m zela.streamlit_app.usuarios criar familia
+```
 
-## Limitações conhecidas do Plano 3
+## Limitações conhecidas
 
-1. **Sessão de conversa compartilhada entre idosa e família:** desde que o
-   webhook passou a aceitar mensagens de múltiplos números (idosa +
-   contatos familiares), a ponte com o ADK Runner (`zela/api/runner.py`)
-   ainda usa uma única sessão de conversa fixa por idoso (não por
-   remetente) — ou seja, mensagens da idosa e da família compartilham o
-   mesmo histórico de contexto do LLM. Isso significa que, em teoria, uma
-   mensagem de um familiar poderia acionar `confirmar_medicamento` como se
-   fosse a própria idosa confirmando. Corrigir isso exige repensar o
-   design de sessão do Plano 2 (ex.: uma sessão por número de telefone) —
-   fica como item para um plano futuro.
-2. **Autenticação dos endpoints de ingestão é opcional:** `/ingest/esp32`
-   e `/ingest/health-connect` aceitam um token compartilhado via
-   `ZELA_INGESTAO_TOKEN` (header `X-Api-Key`), mas só passam a exigi-lo se
-   essa variável estiver definida no backend — por padrão (rede local,
-   MVP) continuam abertos. Antes de expor o backend fora da rede local
-   (ex.: VPS), defina essa variável.
-3. **Resposta da idosa não interrompe o escalonamento:** quando o Agente
-   de Emergência envia a mensagem inicial de verificação ("Tudo bem? Pode
-   confirmar que está tudo certo?"), uma resposta da idosa por WhatsApp
-   ainda não interrompe automaticamente a escada de escalonamento (que
-   segue avançando para notificar a família e, depois, simular contato de
-   emergência). Implementar isso exige um caminho determinístico (não
-   dependente de LLM) para interpretar a resposta da idosa e resetar o
-   estado de escalonamento — fica como item para um plano futuro.
-   **Atualização (Plano 4):** parcialmente endereçado — mensagens de texto
-   da idosa agora são classificadas por similaridade de embedding e
-   alimentam essa mesma máquina de escalonamento; uma resposta
-   classificada como `NORMAL` reseta o escalonamento para `RESOLVIDO`.
-   Desde a issue do aviso em 60 s, mensagens classificadas como `ATENCAO` ou
-   `RISCO` só geram um registro no painel: sintomas reais seguem o fluxo de
-   "Aviso à família após relato de sintomas", e a similaridade não escala sozinha.
-   Ver "Limitações conhecidas do Plano 4" abaixo para as ressalvas.
+- O Mi Fitness só compartilha com o Health Connect os batimentos medidos em
+  treinos; passos e sono chegam normalmente.
+- A regra da pulseira prova que o celular sincroniza, não que a pulseira
+  está no pulso.
+- Formas de relatar um sintoma que o classificador não conhece só chegam ao
+  painel.
+- Um idoso por instalação; mensagens do idoso e da família compartilham a
+  mesma sessão de conversa do agente.
+- Sem áudio no WhatsApp; o contato de emergência é simulado.
+- As bulas vieram de fabricantes e farmácias e devem ser conferidas no
+  Bulário Eletrônico da Anvisa antes de uso real.
+- O app OAuth não é verificado pelo Google (vale para até 100 contas).
+- O login do painel vale enquanto a aba estiver aberta, sem recuperação de
+  senha por e-mail.
 
-## Limitações conhecidas do Plano 4
+## Documentação
 
-1. **Um risco originado por mensagem não avança sozinho até a família:**
-   a classificação por embedding de uma mensagem da idosa entra na mesma
-   escada de escalonamento dos sensores (`aplicar_escalonamento`), mas
-   nada além do job periódico de sensores (`verificar_e_escalonar_riscos`,
-   a cada 15 min) avança essa escada adiante. Na prática, isso produz um
-   de dois resultados: (a) se não houver leituras de presença recentes
-   (instalação sem ESP32, o cenário mais provável em demonstração), o
-   job de sensores trata isso como "sem dados" e nunca chama
-   `aplicar_escalonamento` de novo — a escada fica congelada em
-   `CONTATO_IDOSO` indefinidamente; (b) se as leituras de presença
-   parecerem normais, o próximo tick do job classifica `NORMAL` e reseta
-   o escalonamento para `RESOLVIDO` em até 15 minutos. Ou seja: uma
-   mensagem como "caí no banheiro e não consigo levantar" hoje gera a
-   pergunta de verificação para a idosa, mas não necessariamente chega a
-   notificar a família sozinha. Corrigir isso exige persistir o evento
-   que originou o escalonamento para que o próprio job de sensores possa
-   reconhecê-lo e continuar avançando a escada — fica como item para um
-   plano futuro.
-2. **Isso também atualiza (parcialmente) a Limitação 3 do Plano 3
-   ("resposta da idosa não interrompe o escalonamento"):** uma mensagem
-   da idosa classificada como `NORMAL` agora reseta qualquer
-   escalonamento em andamento (inclusive um iniciado por sensor) para
-   `RESOLVIDO` — de fato, uma forma de interrupção. Mas o classificador
-   por similaridade não tem um piso mínimo de similaridade: uma mensagem
-   fora do padrão dos exemplos de referência (ex.: "oi", enviada por uma
-   idosa desorientada) ainda recebe a classificação do exemplo mais
-   próximo, que pode ser `NORMAL` e fechar um escalonamento real por
-   engano. Calibrar um piso de similaridade exige testar contra
-   embeddings reais do Gemini — fica para um plano futuro.
-3. **Histórico de mensagens no RAG não sobrevive à perda do `chroma_db/`:**
-   a reindexação automática no boot (`reindexar_documentos`) só cobre
-   bulas de medicamentos (lidas do SQLite, fonte de verdade). Mensagens
-   passadas da idosa são indexadas apenas em tempo real, direto no
-   Chroma — não há cópia em SQLite. Se `./chroma_db/` for apagado ou
-   corrompido, o histórico de mensagens pesquisável pelo RAG se perde
-   (as bulas são reconstruídas automaticamente no próximo boot; as
-   mensagens, não).
-
-## Limitações conhecidas do Plano 6
-
-1. **Autenticação do `/api/classificar-mensagem` também é opcional:**
-   protegido pelo mesmo `ZELA_INGESTAO_TOKEN` dos endpoints de ingestão
-   (ver seção de configuração), mas só exige o header se a variável
-   estiver definida. Diferente dos endpoints de ingestão, este consome
-   cota da API do Gemini a cada chamada e não impõe um tamanho máximo
-   para o campo `texto` — vale adicionar um limite de tamanho antes de
-   expor publicamente.
-   **Atualização (deploy em VPS):** `/webhook/whatsapp` também passou a
-   aceitar o mesmo `ZELA_INGESTAO_TOKEN` (header `X-Api-Key`, validado
-   pelo WAHA ao chamar o webhook). Isso foi necessário porque a allowlist
-   de telefones/LID por si só falha "aberta": antes do primeiro perfil
-   ser cadastrado via Streamlit, ela vem `None` (sem filtro), e qualquer
-   POST não autenticado nessa URL pública aciona o agente de IA de
-   verdade — confirmado na prática durante o deploy real, não é só
-   teórico. Ver `docs/deploy/vps.md` para como configurar o header
-   customizado no webhook do WAHA.
-2. **Sem teste automatizado da execução real do workflow n8n:** o arquivo
-   `docs/n8n/zela-classificacao-mensagem.json` tem um teste estrutural
-   (`tests/test_n8n_workflow.py`, valida tipos de nó, parâmetros e
-   conexões), mas nenhum teste executa o workflow de verdade dentro do
-   n8n — isso não é possível a partir da suíte `pytest` deste repositório
-   (o n8n é uma ferramenta externa). A verificação de que o workflow
-   funciona de ponta a ponta é manual, feita pelo usuário ao importar e
-   testar o arquivo (veja "Workflow n8n (Plano 6)" acima).
+- `RELATORIO.md` / `RELATORIO.pdf`: relatório técnico do projeto.
+- `docs/pitch/roteiro.md`: roteiro do vídeo pitch.
+- `docs/deploy/vps.md`: implantação em produção.
+- `docs/hardware/automacao_esp32.md`: hardware do ESP32.
+- `docs/testes/estrategia-e-resultados.md`: estratégia de testes.
+- `docs/superpowers/specs/`: documentos de design de cada funcionalidade.
