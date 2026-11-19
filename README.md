@@ -414,9 +414,8 @@ docker compose exec streamlit python -m zela.streamlit_app.usuarios criar famili
 
 ## Documentação
 
-- `RELATORIO.md` / `RELATORIO.pdf`: relatório técnico do projeto.
+- `Relatório 14 - Lucas Augusto.pdf`: relatório técnico do projeto.
 - `docs/pitch/roteiro.md`: roteiro do vídeo pitch.
 - `docs/deploy/vps.md`: implantação em produção.
 - `docs/hardware/automacao_esp32.md`: hardware do ESP32.
 - `docs/testes/estrategia-e-resultados.md`: estratégia de testes.
-- `docs/superpowers/specs/`: documentos de design de cada funcionalidade.
