@@ -1,0 +1,20 @@
+flowchart TD
+  classDef canal fill:#fdebd0,stroke:#b9770e
+  classDef det fill:#f9e2e2,stroke:#a93226
+  classDef ia fill:#e8f1fb,stroke:#3b6ea5
+  classDef dec fill:#efe6fb,stroke:#6d3fc0
+  A["Mensagem do idoso no WhatsApp"]:::canal --> B["WAHA → webhook do backend"]
+  B --> C{"Remetente cadastrado?"}:::dec
+  C -->|não| X["Ignorada"]
+  C -->|sim| D{"Classificador de sintomas<br/>(antes da IA)"}:::dec
+  D -->|"pedido de ajuda"| F["Avisa todos os familiares na hora"]:::det
+  D -->|"sintoma grave"| G["Pergunta se está bem<br/>e inicia contagem de 60 s"]:::det
+  G --> H{"Resposta em 60 s?"}:::dec
+  H -->|"nenhuma"| F
+  H -->|"estou bem / não avise"| I["Cancela o aviso"]:::det
+  I --> J{"2ª recusa em 7 dias?"}:::dec
+  J -->|sim| K["Advertência aos familiares"]:::det
+  D -->|"nenhum sintoma"| L["Orquestrador ADK (DeepSeek)"]:::ia
+  L --> M["Agente especializado<br/>(rotina, monitoramento, comunicação, emergência)"]:::ia
+  M --> N["Resposta ao idoso pelo WhatsApp"]:::canal
+  N -.->|"depois da resposta"| P["Similaridade por embeddings<br/>registra no painel"]:::ia

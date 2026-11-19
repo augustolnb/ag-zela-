@@ -1,0 +1,28 @@
+flowchart TB
+  classDef canal fill:#fdebd0,stroke:#b9770e
+  classDef det fill:#f9e2e2,stroke:#a93226
+  classDef ia fill:#e8f1fb,stroke:#3b6ea5
+  classDef dados fill:#e2f0d9,stroke:#3c763d
+  W["WhatsApp do idoso<br/>(WAHA)"]:::canal
+  P["Pulseira Band 10 Pro<br/>Health Connect → HC Webhook"]:::canal
+  E["ESP32 + 2 sensores PIR<br/>(sala e quarto)"]:::canal
+  S["Painel Streamlit<br/>(família)"]:::canal
+  W --> C["Classificador de sintomas<br/>determinístico, antes da IA"]:::det
+  C -->|"sintoma ou pedido de ajuda"| AF["Aviso à família em 60 s<br/>e advertência por recusas"]:::det
+  C -->|"demais mensagens"| O["Orquestrador ADK<br/>LLM: DeepSeek via LiteLLM"]:::ia
+  O --> R["Rotina e<br/>Medicação"]:::ia
+  O --> M["Monitoramento"]:::ia
+  O --> CO["Comunicação<br/>(RAG em bulas)"]:::ia
+  O --> EM["Emergência"]:::ia
+  P --> D["Regras determinísticas:<br/>monitoramento, escalonamento e sono"]:::det
+  E --> D
+  CO --> V[("ChromaDB<br/>embeddings Gemini")]:::dados
+  R --> DB[("SQLite")]:::dados
+  M --> DB
+  EM --> DB
+  D --> DB
+  S --> DB
+  AF --> WF["WhatsApp da família"]:::canal
+  D -->|"risco"| WF
+  DB -->|"compromissos"| GA["Google Agenda →<br/>notificação na pulseira"]:::canal
+  DB -->|"lembretes"| W2["WhatsApp do idoso"]:::canal
