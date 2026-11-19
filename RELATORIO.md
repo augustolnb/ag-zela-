@@ -1,7 +1,7 @@
 # Zela+ — Relatório do Trabalho Final (Agentes de IA)
 
 **Autor:** Lucas Augusto Nunes de Barros
-**Repositório:** https://github.com/augustolnb/ag-zela-
+**Repositório:** https://github.com/augustolnb/zela-mais
 **Vídeo pitch:** roteiro em `docs/pitch/roteiro.md`; o vídeo fica em `docs/pitch/`.
 
 ---
@@ -344,7 +344,7 @@ autor:
 ## 7. Instruções de uso
 
 ```bash
-git clone https://github.com/augustolnb/ag-zela-.git && cd ag-zela-
+git clone https://github.com/augustolnb/zela-mais.git && cd zela-mais
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev,deepseek]"
 pytest -q                                   # 546 testes
