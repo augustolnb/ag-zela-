@@ -264,7 +264,36 @@ C++). Ele lê os 2 sensores de presença e avisa o backend em
 `POST /ingest/esp32` (`zela/api/ingestao.py`), que valida a leitura com
 Pydantic e a grava para as regras de monitoramento.
 
-![Planta baixa da instalação](docs/hardware/planta-baixa-instalacao-zela-mais.png)
+**Planta baixa da instalação:**
+
+![Planta baixa da instalação: ESP32 central e os 2 sensores SR602 (sala e quarto)](docs/hardware/planta-baixa-instalacao-zela-mais.png)
+
+**Dispositivos instalados:**
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/hardware/imagens/esp32-instalado-na-parede.jpg" width="260" alt="ESP32 DevKit instalado na parede"></td>
+    <td align="center"><img src="docs/hardware/imagens/sr602-instalado-na-parede.jpg" width="260" alt="Sensor PIR SR602 instalado na parede"></td>
+    <td align="center"><img src="docs/hardware/imagens/pulseira-lembrete.jpg" width="300" alt="Lembrete do Zela+ na pulseira"></td>
+  </tr>
+  <tr>
+    <td align="center">ESP32 DevKit V1 na parede</td>
+    <td align="center">Sensor PIR SR602 na parede</td>
+    <td align="center">Lembrete do Zela+ na pulseira</td>
+  </tr>
+</table>
+
+**Lista de materiais:**
+
+| Item | Modelo | Quantidade |
+|---|---|---|
+| Microcontrolador ESP32 DevKit V1 | ESP32-WROOM-32 | 1 un |
+| Sensor de presença PIR | SR602 | 2 un (sala e quarto) |
+| Fonte 5 V 2 A | USB | 1 un |
+| Cabo de rede par trançado Cat5e UTP 24 AWG | 3 vias usadas (VCC, OUT, GND) | 5,40 m (3,00 + 2,40) |
+| Placa perfurada (ESP32) e mini protoboard (sensores) | para montagem sem solda | 1 placa + 1 mini protoboard por sensor |
+| Conectores e termorretrátil | kit | 1 kit |
+| Pulseira | Xiaomi Smart Band 10 Pro (a que o idoso já usa) | 1 un |
 
 **Instalação na casa:**
 - um ESP32 DevKit V1 (WROOM-32) central, alimentado por fonte USB 5 V;
