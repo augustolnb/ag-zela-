@@ -1,6 +1,6 @@
 # Zela+ — Agente de IA de Apoio ao Idoso que Mora Sozinho
 
-Trabalho final da pós-graduação em Agentes de IA.
+Trabalho Final do Fastcamp de Agentes Inteligentes - LAMIA - UTFPR.
 
 ## O problema
 
@@ -248,17 +248,67 @@ resposta e simula o contato de emergência 15 min depois. O sono da noite
 
 ### Sensores
 
-**ESP32:** 2 PIR SR602 (sala no GPIO 13, quarto no GPIO 14), alimentados em
-3,3 V. Copie `firmware/zela_presenca/config.h.example` para `config.h`,
-preencha Wi-Fi, URL de ingestão e token, e grave
-`firmware/zela_presenca/zela_presenca.ino` pelo Arduino IDE (placa "ESP32
-Dev Module"). Ligações e materiais em `docs/hardware/automacao_esp32.md`.
+**ESP32:** 2 PIR SR602 (sala e quarto). Hardware, firmware e gravação na
+seção [Firmware do ESP32](#firmware-do-esp32).
 
 **Pulseira:** Smart Band 10 Pro → Mi Fitness → Health Connect →
 [HC Webhook](https://github.com/mcnaveen/health-connect-webhook) (instalado
 de graça pelo Obtainium). No HC Webhook, configure a URL
 `https://<backend>/ingest/health-connect`, formato JSON e o header
 `x-api-key` com o valor de `ZELA_INGESTAO_TOKEN`.
+
+### Firmware do ESP32
+
+O firmware fica em `firmware/zela_presenca/zela_presenca.ino` (Arduino,
+C++). Ele lê os 2 sensores de presença e avisa o backend em
+`POST /ingest/esp32` (`zela/api/ingestao.py`), que valida a leitura com
+Pydantic e a grava para as regras de monitoramento.
+
+![Planta baixa da instalação](docs/hardware/planta-baixa-instalacao-zela-mais.png)
+
+**Instalação na casa:**
+- um ESP32 DevKit V1 (WROOM-32) central, alimentado por fonte USB 5 V;
+- 2 sensores PIR SR602, um na sala (GPIO 13) e um no quarto (GPIO 14),
+  alimentados em 3,3 V pelo próprio ESP32;
+- cada sensor é ligado por um cabo Cat5e, usando 3 vias (VCC, OUT e GND),
+  em canaleta: 3,00 m até o quarto e 2,40 m até a sala;
+- a saída do SR602 já é digital em 3,3 V, então não há resistor nem
+  divisor de tensão.
+
+**Como o firmware funciona:**
+
+| Etapa | O que faz | Por quê |
+|---|---|---|
+| Boot | Conecta ao Wi-Fi (até 30 s) e sincroniza a hora por NTP (UTC−3) | O ESP32 não tem relógio com bateria; sem NTP os horários das leituras seriam falsos |
+| Aquecimento | Ignora os sensores nos primeiros 60 s | O PIR oscila e dispara falsos positivos logo depois de ligar |
+| Leitura | Lê os 2 sensores a cada 2 s e combina com OU | Presença em qualquer cômodo conta como movimento |
+| Envio | Manda `{"valor": 1 ou 0, "timestamp": ...}` só quando a presença muda | Evita tráfego e leituras repetidas; se o envio falha, tenta de novo na próxima leitura |
+| Sinal de vida | A cada 5 min manda `{"tipo": "sinal_de_vida", ...}`, com ou sem movimento | Separa "a casa está parada" de "o ESP32 caiu" |
+| Rede | Reconecta o Wi-Fi sem travar o loop, no máximo a cada 15 s | Uma queda de rede não pode congelar a leitura dos sensores |
+| Segurança | Envia o token no cabeçalho `X-Api-Key` | O endpoint de ingestão é público (HTTPS) e recusa leituras sem token |
+
+O backend usa essas duas mensagens nas regras de monitoramento (tabela
+acima): 8 h ou mais sem movimento com o ESP32 enviando sinal de vida gera
+RISCO; ESP32 sem sinal há 15 min, junto com a pulseira sem dados, também.
+
+**Como gravar:**
+1. Instale o Arduino IDE e o suporte a placas ESP32 (Espressif).
+2. Copie `firmware/zela_presenca/config.h.example` para `config.h` e
+   preencha o Wi-Fi, a URL de ingestão
+   (`https://<backend>/ingest/esp32`) e o token (`ZELA_INGESTAO_TOKEN`).
+   O `config.h` está no `.gitignore`.
+3. Selecione a placa "ESP32 Dev Module", grave e abra o Serial Monitor
+   (115200). Cada envio aparece como `POST /ingest/esp32 -> 200`.
+
+**Evolução:** a primeira versão usava um sensor ultrassônico HC-SR04,
+trocado depois por sensores PIR de infravermelho. A montagem passou por
+4 sensores (SR602 e HC-SR505, 2 por cômodo) e chegou a 2 SR602, um por
+cômodo; o HC-SR505 ficou como trabalho futuro. Correções posteriores
+trataram o fuso horário, o timeout do NTP, a reconexão do Wi-Fi sem travar
+o boot e o token nos endpoints de ingestão.
+
+Diagrama elétrico, lista de materiais e detalhes em
+`docs/hardware/automacao_esp32.md`.
 
 ### Google Agenda e Gmail na pulseira
 
