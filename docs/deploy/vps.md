@@ -58,8 +58,8 @@ sudo ufw status
 ## 3. Clonar e configurar
 
 ```bash
-git clone https://github.com/augustolnb/ag-zela-.git
-cd ag-zela-
+git clone https://github.com/augustolnb/zela-mais.git
+cd zela-mais
 cp .env.example .env
 ```
 

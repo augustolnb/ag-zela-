@@ -91,8 +91,8 @@ tests/             suíte automatizada
 Requer Python 3.11 ou superior.
 
 ```bash
-git clone https://github.com/augustolnb/ag-zela-.git
-cd ag-zela-
+git clone https://github.com/augustolnb/zela-mais.git
+cd zela-mais
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev,deepseek]"
